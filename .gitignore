@@ -1,0 +1,76 @@
+# ─── 依赖 ───
+node_modules/
+
+# ─── 所有构建产物 ───
+dist/
+dist-new/
+dist-installer/
+dist-build/
+dist-v2/
+dist-packager/
+output/
+release/
+build/
+
+# ─── Electron 打包输出 ───
+*.exe
+*.dll
+*.pak
+*.bin
+*.dat
+!build-installer.js
+
+# ─── ASAR 打包文件 ───
+*.asar
+
+# ─── 密钥 / 签名文件 ───
+*.keystore
+*.pem
+
+# ─── 日志 / 临时 / 备份 ───
+*.log
+*.bak
+*.backup
+*.broken_backup
+*.md.bak
+
+# ─── IDE / 编辑器 ───
+.vscode/
+.idea/
+*.swp
+*~
+
+# ─── 操作系统 ───
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ─── 数据目录（运行时生成） ───
+data/
+
+# ─── Java / Kotlin 编译产物 ───
+cpw/
+resources/
+versepc/
+
+# ─── 文档草稿（非正式文档） ───
+优化总结.md
+项目诊断报告.md
+app.js优化总结.md
+SPLASH_ANIMATION_DESIGN.md
+
+# ─── 测试/预览/临时页面 ───
+modal-demo.html
+splash-preview.html
+support-preview.html
+file-browser.html
+content-area-part.html
+test-launch.js
+fix_backticks.ps1
+
+# ─── lock 文件 ───
+package-lock.json
+
+# ─── 安装器冗余数据 ───
+installer-app/data/
+installer-app/package-lock.json

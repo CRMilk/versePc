@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  <rect width="80" height="80" rx="16" fill="#1e1e1e"/>
+  <g transform="translate(12,12)">
+    <!-- Head -->
+    <rect x="16" y="0" width="24" height="24" fill="#c8a87c" stroke="#a08060" stroke-width="1"/>
+    <rect x="16" y="0" width="24" height="8" fill="#4a3728"/>
+    <rect x="22" y="10" width="4" height="4" fill="#1a237e"/>
+    <rect x="30" y="10" width="4" height="4" fill="#1a237e"/>
+    <rect x="24" y="18" width="8" height="2" fill="#8d6e63"/>
+    <!-- Body -->
+    <rect x="16" y="24" width="24" height="20" fill="#0097a7" stroke="#00838f" stroke-width="1"/>
+    <!-- Arms -->
+    <rect x="4" y="24" width="12" height="20" fill="#c8a87c" stroke="#a08060" stroke-width="1"/>
+    <rect x="40" y="24" width="12" height="20" fill="#c8a87c" stroke="#a08060" stroke-width="1"/>
+    <!-- Legs -->
+    <rect x="16" y="44" width="12" height="16" fill="#1a237e" stroke="#0d1642" stroke-width="1"/>
+    <rect x="28" y="44" width="12" height="16" fill="#1a237e" stroke="#0d1642" stroke-width="1"/>
+  </g>
+</svg>

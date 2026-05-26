@@ -1,0 +1,447 @@
+// ============================================================
+// api.js — VersePC 前端 API 通信层
+// 封装所有与本地后端服务器(Express)的 HTTP 通信
+// 通过 fetch API 调用后端路由，统一管理所有网络请求
+// ============================================================
+
+// ============================================================
+// 统一错误类型体系
+// ============================================================
+
+class ApiError extends Error {
+    constructor(message, code, originalError = null) {
+        super(message);
+        this.name = 'ApiError';
+        this.code = code;
+        this.originalError = originalError;
+        this.timestamp = Date.now();
+    }
+}
+
+class NetworkError extends ApiError {
+    constructor(message, originalError = null) {
+        super(message, 'NETWORK_ERROR', originalError);
+        this.name = 'NetworkError';
+    }
+}
+
+class ServerError extends ApiError {
+    constructor(message, statusCode, originalError = null) {
+        super(message, `SERVER_ERROR_${statusCode}`, originalError);
+        this.name = 'ServerError';
+        this.statusCode = statusCode;
+    }
+}
+
+class ClientError extends ApiError {
+    constructor(message, statusCode, originalError = null) {
+        super(message, `CLIENT_ERROR_${statusCode}`, originalError);
+        this.name = 'ClientError';
+        this.statusCode = statusCode;
+    }
+}
+
+class TimeoutError extends NetworkError {
+    constructor(message = '请求超时，请检查网络连接') {
+        super(message);
+        this.name = 'TimeoutError';
+        this.code = 'TIMEOUT_ERROR';
+    }
+}
+
+// ============================================================
+// 错误消息映射与转换
+// ============================================================
+
+const ERROR_MESSAGES = {
+    'NETWORK_ERROR': '网络连接失败，请检查网络设置',
+    'TIMEOUT_ERROR': '请求超时，请检查网络连接后重试',
+    'CLIENT_ERROR_400': '请求参数错误',
+    'CLIENT_ERROR_401': '未授权，请重新登录',
+    'CLIENT_ERROR_403': '没有权限执行此操作',
+    'CLIENT_ERROR_404': '请求的资源不存在',
+    'CLIENT_ERROR_409': '操作冲突，请刷新后重试',
+    'CLIENT_ERROR_429': '请求过于频繁，请稍后再试',
+    'SERVER_ERROR_500': '服务器内部错误，请稍后重试',
+    'SERVER_ERROR_502': '网关错误，服务暂时不可用',
+    'SERVER_ERROR_503': '服务维护中，请稍后访问',
+    'SERVER_ERROR_504': '网关超时，请稍后重试',
+    'PARSE_ERROR': '数据解析失败',
+    'UNKNOWN_ERROR': '未知错误，请稍后重试'
+};
+
+function getUserFriendlyMessage(error) {
+    if (error instanceof ApiError) {
+        return ERROR_MESSAGES[error.code] || error.message;
+    }
+    return ERROR_MESSAGES['UNKNOWN_ERROR'];
+}
+
+// ============================================================
+// 全局错误处理器
+// ============================================================
+
+const ErrorHandler = {
+    handle(error, context = {}) {
+        console.error(`[API Error] ${context.action || 'Unknown'}:`, error);
+
+        const userMessage = getUserFriendlyMessage(error);
+
+        if (error instanceof TimeoutError || error instanceof NetworkError) {
+            if (typeof showToast === 'function') showToast(userMessage, 'warning');
+        } else if (error instanceof ClientError && error.statusCode === 401) {
+            if (typeof showToast === 'function') showToast('登录已过期，请重新登录', 'error');
+        } else if (error instanceof ServerError) {
+            if (typeof showToast === 'function') showToast(userMessage, 'error');
+        } else {
+            if (typeof showToast === 'function') showToast(userMessage, 'error');
+        }
+    }
+};
+
+// 后端服务器基地址（空字符串表示同源请求）
+const API_BASE = '';
+
+// ============================================================
+// 底层网络工具函数
+// ============================================================
+
+// 带超时的 fetch 包装器，默认超时30秒，超时自动中断请求
+async function fetchWithTimeout(url, options = {}, timeout = 30000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (e) {
+        clearTimeout(timeoutId);
+        if (e.name === 'AbortError') {
+            throw new TimeoutError();
+        }
+        throw new NetworkError('网络连接失败', e);
+    }
+}
+
+// 通用 GET 请求，自动拼接 URL 查询参数
+async function apiGet(path, params = {}) {
+    const query = new URLSearchParams(params).toString();
+    const url = `${API_BASE}${path}${query ? '?' + query : ''}`;
+    try {
+        const res = await fetchWithTimeout(url);
+        if (!res.ok) {
+            if (res.status >= 500) throw new ServerError(`HTTP ${res.status}`, res.status);
+            if (res.status >= 400) throw new ClientError(`HTTP ${res.status}`, res.status);
+        }
+        return await res.json();
+    } catch (e) {
+        if (e instanceof ApiError) throw e;
+        console.error(`API GET ${path} failed:`, e);
+        throw new ApiError('请求失败', 'UNKNOWN_ERROR', e);
+    }
+}
+
+// 通用 POST 请求，自动设置 JSON 请求头
+async function apiPost(path, data = {}) {
+    try {
+        const res = await fetchWithTimeout(`${API_BASE}${path}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+            if (res.status >= 500) throw new ServerError(`HTTP ${res.status}`, res.status);
+            if (res.status >= 400) throw new ClientError(`HTTP ${res.status}`, res.status);
+        }
+        return await res.json();
+    } catch (e) {
+        if (e instanceof ApiError) throw e;
+        console.error(`API POST ${path} failed:`, e);
+        throw new ApiError('请求失败', 'UNKNOWN_ERROR', e);
+    }
+}
+
+// 通用 DELETE 请求
+async function apiDelete(path, data = {}) {
+    try {
+        const res = await fetchWithTimeout(`${API_BASE}${path}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+            if (res.status >= 500) throw new ServerError(`HTTP ${res.status}`, res.status);
+            if (res.status >= 400) throw new ClientError(`HTTP ${res.status}`, res.status);
+        }
+        return await res.json();
+    } catch (e) {
+        if (e instanceof ApiError) throw e;
+        console.error(`API DELETE ${path} failed:`, e);
+        throw new ApiError('请求失败', 'UNKNOWN_ERROR', e);
+    }
+}
+
+// ============================================================
+// API 接口对象 — 按功能模块分组
+// 所有方法均返回 Promise，由调用方处理异步逻辑
+// ============================================================
+
+const API = {
+    // === 系统信息 ===
+    getSystemMemory: () => apiGet('/api/system/memory'),
+
+    // === 游戏版本管理 ===
+    getVersions: (refresh = false) => apiGet('/api/versions', { refresh: refresh ? 'true' : '' }),
+    getVersionDetails: (url) => apiGet('/api/version-details', { url }),
+    deleteVersion: (versionId) => apiPost('/api/version/delete', { versionId }),
+    renameVersion: (versionId, newName) => apiPost('/api/version/rename', { versionId, newName }),
+    deleteVersionById: (versionId) => apiPost('/api/version/delete', { versionId }),
+    openVersionFolder: (versionId, folderType) => apiGet('/api/version/open-folder', { versionId, folderType }),
+    getVersionExportInfo: (versionId) => apiGet('/api/version/export-info', { versionId }),
+    setVersionDescription: (versionId, description) => apiPost('/api/version/description', { versionId, description }),
+    setVersionFavorite: (versionId, favorite) => apiPost('/api/version/favorite', { versionId, favorite }),
+    setVersionIcon: (versionId, icon) => apiPost('/api/version/icon', { versionId, icon }),
+    setVersionCategory: (versionId, category) => apiPost('/api/version/category', { versionId, category }),
+
+    // === 版本安装 ===
+    installVersion: (url, versionId, loaderInfo = null, downloadSource = 'mojang') =>
+        apiPost('/api/install-start', { url, versionId, loaderInfo, downloadSource }),
+    getInstallProgress: (sessionId, sse = false) =>
+        apiGet('/api/install-progress', { sessionId, sse: sse ? 'true' : '' }),
+    cancelInstall: (sessionId) => apiGet('/api/install-cancel', { sessionId }),
+
+    // === 模组管理 ===
+    getInstalledMods: () => apiGet('/api/mods'),
+    searchMods: (query, source = 'modrinth', loader = '', version = '', category = '', sort = 'relevance', limit = 15, offset = 0) =>
+        apiGet('/api/mods/search', { query, source, loader, version, category, sort, limit, offset }),
+    downloadMod: (projectId, source = 'modrinth', loader = '', mcVersion = '') =>
+        apiPost('/api/mods/download', { projectId, source, loader, mcVersion }),
+    downloadModVersion: (versionId, projectId, source = 'modrinth', fileId = '', gameVersion = '', loader = '', savePath = '', includeDeps = true) =>
+        apiPost('/api/mods/download-version', { versionId, projectId, source, fileId, gameVersion, loader, savePath, includeDeps }),
+    getModDownloadStatus: (sessionId) => apiGet('/api/mods/download-status', { sessionId }),
+    getModDetail: (projectId, source = 'modrinth') => apiGet('/api/mods/detail', { projectId, source }),
+    getModVersions: (projectId, source = 'modrinth', loader = '', gameVersion = '') =>
+        apiGet('/api/mods/versions', { projectId, source, loader, gameVersion }),
+    getModCategories: (source = 'modrinth') => apiGet('/api/mods/categories', { source }),
+    getFeaturedMods: (loader = '', gameVersion = '') => apiGet('/api/mods/featured', { loader, gameVersion }),
+    toggleMod: (modId, enabled) => apiPost('/api/mods/toggle', { modId, enabled }),
+    deleteMod: (modId) => apiPost('/api/mods/delete', { modId }),
+    toggleModForVersion: (modId, enabled) => apiPost('/api/mods/toggle', { modId, enabled }),
+    getVersionMods: (versionId) => apiGet('/api/mods/installed', { versionId }),
+    selectModFile: () => apiGet('/api/mods/select-file'),
+    selectModpackFile: () => apiGet('/api/mods/select-modpack-file'),
+    installModFromFile: (versionId, filePath) => apiPost('/api/mods/install-from-file', { versionId, filePath }),
+    removeMod: (versionId, fileName) => apiPost('/api/mods/remove', { versionId, fileName }),
+    openModSaveFolder: () => apiGet('/api/mods/open-save-folder'),
+    resolveModDeps: (ids) => apiGet('/api/mods/resolve-deps', { ids }),
+    resolveDepVersions: (ids, gameVersion = '', loader = '', source = 'modrinth') =>
+        apiPost('/api/mods/resolve-deps-versions', { ids, gameVersion, loader, source }),
+    selectSaveFolder: async (defaultPath = '') => {
+        try {
+            if (window.electronAPI?.selectSaveFolder) {
+                return await window.electronAPI.selectSaveFolder(defaultPath);
+            }
+        } catch (e) {
+            console.warn('[API] IPC selectSaveFolder failed, falling back to server:', e.message);
+        }
+        return await apiPost('/api/mods/select-save-folder', { defaultPath });
+    },
+    getModDependencies: (versionId, source = 'modrinth', gameVersion = '', loader = '') =>
+        apiPost('/api/mods/get-dependencies', { versionId, source, gameVersion, loader }),
+
+    // === 模组加载器（Fabric/Forge/NeoForge/OptiFine）===
+    getModLoaderVersions: async (gameVersion, loaderType) => {
+        try {
+            let result;
+            switch (loaderType.toLowerCase()) {
+                case 'forge':       result = await API.getForgeVersions(gameVersion); break;
+                case 'neoforge':    result = await apiGet('/api/neoforge/versions', { game: gameVersion }); break;
+                case 'fabric':      result = await API.getFabricVersions(gameVersion); break;
+                case 'optifine':    result = await API.getOptiFineVersions(gameVersion); break;
+                default:            return [];
+            }
+            if (result && result.versions) return result.versions;
+            return Array.isArray(result) ? result : [];
+        } catch (e) {
+            console.error('getModLoaderVersions error:', e);
+            return [];
+        }
+    },
+    getFabricVersions: async (game = '') => {
+        const result = await apiGet('/api/fabric/versions', { game });
+        return result && result.versions ? result.versions : (Array.isArray(result) ? result : []);
+    },
+    installFabric: (gameVersion, loaderVersion = '') =>
+        apiPost('/api/fabric/install', { gameVersion, loaderVersion }),
+    getForgeVersions: async (game) => {
+        const result = await apiGet('/api/forge/versions', { game });
+        return result && result.versions ? result.versions : (Array.isArray(result) ? result : []);
+    },
+    installForge: (gameVersion, forgeVersion) =>
+        apiPost('/api/forge/install', { gameVersion, forgeVersion }),
+    installNeoForge: (gameVersion, neoVersion) =>
+        apiPost('/api/neoforge/install', { gameVersion, neoVersion }),
+    getOptiFineVersions: async (game) => {
+        const result = await apiGet('/api/optifine/versions', { game });
+        return result && result.versions ? result.versions : (Array.isArray(result) ? result : []);
+    },
+    installOptiFine: (gameVersion, optifineType) =>
+        apiPost('/api/optifine/install', { gameVersion, optifineType }),
+
+    // === 游戏启动与生命周期 ===
+    launchGame: (versionId) => apiPost('/api/launch', { versionId }),
+    launchCheck: (versionId) => apiPost('/api/launch/check', { versionId }),
+    getLaunchArgsPreview: (versionId) => apiPost('/api/launch/args-preview', { versionId }),
+    checkLaunchDeps: (versionId) => apiPost('/api/launch/check', { versionId }),
+    downloadLaunchDeps: (versionId, sessionId) =>
+        apiPost('/api/launch/download-deps', { versionId, sessionId }),
+    getLaunchSessionStatus: (sessionId) => apiGet('/api/launch/session-status', { sessionId }),
+    getGameStatus: () => apiGet('/api/game/status'),
+    stopGame: () => apiPost('/api/game/stop'),
+    stopGameInstance: (sessionId) => apiPost('/api/game/stop', { sessionId }),
+    getGameLog: (count = 100, offset = 0) => apiGet('/api/game/log', { count, offset }),
+    getGameLogBySession: (sessionId, count = 100, offset = 0) =>
+        apiGet('/api/game/log', { count, offset, sessionId }),
+    getExitAnalysis: () => apiGet('/api/game/exit-analysis'),
+    getCrashLog: (versionId) => apiGet('/api/game/crash-log', { versionId }),
+    analyzeCrash: (versionId) => apiGet('/api/game/crash-analyze', { versionId }),
+    getPlayTime: (versionId) => apiGet('/api/game/play-time', { versionId }),
+    diagnoseGame: (versionId) => apiGet('/api/game/diagnose', { versionId }),
+    exportLaunchScript: (versionId) => apiPost('/api/version/export-script', { versionId }),
+
+    // === 版本修复 ===
+    repairVersion: (versionId) => apiPost('/api/version/repair', { versionId }),
+    repairVersionFiles: (versionId) => apiPost('/api/version/repair-files', { versionId }),
+    cleanupVersion: (versionId) => apiGet('/api/version/cleanup', { versionId }),
+    repairStart: (versionId) => apiPost('/api/version/repair-start', { versionId }),
+    repairProgress: (sessionId, sse = false) =>
+        apiGet('/api/version/repair-progress', { sessionId, sse: sse ? 'true' : '' }),
+    repairCancel: (sessionId) => apiGet('/api/version/repair-cancel', { sessionId }),
+    diagnoseVersion: (versionId) => apiGet('/api/version/diagnose', { versionId }),
+
+    // === 版本配置（独立/隔离设置）===
+    getVersionSettings: (versionId) => apiGet('/api/version/settings', { versionId }),
+    saveVersionSettings: (settings) => apiPost('/api/version/settings/save', settings),
+
+    // === 设置管理 ===
+    getSettings: () => apiGet('/api/settings'),
+    saveSettings: (settings) => apiPost('/api/settings', settings),
+    resetSettings: () => apiPost('/api/settings/reset', {}),
+    saveSetting: (key, value) => apiPost('/api/settings/set', { key, value }),
+
+    // === 账户管理（离线/Microsoft/外置登录）===
+    getAccounts: () => apiGet('/api/accounts'),
+    addOfflineAccount: (username) => apiPost('/api/accounts/add-offline', { username }),
+    deleteAccount: (accountId) => apiPost('/api/accounts/delete', { accountId }),
+    selectAccount: (accountId) => apiPost('/api/accounts/select', { accountId }),
+    addThirdPartyAccount: (serverUrl, username, password) =>
+        apiPost('/api/accounts/add-thirdparty', { serverUrl, username, password }),
+    loginThirdParty: (serverUrl, username, password) =>
+        apiPost('/api/accounts/thirdparty-login', { serverUrl, username, password }),
+    verifyThirdPartyServer: (serverUrl) =>
+        apiGet('/api/accounts/thirdparty-verify', { serverUrl }),
+    selectThirdPartyProfile: (accessToken, clientToken, serverUrl, profileId, profileName) =>
+        apiPost('/api/accounts/thirdparty-select-profile', { accessToken, clientToken, serverUrl, profileId, profileName }),
+
+    // === Microsoft 认证 ===
+    getMsDeviceCode: () => apiPost('/api/msauth/device-code'),
+    pollMsAuth: (deviceCode) => apiPost('/api/msauth/poll', { deviceCode }),
+
+    // === Java 运行时管理 ===
+    detectJava: () => apiGet('/api/java/detect'),
+    getJavaList: () => apiGet('/api/java/list'),
+    getInstalledJava: () => apiGet('/api/java/installed'),
+    installJava: (component = 'java-runtime-gamma') =>
+        apiPost('/api/java/install', { component }),
+    getJavaInstallStatus: (sessionId) =>
+        apiGet('/api/java/install-status', { sessionId }),
+    autoInstallJava: (requiredVersion = 17) =>
+        apiPost('/api/java/auto-install', { requiredVersion }),
+    getJavaDownloadSources: () => apiGet('/api/java/download-sources'),
+    downloadJava: (majorVersion) => apiPost('/api/java/download', { majorVersion }),
+    getJavaDownloadStatus: (sessionId) =>
+        apiGet('/api/java/download-status', { sessionId }),
+    configureJavaEnv: (javaHome, majorVersion) =>
+        apiPost('/api/java/configure-env', { javaHome, majorVersion }),
+    deleteJava: (javaHome) => apiPost('/api/java/delete', { javaHome }),
+    getOptimizedJvmArgs: (versionId) => apiGet('/api/jvm/optimize-args', { versionId }),
+    generateCds: (versionId) => apiPost('/api/jvm/generate-cds', { versionId }),
+    getCdsStatus: (versionId) => apiGet('/api/jvm/cds-status', { versionId }),
+
+    // === authlib-injector（外置登录）===
+    getAuthlibInfo: () => apiGet('/api/authlib-injector/info'),
+    downloadAuthlib: () => apiPost('/api/authlib-injector/download'),
+
+    // === 服务端状态 ===
+    getStatus: () => apiGet('/api/status'),
+    pingServer: (host, port = 25565) => apiGet('/api/server/ping', { host, port }),
+
+    // === 文件系统操作 ===
+    openFolder: (folder) => apiPost('/api/open-folder', { folder }),
+    openInExplorer: (targetPath) => apiPost('/api/filesystem/open-in-explorer', { targetPath }),
+    getDefaultModPath: () => apiGet('/api/filesystem/default-mod-path'),
+    getQuickAccessPaths: () => apiGet('/api/filesystem/quick-access'),
+    getDrives: () => apiGet('/api/filesystem/drives'),
+    getFolderContents: (folderPath) => apiGet('/api/filesystem/list', { path: folderPath }),
+    browseDirectory: (path, showHidden) =>
+        apiPost('/api/filesystem/browse', { path, showHidden }),
+    createDirectory: (parentPath, name) =>
+        apiPost('/api/filesystem/create-directory', { parentPath, name }),
+
+    // === 外部版本目录（整合包/其他启动器版本目录）===
+    addExternalFolder: (folderPath, name = '') =>
+        apiPost('/api/version/add-folder', { path: folderPath, name }),
+    removeExternalFolder: (folderPath) =>
+        apiPost('/api/version/remove-folder', { path: folderPath }),
+    listExternalFolders: () => apiGet('/api/version/list-folders'),
+    selectExternalFolder: () => apiGet('/api/version/select-folder'),
+
+    // === 整合包导出 ===
+    exportModpack: (versionId, name, version, author, description, selectedKeys) =>
+        apiPost('/api/version/export-modpack', { versionId, name, version, author, description, selectedKeys }),
+
+    // === 资源搜索 ===
+    searchResources: (query, type = 'modpack', loader = '', version = '', category = '', sort = 'downloads', limit = 15, offset = 0) =>
+        apiGet('/api/resources/search', { query, type, loader, version, category, sort, limit, offset }),
+    getResourceDetail: (projectId) => apiGet('/api/resources/detail', { projectId }),
+    getResourceVersions: (projectId, loader = '', gameVersion = '') =>
+        apiGet('/api/resources/versions', { projectId, loader, gameVersion }),
+    downloadResource: (versionId, projectId, projectType = 'mod', targetVersionId = '') =>
+        apiPost('/api/resources/download', { versionId, projectId, projectType, targetVersionId }),
+
+    // === 局域网联机 (LAN) ===
+    lanCreateRoom: (name, port, playerName) =>
+        apiPost('/api/lan/create', { name, port, playerName }),
+    lanJoinRoom: (code, playerName) =>
+        apiPost('/api/lan/join', { code, playerName }),
+    lanGetRoomInfo: (code) => apiGet('/api/lan/info', { code }),
+    lanLeaveRoom: (code, peerId) => apiPost('/api/lan/leave', { code, peerId }),
+    lanDestroyRoom: (code) => apiPost('/api/lan/destroy', { code }),
+    lanGetMyIP: () => apiGet('/api/lan/my-ip'),
+    lanUPnPMap: (internalPort, externalPort, description) =>
+        apiPost('/api/lan/upnp-map', { internalPort, externalPort, description }),
+    lanUPnPUnmap: (externalPort) => apiPost('/api/lan/upnp-unmap', { externalPort }),
+    lanUPnPStatus: () => apiGet('/api/lan/upnp-status'),
+    lanUPnPDiagnose: () => apiGet('/api/lan/upnp-diagnose'),
+    lanRemoteCreate: (name, port, playerName, useUPnP) =>
+        apiPost('/api/lan/remote-create', { name, port, playerName, useUPnP }),
+    lanGetPublicIP: () => apiGet('/api/lan/public-ip'),
+
+    // === EasyTier 虚拟组网 ===
+    easytierStatus: () => apiGet('/api/easytier/status'),
+    easytierHost: (gamePort) => apiPost('/api/easytier/host', { gamePort }),
+    easytierGuest: (roomCode) => apiPost('/api/easytier/guest', { roomCode }),
+    easytierStop: () => apiPost('/api/easytier/stop', {}),
+    easytierPeers: () => apiGet('/api/easytier/peers'),
+
+    checkModUpdates: (versionId) => apiPost('/api/mods/check-updates', { versionId }),
+
+    // === 下载管理 ===
+    getDownloadQueue: () => apiGet('/api/downloads/queue'),
+    cancelDownload: (taskId) => apiPost('/api/downloads/cancel', { taskId }),
+    getDownloadHistory: (limit = 15, offset = 0) => apiGet('/api/downloads/history', { limit, offset }),
+};
