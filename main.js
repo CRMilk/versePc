@@ -47,6 +47,7 @@ let apiHandler = null;            // server.js 的 API 处理函数引用
 let sseExecuteTool = null;         // SSE 服务器使用的工具执行函数引用
 let shuttingDown = false;         // 是否正在关闭应用
 let serverModuleCache = null;     // server.js 模块缓存
+let ssePort = 3001;
 let updateDownloaded = false;     // 更新是否已下载完成
 let updateAvailableInfo = null;   // 可用的更新信息（用于弹窗通知）
 
@@ -497,13 +498,25 @@ function saveStore(data) {
     try {
         const dir = path.dirname(STORE_PATH);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2));
+        const json = JSON.stringify(data, null, 2);
+        fs.writeFile(STORE_PATH, json, (err) => {
+            if (err) console.error('Failed to save store:', err);
+        });
     } catch (e) { console.error('Failed to save store:', e); }
 }
 
 ipcMain.handle('store-get', async (event, key) => {
     const store = loadStore();
     return store[key] !== undefined ? store[key] : null;
+});
+
+ipcMain.handle('store-get-multiple', async (event, keys) => {
+    const store = loadStore();
+    const result = {};
+    for (const key of keys) {
+        result[key] = store[key] !== undefined ? store[key] : null;
+    }
+    return result;
 });
 
 ipcMain.handle('store-set', async (event, key, value) => {
@@ -532,6 +545,193 @@ ipcMain.handle('shell-open-external', async (event, url) => {
     }
     await shell.openExternal(url);
     return true;
+});
+
+let editorWindow = null;
+
+function createEditorWindow(filePath) {
+    if (editorWindow && !editorWindow.isDestroyed()) {
+        editorWindow.focus();
+        if (filePath) editorWindow.webContents.send('editor:open-file', filePath);
+        return;
+    }
+    const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+    editorWindow = new BrowserWindow({
+        width: Math.min(1200, width - 100),
+        height: Math.min(800, height - 100),
+        title: 'VersePC Editor',
+        icon: path.join(__dirname, 'img', 'logo.png'),
+        backgroundColor: '#1e1e1e',
+        show: false,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false,
+            webviewTag: false
+        }
+    });
+    editorWindow.loadFile('editor.html');
+    editorWindow.once('ready-to-show', () => {
+        editorWindow.show();
+        if (filePath) {
+            editorWindow.webContents.once('did-finish-load', () => {
+                editorWindow.webContents.send('editor:open-file', filePath);
+            });
+        }
+    });
+    editorWindow.on('closed', () => { editorWindow = null; });
+}
+
+ipcMain.handle('editor:open-file-dialog', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win, {
+        title: '打开文件',
+        properties: ['openFile'],
+        filters: [
+            { name: '所有文件', extensions: ['*'] },
+            { name: 'JSON', extensions: ['json', 'jsonc'] },
+            { name: 'JavaScript', extensions: ['js', 'jsx', 'ts', 'tsx'] },
+            { name: '配置文件', extensions: ['toml', 'ini', 'cfg', 'properties', 'yml', 'yaml'] },
+            { name: '文本文件', extensions: ['txt', 'md', 'log'] }
+        ]
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+    return result.filePaths[0];
+});
+
+ipcMain.handle('editor:read-file', async (event, filePath) => {
+    try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        return { content };
+    } catch (e) {
+        return { error: e.message };
+    }
+});
+
+ipcMain.handle('editor:write-file', async (event, filePath, content) => {
+    try {
+        fs.writeFileSync(filePath, content, 'utf-8');
+        return { success: true };
+    } catch (e) {
+        return { error: e.message };
+    }
+});
+
+ipcMain.handle('editor:open', async (event, filePath) => {
+    createEditorWindow(filePath);
+    return true;
+});
+
+ipcMain.handle('editor:scan-dir', async (event, dirPath) => {
+    try {
+        const resolved = path.resolve(dirPath);
+        const entries = fs.readdirSync(resolved, { withFileTypes: true });
+        const IGNORE = ['node_modules', '.git', '.svn', '__pycache__', '.DS_Store', 'Thumbs.db', 'dist', '.next', '.cache'];
+        return entries
+            .filter(e => !IGNORE.includes(e.name) && !e.name.startsWith('.'))
+            .sort((a, b) => {
+                if (a.isDirectory() && !b.isDirectory()) return -1;
+                if (!a.isDirectory() && b.isDirectory()) return 1;
+                return a.name.localeCompare(b.name);
+            })
+            .slice(0, 200)
+            .map(e => ({
+                name: e.name,
+                path: path.join(resolved, e.name),
+                isDir: e.isDirectory(),
+                rel: path.relative(resolved, path.join(resolved, e.name))
+            }));
+    } catch (e) { return []; }
+});
+
+const terminalSessions = new Map();
+
+const pendingVersionSelections = new Map();
+
+function createTerminalSession(id, cols, rows) {
+    const shell = process.env.COMSPEC || 'cmd.exe';
+    const pwsh = 'powershell.exe';
+    let child;
+    try {
+        child = require('child_process').spawn(pwsh, ['-NoLogo', '-NoExit'], {
+            cwd: process.env.USERPROFILE || process.env.HOME || 'C:\\',
+            env: { ...process.env, TERM: 'xterm-256color' },
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
+    } catch (e) {
+        child = require('child_process').spawn(shell, [], {
+            cwd: process.env.USERPROFILE || process.env.HOME || 'C:\\',
+            env: { ...process.env, TERM: 'xterm-256color' },
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
+    }
+    const session = { id, process: child, cols: cols || 80, rows: rows || 24 };
+    terminalSessions.set(id, session);
+    return session;
+}
+
+ipcMain.handle('terminal:create', async (event, id, cols, rows) => {
+    const session = createTerminalSession(id, cols, rows);
+    const win = BrowserWindow.fromWebContents(event.sender);
+    session.process.stdout.on('data', (data) => {
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('terminal:data', id, data.toString('utf-8'));
+        }
+    });
+    session.process.stderr.on('data', (data) => {
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('terminal:data', id, data.toString('utf-8'));
+        }
+    });
+    session.process.on('exit', (code) => {
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('terminal:exit', id, code);
+        }
+        terminalSessions.delete(id);
+    });
+    session.process.on('error', (err) => {
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('terminal:data', id, `\r\n\x1b[31mError: ${err.message}\x1b[0m\r\n`);
+        }
+    });
+    return { success: true };
+});
+
+ipcMain.handle('terminal:write', async (event, id, data) => {
+    const session = terminalSessions.get(id);
+    if (session && session.process && !session.process.killed) {
+        session.process.stdin.write(data);
+    }
+});
+
+ipcMain.handle('terminal:resize', async (event, id, cols, rows) => {
+    const session = terminalSessions.get(id);
+    if (session) {
+        session.cols = cols;
+        session.rows = rows;
+    }
+});
+
+ipcMain.handle('terminal:kill', async (event, id) => {
+    const session = terminalSessions.get(id);
+    if (session) {
+        if (session.process && !session.process.killed) {
+            session.process.kill();
+        }
+        terminalSessions.delete(id);
+    }
+});
+
+ipcMain.handle('terminal:list', async () => {
+    return Array.from(terminalSessions.keys());
+});
+
+ipcMain.on('ai:select-version-response', (event, { selId, selected }) => {
+    const pending = pendingVersionSelections.get(selId);
+    if (pending) {
+        clearTimeout(pending.timer);
+        pendingVersionSelections.delete(selId);
+        pending.resolve(selected);
+    }
 });
 
 ipcMain.handle('get-memory-info', async () => {
@@ -699,7 +899,8 @@ app.whenReady().then(async () => {
             sseLog('[DEBUG SSE] require sse-server...');
             const { createSSEServer } = require('./sse-server');
             const result = createSSEServer({ executeTool: sseExecuteTool });
-            sseLog('[DEBUG SSE] SSE server created: port=' + (result ? result.PORT : 'null'));
+            ssePort = result ? result.PORT : 3001;
+            sseLog('[DEBUG SSE] SSE server created: port=' + ssePort);
         } catch (e) {
             sseLog('[DEBUG SSE] SSE server failed: ' + e.message);
         }
@@ -1683,11 +1884,36 @@ function registerAIChatIPC() {
         if (!fs.existsSync(versionsDir)) return [];
         try {
             const dirs = await fs.promises.readdir(versionsDir, { withFileTypes: true });
-            return dirs.filter(d => d.isDirectory()).map(d => ({
-                id: d.name,
-                name: d.name,
-                path: path.join(versionsDir, d.name)
-            }));
+            const results = [];
+            for (const d of dirs) {
+                if (!d.isDirectory()) continue;
+                const versionDir = path.join(versionsDir, d.name);
+                const info = { id: d.name, name: d.name, path: versionDir };
+                try {
+                    const versionJsonPath = path.join(versionDir, d.name + '.json');
+                    if (fs.existsSync(versionJsonPath)) {
+                        const data = JSON.parse(await fs.promises.readFile(versionJsonPath, 'utf8'));
+                        info.type = data.type || 'release';
+                        info.baseVersion = d.name.replace(/-?(fabric|forge|neoforge|optifine|liteloader|quilt)[\s\S]*/i, '').trim();
+                        info.isFabric = /fabric/i.test(d.name);
+                        info.isForge = /forge/i.test(d.name);
+                        info.isNeoForge = /neoforge/i.test(d.name);
+                        info.isOptiFine = /optifine/i.test(d.name);
+                        info.isQuilt = /quilt/i.test(d.name);
+                        info.loader = info.isFabric ? 'Fabric' : info.isForge ? 'Forge' : info.isNeoForge ? 'NeoForge' : info.isOptiFine ? 'OptiFine' : info.isQuilt ? 'Quilt' : 'Vanilla';
+                        if (data.inheritsFrom) info.inheritsFrom = data.inheritsFrom;
+                        if (data.javaVersion) info.javaVersion = data.javaVersion.majorVersion || '';
+                        const modsDir = path.join(versionDir, 'mods');
+                        if (fs.existsSync(modsDir)) {
+                            const modFiles = await fs.promises.readdir(modsDir);
+                            info.modsCount = modFiles.filter(f => f.endsWith('.jar')).length;
+                        }
+                        info.modsPath = modsDir;
+                    }
+                } catch (e) {}
+                results.push(info);
+            }
+            return results;
         } catch (e) { return []; }
     });
 
@@ -1763,11 +1989,11 @@ function registerAIChatIPC() {
             type: 'function',
             function: {
                 name: 'get_versions',
-                description: '获取 Minecraft 版本列表。返回的每个版本包含 id、type 和 url 字段。ALWAYS 在安装版本时使用返回的url字段，NEVER 自行编造URL。installedOnly=true 只返回已安装版本，false返回所有可用版本。',
+                description: '获取 Minecraft 版本列表。每个版本包含 id、type、path(完整路径)、loader(加载器类型如Fabric/Forge/Vanilla)、modsCount(模组数量)、baseVersion(基础MC版本)。installedOnly=true 只返回已安装版本（含完整路径和元数据），false 返回所有可用版本。',
                 parameters: {
                     type: 'object',
                     properties: {
-                        installedOnly: { type: 'boolean', description: '是否只返回已安装的版本，默认 false' }
+                        installedOnly: { type: 'boolean', description: '是否只返回已安装的版本（含路径、加载器、模组数等详细信息），默认 false' }
                     }
                 }
             }
@@ -1960,6 +2186,16 @@ function registerAIChatIPC() {
                 name: 'get_current_context',
                 description: '获取启动器当前上下文信息。ALWAYS 在执行任何操作前调用此工具了解当前状态，NEVER 假设当前版本或加载器。返回选中的游戏版本、加载器类型、mods目录、Java配置、已安装模组数量等。',
                 parameters: { type: 'object', properties: {} }
+            }
+        },
+        {
+            type: 'function',
+            function: {
+                name: 'select_version',
+                description: '向用户展示版本选择卡片，让用户选择一个已安装的游戏版本。当需要用户确认目标版本时使用此工具（如安装模组、切换版本等场景）。调用后会暂停AI思考，等待用户选择版本后自动继续。',
+                parameters: { type: 'object', properties: {
+                    purpose: { type: 'string', description: '选择版本的目的说明，如"安装模组到目标版本"、"切换游戏版本"等，会显示在卡片标题中' }
+                }, required: ['purpose'] }
             }
         },
         {
@@ -2209,7 +2445,8 @@ function registerAIChatIPC() {
         grep_search: '搜索文件内容', glob_search: '搜索文件名', web_fetch: '获取网页',
         web_search_general: '通用网络搜索', todo_write: '任务管理', update_todo_list: '更新计划', agent: '子代理',
         translate_mod: '模组汉化', download_cfpa_pack: '下载社区汉化包',
-        explore_environment: '探索环境'
+        explore_environment: '探索环境',
+        select_version: '选择版本'
     };
 
     const TOOL_CONFIG = {
@@ -2253,7 +2490,8 @@ function registerAIChatIPC() {
         agent:             { timeout: 120000,retries: 0, risk: 'moderate' },
         translate_mod:     { timeout: 120000,retries: 0, risk: 'moderate' },
         download_cfpa_pack:{ timeout: 60000, retries: 1, risk: 'safe' },
-        explore_environment: { timeout: 20000, retries: 1, risk: 'safe' }
+        explore_environment: { timeout: 20000, retries: 1, risk: 'safe' },
+        select_version:    { timeout: 120000, retries: 0, risk: 'safe' }
     };
 
     function normalizeToolResult(name, result) {
@@ -2474,6 +2712,19 @@ function registerAIChatIPC() {
                     }
                     return JSON.stringify(summary);
                 }
+                case 'select_version': {
+                    const installed = parsed.installed || [];
+                    return JSON.stringify({
+                        purpose: parsed.purpose || '选择版本',
+                        versionCount: installed.length,
+                        versions: installed.map(v => ({
+                            id: v.id,
+                            loader: v.loader || 'Vanilla',
+                            modsCount: v.modsCount || 0,
+                            type: v.type || 'release'
+                        }))
+                    });
+                }
                 default: {
                     const str = JSON.stringify(parsed);
                     if (str.length > 2000) return JSON.stringify({ summary: str.slice(0, 1500) + '...[truncated]', truncated: true });
@@ -2517,7 +2768,7 @@ function registerAIChatIPC() {
                 clearTimeout(timeoutId);
                 const result = normalizeToolResult(name, summarizeToolResult(name, rawResult));
 
-                const noCacheTools = ['install_mod', 'install_version', 'install_loader', 'install_modpack', 'launch_game', 'stop_game', 'toggle_mod', 'manage_settings', 'execute_command', 'write_file', 'edit_file', 'translate_mod', 'download_cfpa_pack', 'explore_environment'];
+                const noCacheTools = ['install_mod', 'install_version', 'install_loader', 'install_modpack', 'launch_game', 'stop_game', 'toggle_mod', 'manage_settings', 'execute_command', 'write_file', 'edit_file', 'translate_mod', 'download_cfpa_pack', 'explore_environment', 'select_version'];
                 if (!noCacheTools.includes(name)) {
                     toolResultCache.set(cacheKey, { result, time: Date.now() });
                     if (toolResultCache.size > 50) {
@@ -2641,12 +2892,44 @@ function registerAIChatIPC() {
                     return JSON.stringify(body);
                 }
                 case 'get_versions': {
-                    const query = args.installedOnly ? { installed: 'true' } : {};
+                    if (args.installedOnly) {
+                        const fs = require('fs');
+                        const pathMod = require('path');
+                        const os = require('os');
+                        const versionsDir = pathMod.join(os.homedir(), '.versepc', 'versions');
+                        if (!fs.existsSync(versionsDir)) return JSON.stringify({ installed: [] });
+                        try {
+                            const dirs = await fs.promises.readdir(versionsDir, { withFileTypes: true });
+                            const results = [];
+                            for (const d of dirs) {
+                                if (!d.isDirectory()) continue;
+                                const vDir = pathMod.join(versionsDir, d.name);
+                                const info = { id: d.name, name: d.name, path: vDir };
+                                try {
+                                    const vJson = pathMod.join(vDir, d.name + '.json');
+                                    if (fs.existsSync(vJson)) {
+                                        const data = JSON.parse(await fs.promises.readFile(vJson, 'utf8'));
+                                        info.type = data.type || 'release';
+                                        info.baseVersion = d.name.replace(/-?(fabric|forge|neoforge|optifine|liteloader|quilt)[\s\S]*/i, '').trim();
+                                        info.loader = /fabric/i.test(d.name) ? 'Fabric' : /forge/i.test(d.name) ? 'Forge' : /neoforge/i.test(d.name) ? 'NeoForge' : /optifine/i.test(d.name) ? 'OptiFine' : /quilt/i.test(d.name) ? 'Quilt' : 'Vanilla';
+                                        if (data.inheritsFrom) info.inheritsFrom = data.inheritsFrom;
+                                        if (data.javaVersion) info.javaVersion = data.javaVersion.majorVersion || '';
+                                        const modsDir = pathMod.join(vDir, 'mods');
+                                        if (fs.existsSync(modsDir)) {
+                                            const modFiles = await fs.promises.readdir(modsDir);
+                                            info.modsCount = modFiles.filter(f => f.endsWith('.jar')).length;
+                                        }
+                                        info.modsPath = pathMod.join(vDir, 'mods');
+                                    }
+                                } catch (e) {}
+                                results.push(info);
+                            }
+                            return JSON.stringify({ installed: results });
+                        } catch (e) { return JSON.stringify({ installed: [] }); }
+                    }
+                    const query = {};
                     const result = await callAPI('/api/versions', 'GET', null, query);
                     const body = JSON.parse(result.body.toString());
-                    if (args.installedOnly && body.installed) {
-                        return JSON.stringify(body.installed);
-                    }
                     return JSON.stringify(body);
                 }
                 case 'get_game_status': {
@@ -2797,6 +3080,56 @@ function registerAIChatIPC() {
                     const result = await callAPI('/api/current-context', 'GET', null, {});
                     const body = JSON.parse(result.body.toString());
                     return JSON.stringify(body);
+                }
+                case 'select_version': {
+                    const fs = require('fs');
+                    const pathMod = require('path');
+                    const os = require('os');
+                    const versionsDir = pathMod.join(os.homedir(), '.versepc', 'versions');
+                    let installed = [];
+                    if (fs.existsSync(versionsDir)) {
+                        try {
+                            const dirs = await fs.promises.readdir(versionsDir, { withFileTypes: true });
+                            for (const d of dirs) {
+                                if (!d.isDirectory()) continue;
+                                const vDir = pathMod.join(versionsDir, d.name);
+                                const info = { id: d.name, name: d.name, path: vDir };
+                                try {
+                                    const vJson = pathMod.join(vDir, d.name + '.json');
+                                    if (fs.existsSync(vJson)) {
+                                        const data = JSON.parse(await fs.promises.readFile(vJson, 'utf8'));
+                                        info.type = data.type || 'release';
+                                        info.loader = /fabric/i.test(d.name) ? 'Fabric' : /forge/i.test(d.name) ? 'Forge' : /neoforge/i.test(d.name) ? 'NeoForge' : /optifine/i.test(d.name) ? 'OptiFine' : /quilt/i.test(d.name) ? 'Quilt' : 'Vanilla';
+                                        const modsDir = pathMod.join(vDir, 'mods');
+                                        if (fs.existsSync(modsDir)) {
+                                            const modFiles = await fs.promises.readdir(modsDir);
+                                            info.modsCount = modFiles.filter(f => f.endsWith('.jar')).length;
+                                        }
+                                    }
+                                } catch (e) {}
+                                installed.push(info);
+                            }
+                        } catch (e) {}
+                    }
+                    if (installed.length === 0) {
+                        return JSON.stringify({ purpose: args.purpose || '', selected: null, installed: [] });
+                    }
+                    const selId = 'sel-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+                    if (mainWindow && mainWindow.webContents) {
+                        mainWindow.webContents.send('ai:select-version-request', {
+                            selId,
+                            purpose: args.purpose || '选择版本',
+                            installed
+                        });
+                    }
+                    const selected = await new Promise((resolve) => {
+                        const timer = setTimeout(() => {
+                            pendingVersionSelections.delete(selId);
+                            resolve(null);
+                        }, 120000);
+                        pendingVersionSelections.set(selId, { resolve, timer });
+                    });
+                    return JSON.stringify({ purpose: args.purpose || '', selected, installed });
                 }
                 case 'search_modpacks': {
                     const query = {
@@ -3574,7 +3907,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                         const out = await new Promise((resolve, reject) => {
                             exec(cmd, {
                                 timeout: 120000, maxBuffer: 1024 * 1024,
-                                shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/bash',
+                                shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
                                 encoding: 'utf-8', cwd: args.cwd || process.cwd()
                             }, (error, stdout, stderr) => {
                                 if (error) {
@@ -3636,17 +3969,31 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                         const count = content.split(oldStr).length - 1;
                         if (count === 0) return JSON.stringify({ error: `old_str not found in ${resolvedPath}` });
                         if (count > 1) return JSON.stringify({ error: `Multiple occurrences (${count}) of old_str. Please provide more context to make it unique.` });
+                        const originalContent = content;
                         content = content.replace(oldStr, newStr);
                         fs.writeFileSync(resolvedPath, content, 'utf-8');
+                        try {
+                            if (mainWindow && !mainWindow.isDestroyed()) {
+                                mainWindow.webContents.send('editor:show-diff', resolvedPath, originalContent, content);
+                            }
+                        } catch (e) {}
                         return JSON.stringify({ output: `File ${resolvedPath} edited successfully.` });
                     }
                     if (cmd === 'insert') {
                         const insertLine = args.insert_line;
                         const newStr = args.new_str || '';
                         if (insertLine == null) return JSON.stringify({ error: 'insert_line is required for insert' });
-                        let lines = fs.readFileSync(resolvedPath, 'utf-8').split('\n');
+                        let content = fs.readFileSync(resolvedPath, 'utf-8');
+                        let lines = content.split('\n');
+                        const originalContent = content;
                         lines.splice(insertLine, 0, ...newStr.split('\n'));
-                        fs.writeFileSync(resolvedPath, lines.join('\n'), 'utf-8');
+                        const newContent = lines.join('\n');
+                        fs.writeFileSync(resolvedPath, newContent, 'utf-8');
+                        try {
+                            if (mainWindow && !mainWindow.isDestroyed()) {
+                                mainWindow.webContents.send('editor:show-diff', resolvedPath, originalContent, newContent);
+                            }
+                        } catch (e) {}
                         return JSON.stringify({ output: `File ${resolvedPath} edited successfully at line ${insertLine}.` });
                     }
                     return JSON.stringify({ error: `Unknown command: ${cmd}` });
@@ -4098,19 +4445,77 @@ ${toolDescriptions}
 
             activeWorker = new Worker(path.join(__dirname, 'agent-worker.js'));
 
+            let _lastReasoningForward = 0;
+            let _pendingReasoningChunk = null;
+            let _reasoningFlushTimer = null;
+            let _lastTextForward = 0;
+            let _pendingTextChunks = [];
+            let _textFlushTimer = null;
+            const _TEXT_THROTTLE_MS = 40;
+            function _flushTextChunks() {
+                _textFlushTimer = null;
+                if (_pendingTextChunks.length === 0) return;
+                const chunks = _pendingTextChunks.splice(0);
+                for (const chunk of chunks) {
+                    try { event.sender.send('ai:chat-chunk', chunk); } catch (e) {}
+                }
+                _lastTextForward = Date.now();
+            }
+
             activeWorker.on('message', (msg) => {
                 try {
                     switch (msg.type) {
-                        case 'chunk':
+                        case 'chunk': {
+                            const c = msg.chunk;
+                            if (c && c.type === 'reasoning_content') {
+                                _pendingReasoningChunk = c;
+                                const now = Date.now();
+                                if (!_reasoningFlushTimer) {
+                                    const delay = Math.max(80 - (now - _lastReasoningForward), 0);
+                                    _reasoningFlushTimer = setTimeout(() => {
+                                        _reasoningFlushTimer = null;
+                                        if (_pendingReasoningChunk) {
+                                            try { event.sender.send('ai:chat-chunk', _pendingReasoningChunk); } catch (e) {}
+                                            _lastReasoningForward = Date.now();
+                                            _pendingReasoningChunk = null;
+                                        }
+                                    }, delay);
+                                }
+                                break;
+                            }
+                            if (_reasoningFlushTimer && _pendingReasoningChunk) {
+                                clearTimeout(_reasoningFlushTimer);
+                                _reasoningFlushTimer = null;
+                                try { event.sender.send('ai:chat-chunk', _pendingReasoningChunk); } catch (e) {}
+                                _pendingReasoningChunk = null;
+                            }
+                            const isTextDelta = c && c.type === 'say' && c.partial && (c.say === 'text' || c.say === 'reasoning');
+                            if (isTextDelta) {
+                                _pendingTextChunks.push(msg.chunk);
+                                if (!_textFlushTimer) {
+                                    const delay = Math.max(_TEXT_THROTTLE_MS - (Date.now() - _lastTextForward), 0);
+                                    _textFlushTimer = setTimeout(_flushTextChunks, delay);
+                                }
+                                break;
+                            }
                             try {
-                                const c = msg.chunk;
-                                const tag = c.done ? 'DONE' : c.error ? 'ERROR' : c.type || 'text';
-                                if (tag !== 'reasoning_content') {
+                                const tag = c?.done ? 'DONE' : c?.error ? 'ERROR' : c?.type || 'text';
+                                if (tag === 'DONE' || tag === 'ERROR' || tag === 'tool_calls_start' || tag === 'tool_calls_end' || tag === 'reasoning_start' || tag === 'reasoning_end') {
                                     console.log(`[AI-MAIN] chunk→renderer: ${tag}`);
                                 }
                             } catch (e) {}
+                            if (c?.done || c?.error) {
+                                if (_textFlushTimer) { clearTimeout(_textFlushTimer); _textFlushTimer = null; }
+                                if (_pendingTextChunks.length > 0) { _flushTextChunks(); }
+                                if (_reasoningFlushTimer && _pendingReasoningChunk) {
+                                    clearTimeout(_reasoningFlushTimer); _reasoningFlushTimer = null;
+                                    try { event.sender.send('ai:chat-chunk', _pendingReasoningChunk); } catch (e) {}
+                                    _pendingReasoningChunk = null;
+                                }
+                            }
                             event.sender.send('ai:chat-chunk', msg.chunk);
                             break;
+                        }
                         case 'approval_request':
                             const { approvalId, toolName, risk, args } = msg;
                             const pendingRecord = {
@@ -4210,6 +4615,7 @@ ${toolDescriptions}
                             }
                             break;
                         case 'error':
+                            console.error(`[AI-MAIN] worker error: ${msg.error}`);
                             event.sender.send('ai:chat-chunk', { error: msg.error });
                             if (activeWorker) {
                                 try { activeWorker.terminate(); } catch (e) {}
@@ -4262,6 +4668,10 @@ ${toolDescriptions}
             } catch (e) {}
         }
         return true;
+    });
+
+    ipcMain.handle('ai:get-sse-port', async () => {
+        return ssePort;
     });
 
     const SESSIONS_DIR = path.join(require('os').homedir(), '.versepc', 'ai_sessions');

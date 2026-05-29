@@ -985,6 +985,8 @@ async function init() {
     const splashOverlay = document.getElementById('splash-overlay');
     const startTime = Date.now();
     const MIN_SPLASH_DURATION = 800;
+    const _perfInit = (label) => console.log(`[PERF-INIT] ${label} ${(performance.now()-_perfT).toFixed(1)}ms`);
+    let _perfT = performance.now();
 
     try {
         const earlyTheme = await window.electronAPI.store.get('versepc_theme');
@@ -1021,6 +1023,7 @@ async function init() {
         safeSetup('windowControls', setupWindowControls);
         initAllCustomSelects();
         setProgress(15, '正在构建界面...');
+        _perfInit('setup UI');
 
         try {
             const cachedName = localStorage.getItem('cachedPlayerName');
@@ -1037,6 +1040,7 @@ async function init() {
         safeSetup('accountButtons', setupAccountButtons);
         safeSetup('versionListClicks', setupVersionListClicks);
         setProgress(25, '正在加载数据...');
+        _perfT = performance.now();
 
         // 并行加载核心数据，避免串行等待
         const [settingsResult, versionsResult, accountsResult] = await Promise.allSettled([
@@ -1044,12 +1048,14 @@ async function init() {
             loadVersions(),
             loadAccounts()
         ]);
+        _perfInit('load data (parallel)');
         setProgress(70, '正在初始化功能...');
 
         // 设置页面初始化（轻量，不涉及网络请求）
         safeSetup('settingsPage', setupSettingsPage);
         safeSetup('javaPage', setupJavaPage);
         safeSetup('console', setupConsole);
+        _perfInit('setup pages');
 
         setProgress(90, '正在完成...');
 
@@ -1077,15 +1083,33 @@ async function init() {
 
         initWallpaperDropZone();
         initWallpaperAutoAdapt();
+        _perfInit('wallpaper');
 
         if (typeof AIChat !== 'undefined') {
             AIChat.init();
+        }
+        _perfInit('AIChat.init');
+
+        try {
+            const savedCustomImage = await window.electronAPI.store.get('versepc_custom_image');
+            if (savedCustomImage && typeof setCustomWallpaperImage === 'function') {
+                setCustomWallpaperImage(savedCustomImage);
+            }
+
+            const savedCustomVideo = await window.electronAPI.store.get('versepc_custom_video');
+            if (savedCustomVideo && typeof setCustomWallpaperVideo === 'function') {
+                setCustomWallpaperVideo(savedCustomVideo);
+            }
+        } catch (e) {
+            console.error('[Init] Load custom wallpaper error:', e);
         }
 
         try {
             const savedWallpaper = await window.electronAPI.store.get('versepc_wallpaper');
             if (savedWallpaper) {
-                const wpEl = document.querySelector(`.wallpaper-option[data-wallpaper="${savedWallpaper}"]`);
+                let wpName = savedWallpaper;
+                if (wpName === 'starry') wpName = 'panorama';
+                const wpEl = document.querySelector(`.wallpaper-option[data-wallpaper="${wpName}"]`);
                 if (wpEl) selectWallpaper(wpEl);
             }
         } catch (e) {
@@ -1112,16 +1136,14 @@ async function init() {
             }
 
             const savedCustomImage = await window.electronAPI.store.get('versepc_custom_image');
-            if (savedCustomImage && typeof setCustomWallpaperImage === 'function') {
-                setCustomWallpaperImage(savedCustomImage);
+            if (savedCustomImage) {
                 const nameEl = document.getElementById('custom-wallpaper-file-name');
                 if (nameEl) nameEl.textContent = savedCustomImage.split(/[\\/]/).pop();
                 _updateCustomImagePreview(savedCustomImage);
             }
 
             const savedCustomVideo = await window.electronAPI.store.get('versepc_custom_video');
-            if (savedCustomVideo && typeof setCustomWallpaperVideo === 'function') {
-                setCustomWallpaperVideo(savedCustomVideo);
+            if (savedCustomVideo) {
                 const nameEl = document.getElementById('custom-wallpaper-file-name');
                 if (nameEl) nameEl.textContent = savedCustomVideo.split(/[\\/]/).pop();
             }
@@ -1983,6 +2005,8 @@ function navigateToPage(pageName) {
     
     if (currentPage && currentPage !== target) {
         _pageTransitionLock = true;
+        console.log(`[PERF-NAV] transition start: ${currentPage.id} → page-${pageName}`);
+        const _navT0 = performance.now();
         currentPage.style.animation = 'pageOut 0.12s var(--ease-out-expo) forwards';
         setTimeout(() => {
             currentPage.classList.remove('active');
@@ -1990,6 +2014,7 @@ function navigateToPage(pageName) {
             target.classList.add('active');
             target.scrollTop = 0;
             target.style.animation = 'pageIn 0.35s var(--ease-out-expo) both';
+            console.log(`[PERF-NAV] page swap ${(performance.now()-_navT0).toFixed(1)}ms`);
             setTimeout(() => {
                 _pageTransitionLock = false;
                 if (_pendingPageTransition && _pendingPageTransition !== pageName) {
@@ -7665,9 +7690,18 @@ async function selectTheme(element) {
     const theme = element.dataset.theme;
     document.documentElement.setAttribute('data-theme', theme);
 
-    document.documentElement.style.removeProperty('--accent');
-    document.documentElement.style.removeProperty('--accent-hover');
-    document.documentElement.style.removeProperty('--accent-rgb');
+    try {
+        const savedColor = await window.electronAPI.store.get('versepc_custom_accent_color');
+        if (savedColor) {
+            document.documentElement.style.setProperty('--accent', savedColor);
+            const r = parseInt(savedColor.slice(1, 3), 16);
+            const g = parseInt(savedColor.slice(3, 5), 16);
+            const b = parseInt(savedColor.slice(5, 7), 16);
+            const lighter = `rgb(${Math.min(255, r + 40)}, ${Math.min(255, g + 40)}, ${Math.min(255, b + 40)})`;
+            document.documentElement.style.setProperty('--accent-hover', lighter);
+            document.documentElement.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+        }
+    } catch (e) {}
 
     if (typeof updateWallpaperTheme === 'function') {
         updateWallpaperTheme(theme === 'dark');
@@ -7762,7 +7796,7 @@ function _updateCustomImagePreview(filePath) {
             preview.style.position = 'relative';
             preview.appendChild(img);
         }
-        img.src = typeof wpfilePath === 'function' ? wpfilePath(filePath) : ('wpfile:///' + filePath.replace(/\\/g, '/'));
+        img.src = typeof wpfilePath === 'function' ? wpfilePath(filePath) : ('wpfile:///' + filePath.replace(/\\/g, '/').split('/').map(encodeURIComponent).join('/'));
     } else {
         if (icon) icon.style.display = '';
         const img = preview.querySelector('.wp-preview-thumb');
@@ -7903,6 +7937,13 @@ async function updateCustomAccentColor(color) {
 
     document.documentElement.style.setProperty('--accent', color);
 
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    const lighter = `rgb(${Math.min(255, r + 40)}, ${Math.min(255, g + 40)}, ${Math.min(255, b + 40)})`;
+    document.documentElement.style.setProperty('--accent-hover', lighter);
+    document.documentElement.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+
     try {
         await window.electronAPI.store.set('versepc_custom_accent_color', color);
     } catch (e) {
@@ -7914,7 +7955,7 @@ async function savePersonalizeSettings() {
     const settings = {
         theme: document.querySelector('.theme-option.active')?.dataset.theme || 'dark',
         customAccentColor: document.getElementById('custom-accent-color')?.value,
-        wallpaper: document.querySelector('.wallpaper-option.active')?.dataset.wallpaper || 'starry'
+        wallpaper: document.querySelector('.wallpaper-option.active')?.dataset.wallpaper || 'panorama'
     };
 
     try {
@@ -7935,7 +7976,7 @@ async function resetPersonalizeSettings() {
     const colorPreviewDot = document.getElementById('color-preview-dot');
     if (colorPreviewDot) colorPreviewDot.style.background = '#ffffff';
 
-    document.querySelector('.wallpaper-option[data-wallpaper="starry"]')?.click();
+    document.querySelector('.wallpaper-option[data-wallpaper="panorama"]')?.click();
 
     const opacitySlider = document.getElementById('wallpaper-opacity-slider');
     if (opacitySlider) { opacitySlider.value = 100; onWallpaperOpacityChange(100); }
@@ -7948,9 +7989,10 @@ async function resetPersonalizeSettings() {
         await window.electronAPI.store.set('versepc_personalize_settings', JSON.stringify({
             theme: 'dark',
             customAccentColor: '#ffffff',
-            wallpaper: 'starry'
+            wallpaper: 'panorama'
         }));
-        await window.electronAPI.store.set('versepc_wallpaper', 'starry');
+        await window.electronAPI.store.set('versepc_wallpaper', 'panorama');
+        await window.electronAPI.store.delete('versepc_solid_color');
         await window.electronAPI.store.set('versepc_wallpaper_opacity', 100);
         await window.electronAPI.store.set('versepc_wallpaper_blur', 0);
         await window.electronAPI.store.set('versepc_wallpaper_fit', 'cover');
@@ -7983,7 +8025,9 @@ async function loadPersonalizeSettings() {
                 updateCustomAccentColor(settings.customAccentColor);
             }
             if (settings.wallpaper) {
-                const wpEl = document.querySelector(`.wallpaper-option[data-wallpaper="${settings.wallpaper}"]`);
+                let wpName = settings.wallpaper;
+                if (wpName === 'starry') wpName = 'panorama';
+                const wpEl = document.querySelector(`.wallpaper-option[data-wallpaper="${wpName}"]`);
                 if (wpEl) selectWallpaper(wpEl);
             }
         } else {
@@ -8393,4 +8437,13 @@ function browseJavaPath() {
 document.addEventListener('DOMContentLoaded', () => {
     init();
     setTimeout(initSettingsPages, 500);
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === '`') {
+        e.preventDefault();
+        if (typeof AIChat !== 'undefined' && AIChat.toggleTerminal) {
+            AIChat.toggleTerminal();
+        }
+    }
 });

@@ -1,5 +1,5 @@
 /**
- * VersePC Agent Engine (基于 Roo Code 架构模式 + 全部智能功能)
+ * VersePC Agent Engine
  * 
  * 核心设计：
  * 1. 状态机驱动：IDLE → RUNNING → STREAMING → ACTING → OBSERVING → REFLECTING → DONE
@@ -11,6 +11,7 @@
 const https = require('https');
 const http = require('http');
 const { URL } = require('url');
+const { getPluginManager } = require('./plugin-manager');
 
 // =============================================================================
 // Agent State Machine
@@ -137,7 +138,7 @@ class OutputManager {
             case SayType.COMPLETION:
                 if (isPartial && text) {
                     const delta = this._streamDelta(ts, text);
-                    this.displayedMessages.set(ts, { ts, text, partial: true });
+                    this.displayedMessages.set(ts, { ts, say, text, partial: true });
                     return { type: 'say', say, ts, text: delta.text, partial: true, delta: delta.action === 'delta' };
                 }
                 if (!isPartial && !alreadyComplete) {
@@ -145,11 +146,11 @@ class OutputManager {
                     if (streamed && text && text.length > streamed.text.length && text.startsWith(streamed.text)) {
                         const remaining = text.slice(streamed.text.length);
                         this._finishStream(ts);
-                        this.displayedMessages.set(ts, { ts, text, partial: false });
+                        this.displayedMessages.set(ts, { ts, say, text, partial: false });
                         return { type: 'say', say, ts, text: remaining, partial: false, trailing: true };
                     }
                     this._finishStream(ts);
-                    this.displayedMessages.set(ts, { ts, text, partial: false });
+                    this.displayedMessages.set(ts, { ts, say, text, partial: false });
                     return { type: 'say', say, ts, text: text || '', partial: false };
                 }
                 break;
@@ -169,7 +170,7 @@ class OutputManager {
 
             case SayType.API_STARTED:
                 this.displayedMessages.set(ts, { ts, text, partial: true });
-                return null;
+                return { type: 'say', say, ts, text, partial: false };
 
             case SayType.API_FINISHED:
             case SayType.FOLLOWUP:
@@ -447,11 +448,24 @@ function _toAnthropicMessages(messages) {
     const result = { messages: [] };
     if (system) result.system = system.content;
 
-    for (let i = 0; i < others.length; i++) {
+    let i = 0;
+    while (i < others.length) {
         const m = others[i];
-        const next = others[i + 1];
-        const content = [];
 
+        if (m.role === 'tool') {
+            const toolResults = [];
+            while (i < others.length && others[i].role === 'tool') {
+                const toolContent = typeof others[i].content === 'string' ? others[i].content : '';
+                toolResults.push({ type: 'tool_result', tool_use_id: others[i].tool_call_id || 'unknown', content: toolContent });
+                i++;
+            }
+            if (toolResults.length > 0) {
+                result.messages.push({ role: 'user', content: toolResults });
+            }
+            continue;
+        }
+
+        const content = [];
         if (m.content) content.push({ type: 'text', text: m.content });
         if (m.tool_calls) {
             for (const tc of m.tool_calls) {
@@ -461,25 +475,10 @@ function _toAnthropicMessages(messages) {
             }
         }
 
-        if (m.role === 'tool') {
-            const toolContent = typeof m.content === 'string' ? m.content : '';
-            const prevAssistant = i > 0 && others[i - 1].role === 'assistant' && others[i - 1].tool_calls;
-            if (prevAssistant && prevAssistant.tool_calls.length > 0) {
-                const matchingTc = prevAssistant.tool_calls.find(tc => tc.id === m.tool_call_id);
-                if (matchingTc || prevAssistant.tool_calls.length === 1) {
-                    const tcId = matchingTc ? matchingTc.id : prevAssistant.tool_calls[0].id;
-                    result.messages.push({
-                        role: 'user',
-                        content: [{ type: 'tool_result', tool_use_id: tcId, content: toolContent }]
-                    });
-                    continue;
-                }
-            }
-        }
-
         if (content.length > 0) {
             result.messages.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content });
         }
+        i++;
     }
 
     if (result.messages.length === 0 && others.length > 0) {
@@ -544,22 +543,210 @@ const AI_TOOLS = [
     { type: 'function', function: { name: 'sequential_thinking', description: 'Break down complex problems into sequential thinking steps. Each step produces a conclusion. Supports revising previous steps. Use when deep analysis is needed.', parameters: { type: 'object', properties: { thought: { type: 'string', description: 'Thinking content for current step' }, thought_number: { type: 'number', description: 'Current step number' }, total_thoughts: { type: 'number', description: 'Estimated total steps' }, next_thought_needed: { type: 'boolean', description: 'Whether another step is needed' }, is_revision: { type: 'boolean', description: 'Whether revising a previous step' }, revises_thought: { type: 'number', description: 'Step number being revised (when is_revision=true)' }, branch_from_thought: { type: 'number', description: 'Branch from this step (optional)' }, branch_id: { type: 'string', description: 'Branch identifier (optional)' } }, required: ['thought', 'thought_number', 'total_thoughts', 'next_thought_needed'] } } },
     { type: 'function', function: { name: 'attempt_completion', description: 'Report task completion. Only call after verifying the task is done. The result will be presented to the user for confirmation.', parameters: { type: 'object', properties: { result: { type: 'string', description: 'Final result message with summary of completed work' } }, required: ['result'] } } },
     { type: 'function', function: { name: 'ckg', description: 'Code Knowledge Graph: search for functions, classes, and class methods in the codebase.', parameters: { type: 'object', properties: { command: { type: 'string', enum: ['search_function', 'search_class', 'search_class_method'], description: 'Search command' }, path: { type: 'string', description: 'Codebase path' }, identifier: { type: 'string', description: 'Function/class/method name to search' }, print_body: { type: 'boolean', description: 'Print function/class body (default true)' } }, required: ['command', 'path', 'identifier'] } } },
-    { type: 'function', function: { name: 'update_todo_list', description: 'Replace the entire TODO list with an updated checklist reflecting current progress. Use this to plan, track, and update task progress. Format: [ ] pending, [-] in progress, [x] completed.', parameters: { type: 'object', properties: { todos: { type: 'string', description: 'Full markdown checklist in execution order. Use [ ] for pending, [-] for in progress, [x] for completed.' } }, required: ['todos'] } } }
+    { type: 'function', function: { name: 'update_todo_list', description: '创建或更新任务计划列表。仅在处理多步骤复杂任务时使用，将用户请求分解为具体任务并跟踪进度。格式：[ ] 待执行, [-] 进行中, [x] 已完成。', parameters: { type: 'object', properties: { todos: { type: 'string', description: '完整的任务清单（Markdown格式）。示例：\n- [ ] 任务1：分析代码结构\n- [-] 任务2：修改CSS样式（当前执行中）\n- [x] 任务3：已修复bug' } }, required: ['todos'] } } },
+    {
+        type: 'function',
+        function: {
+            name: 'sub_agent_dispatch',
+            description: '派遣子代理执行特定任务。file_search: 在代码库中搜索文件和目录, code_analysis: 分析代码结构和调用链, resource_download: 搜索Minecraft资源, crash_analysis: 分析崩溃日志',
+            parameters: {
+                type: 'object',
+                properties: {
+                    agent_type: {
+                        type: 'string',
+                        enum: ['file_search', 'code_analysis', 'resource_download', 'crash_analysis'],
+                        description: '子代理类型'
+                    },
+                    task: {
+                        type: 'string',
+                        description: '子代理要执行的具体任务描述'
+                    }
+                },
+                required: ['agent_type', 'task']
+            }
+        }
+    },
 ];
+
+let _pluginManager = null;
+function _getPluginTools() {
+    try {
+        if (!_pluginManager) _pluginManager = getPluginManager();
+        return _pluginManager.getTools();
+    } catch (e) { return []; }
+}
+
+function _getPluginDisplayNames() {
+    try {
+        if (!_pluginManager) _pluginManager = getPluginManager();
+        return _pluginManager.getToolDisplayNames();
+    } catch (e) { return {}; }
+}
+
+function _getPluginRisks() {
+    try {
+        if (!_pluginManager) _pluginManager = getPluginManager();
+        return _pluginManager.getToolRisks();
+    } catch (e) { return {}; }
+}
+
+function _getPluginPromptExtensions() {
+    try {
+        if (!_pluginManager) _pluginManager = getPluginManager();
+        return _pluginManager.getPromptExtensions();
+    } catch (e) { return []; }
+}
+
+function _isPluginTool(name) {
+    try {
+        if (!_pluginManager) _pluginManager = getPluginManager();
+        return _pluginManager.isPluginTool(name);
+    } catch (e) { return false; }
+}
+
+function _getAllTools() {
+    return [...AI_TOOLS, ..._getPluginTools()];
+}
 
 const toolDescriptions = AI_TOOLS.map(t => `- ${t.function.name}: ${t.function.description}`).join('\n');
 
 const TOOL_RISK = {
     str_replace_based_edit_tool: 'safe', json_edit_tool: 'safe', ckg: 'safe',
     sequential_thinking: 'safe', attempt_completion: 'safe',
-    bash: 'safe', update_todo_list: 'safe'
+    bash: 'safe', update_todo_list: 'safe',
+    sub_agent_dispatch: 'safe'
 };
 
 const TOOL_DISPLAY_NAMES = {
     bash: '执行命令', str_replace_based_edit_tool: '编辑文件',
     json_edit_tool: '编辑JSON', sequential_thinking: '分步思考',
     attempt_completion: '完成任务', ckg: '代码图谱',
-    update_todo_list: '更新计划'
+    update_todo_list: '更新计划',
+    sub_agent_dispatch: '派遣子代理'
+};
+
+const AGENT_META = {
+    file_search: {
+        name: '文件搜索代理', role: 'File Search', avatar: 'robot', color: '#4caf50',
+        systemPrompt: `你是 VersePC 项目的文件搜索代理。你的任务是在代码库中快速定位文件和目录。
+
+## 工作流程
+1. 首先理解搜索目标（文件名、关键词、文件类型等）
+2. 使用 bash 工具执行搜索命令：
+   - 按文件名搜索: find . -name "pattern" -type f
+   - 按内容搜索: grep -r "pattern" --include="*.js" --include="*.css" --include="*.html" -l
+   - 查看目录结构: ls -la, tree (限制深度)
+   - 查看文件信息: wc -l, file, stat
+3. 对搜索结果进行筛选和排序
+4. 输出结构化结果
+
+## 输出格式
+搜索完成后，用以下格式总结：
+- 搜索目标：xxx
+- 找到 N 个文件
+- 关键文件列表（路径 + 用途说明）
+- 相关代码片段（如有）
+
+## 注意事项
+- 优先搜索项目根目录下的 js/、css/、agent-engine.js 等核心文件
+- 搜索时排除 node_modules、dist、.git 目录
+- 如果搜索结果过多，按相关性排序，只展示最相关的
+- 用中文输出结果`
+    },
+    code_analysis: {
+        name: '代码分析代理', role: 'Code Analysis', avatar: 'robot', color: '#9c27b0',
+        systemPrompt: `你是 VersePC 项目的代码分析代理。你的任务是分析代码结构、理解项目架构、追踪函数调用链。
+
+## 工作流程
+1. 首先确定分析目标（文件、函数、模块）
+2. 使用 bash 工具阅读代码：
+   - cat 查看文件内容
+   - grep 搜索函数调用
+   - find 查找相关文件
+3. 分析代码结构和依赖关系
+4. 输出分析报告
+
+## 分析维度
+- 文件职责：该文件的主要功能
+- 依赖关系：依赖了哪些模块，被哪些模块依赖
+- 函数调用链：关键函数的调用路径
+- 数据流：数据如何在模块间传递
+- 潜在问题：发现的 bug、性能问题、代码异味
+
+## 输出格式
+分析完成后，用以下格式总结：
+- 分析目标：xxx
+- 文件结构：列出相关文件及其职责
+- 核心逻辑：关键函数和调用链
+- 发现的问题（如有）：问题描述 + 建议修复方案
+
+## 注意事项
+- 用中文输出分析结果
+- 代码片段保留原始格式
+- 行号引用格式：文件名:行号`
+    },
+    resource_download: {
+        name: '资源搜索代理', role: 'Resource Search', avatar: 'robot', color: '#8d6e63',
+        systemPrompt: `你是 Minecraft 资源搜索代理。你的任务是搜索和推荐 Minecraft 相关资源。
+
+## 支持的资源类型
+- Mod（模组）
+- 整合包（Modpack）
+- 材质包（Texture Pack）
+- 光影包（Shader Pack）
+
+## 工作流程
+1. 理解用户需求（版本、类型、功能偏好）
+2. 搜索 CurseForge 和 Modrinth 上的资源
+3. 筛选和推荐
+
+## 推荐标准
+- 版本兼容性：优先推荐与用户 Minecraft 版本兼容的资源
+- 稳定性：优先推荐更新频繁、bug 少的资源
+- 下载量和评分：作为参考指标
+- 兼容性：推荐的资源之间不要有冲突
+
+## 输出格式
+- 资源名称 + 简介
+- 版本兼容信息
+- 下载量/评分
+- 安装建议
+- 注意事项（如有）
+
+## 注意事项
+- 用中文输出推荐结果
+- 如果资源需要前置依赖，一并说明`
+    },
+    crash_analysis: {
+        name: '崩溃分析代理', role: 'Crash Analysis', avatar: 'robot', color: '#9e9e9e',
+        systemPrompt: `你是 Minecraft 崩溃分析代理。你的任务是分析崩溃日志，定位错误原因并提供修复建议。
+
+## 工作流程
+1. 定位日志文件（crash-reports/、logs/ 目录）
+2. 使用 bash 工具读取和分析日志
+3. 识别崩溃类型和原因
+4. 提供修复建议
+
+## 崩溃类型识别
+- Mod 冲突：检查多个 Mod 的兼容性
+- 内存不足：检查 JVM 参数和内存分配
+- 配置错误：检查配置文件格式和值
+- 版本不兼容：检查 Mod 与 Minecraft 版本的兼容性
+- 驱动问题：检查显卡驱动版本
+- Java 版本：检查 Java 版本是否匹配
+
+## 输出格式
+- 崩溃类型：xxx
+- 错误原因：详细描述
+- 涉及文件：相关日志文件和配置文件
+- 修复步骤：按优先级排列的修复方案
+- 预防建议：避免再次发生的方法
+
+## 注意事项
+- 用中文输出分析结果
+- 引用关键日志行（文件:行号）
+- 修复步骤要具体可操作`
+    }
 };
 
 
@@ -683,16 +870,69 @@ class AgentEngine {
     }
 
     _send(msg) {
+        const passthroughTypes = ['subagent_start', 'subagent_chunk', 'subagent_end'];
+        if (passthroughTypes.includes(msg.type)) {
+            this.onChunk(msg);
+            return;
+        }
         const processed = this.output.processMessage(msg);
         if (processed) {
             this.onChunk(processed);
         }
     }
 
+    _initReasoningThrottle() {
+        if (this._reasoningFlushTimer) {
+            clearTimeout(this._reasoningFlushTimer);
+            this._reasoningFlushTimer = null;
+        }
+        this._reasoningBuffer = null;
+        this._reasoningStarted = false;
+    }
+
+    _sendReasoningDelta(delta, fullReasoning) {
+        if (!this._reasoningStarted) {
+            this._reasoningStarted = true;
+            this.onChunk({ type: 'reasoning_start', content: '' });
+        }
+        this._reasoningBuffer = (this._reasoningBuffer || '') + delta;
+        if (!this._reasoningFlushTimer) {
+            this._reasoningFlushTimer = setTimeout(() => {
+                this._reasoningFlushTimer = null;
+                if (this._reasoningBuffer) {
+                    const buf = this._reasoningBuffer;
+                    this._reasoningBuffer = null;
+                    this.onChunk({ type: 'reasoning_content', content: buf, partial: true });
+                }
+            }, 80);
+        }
+    }
+
+    _flushReasoningThrottle() {
+        if (this._reasoningFlushTimer) {
+            clearTimeout(this._reasoningFlushTimer);
+            this._reasoningFlushTimer = null;
+        }
+        if (this._reasoningStarted && this._reasoningBuffer) {
+            const buf = this._reasoningBuffer;
+            this._reasoningBuffer = null;
+            this.onChunk({ type: 'reasoning_content', content: buf, partial: true });
+        }
+    }
+
+    _finishReasoningThrottle() {
+        if (this._reasoningFlushTimer) {
+            clearTimeout(this._reasoningFlushTimer);
+            this._reasoningFlushTimer = null;
+        }
+        this._reasoningBuffer = null;
+        this._reasoningStarted = false;
+    }
+
     /**
      * 主入口：处理聊天
      */
-    async processChat({ apiKey, model, messages, temperature, enableTools, apiFormat: customApiFormat, baseUrl: customBaseUrl }) {
+    async processChat({ apiKey, model, messages, temperature, enableTools, apiFormat: customApiFormat, baseUrl: customBaseUrl, language }) {
         this._aborted = false;
         this.output.clear();
         this._actionHistory = [];
@@ -730,7 +970,7 @@ class AgentEngine {
             apiFormat = this._provider.apiFormat || 'openai';
         }
         this._requestModel = requestModel;
-        const tools = enableTools !== false ? AI_TOOLS : undefined;
+        const tools = enableTools !== false ? _getAllTools() : undefined;
 
         let conversation = [...messages];
         const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
@@ -738,27 +978,127 @@ class AgentEngine {
         const contextSummary = this._buildContextSummary();
         if (contextSummary) conversation.push({ role: 'system', content: contextSummary });
 
+        conversation.push({ role: 'system', content: 'OS: Windows. Use CMD commands only: dir (not ls), type (not cat), findstr (not grep), copy (not cp), move (not mv), del (not rm), mkdir, rmdir, more (not head/tail). Pipe: | more. Redirect: > file 2>&1. NEVER use Unix/Linux commands.' });
+
+        const pluginPrompts = _getPluginPromptExtensions();
+        if (pluginPrompts.length > 0) {
+            conversation.push({ role: 'system', content: '## Plugin Capabilities\n\n' + pluginPrompts.join('\n\n') });
+        }
+
         if (this.enablePlanning && lastUserMsg && tools) {
             const intent = this._detectIntent(lastUserMsg.content);
-            if (intent.intent === 'complex' && intent.steps_needed > 1) {
+            if (intent.intent === 'complex') {
+                const stepHint = intent.steps_needed >= 3
+                    ? `这是一个复杂的多步骤任务（检测到 ${intent.steps_needed}+ 个步骤）。`
+                    : '这是一个需要多步骤执行的任务。';
                 conversation.push({
                     role: 'system',
-                    content: `This is a multi-step task. You MUST first call update_todo_list to create a plan, then execute each step sequentially:
-1. Call update_todo_list with a markdown checklist (use [ ] pending, [-] in progress, [x] completed)
-2. Before each step, call update_todo_list to mark it as [-] in progress
-3. Execute the step using appropriate tools
-4. Call update_todo_list to mark it as [x] completed
-5. Repeat until all steps are done
-6. Call attempt_completion with a structured summary
+                    content: `${stepHint}
 
-Do NOT skip planning. Do NOT ask the user if you should continue. Execute autonomously.`
+## 任务工作流
+
+请使用 update_todo_list 工具创建任务计划，将用户的请求分解为具体的、可执行的任务。
+
+### 执行流程
+1. 调用 update_todo_list 创建任务列表
+   - [ ] 任务1：具体描述
+   - [ ] 任务2：具体描述
+   - [ ] 任务3：具体描述
+2. 逐个执行任务：
+   a. 将当前任务标记为 [-] 进行中（调用 update_todo_list）
+   b. 执行该任务所需的所有工具调用
+   c. 任务完成后，将任务标记为 [x] 已完成（调用 update_todo_list）
+3. 所有任务完成后，调用 attempt_completion 提交最终总结
+
+### 关键规则
+- 每个任务应该是自包含的，将相关的工具调用归组到一起
+- attempt_completion 的 result 字段必须包含清晰的中文总结
+- 如果某个任务失败，标记为 [x] 并注明错误，然后继续下一个任务
+- 永远不要在回复中使用 emoji
+
+### 子代理派遣规则
+当你需要搜索文件、分析代码、搜索资源或分析崩溃日志时，你必须调用 sub_agent_dispatch 工具，而不是自己执行这些任务。
+- 搜索文件/目录 → sub_agent_dispatch(agent_type="file_search", task="具体任务描述")
+- 分析代码结构 → sub_agent_dispatch(agent_type="code_analysis", task="具体任务描述")
+- 搜索Minecraft资源 → sub_agent_dispatch(agent_type="resource_download", task="具体任务描述")
+- 分析崩溃日志 → sub_agent_dispatch(agent_type="crash_analysis", task="具体任务描述")
+绝对不要在文本中写"[执行] 调用子代理"，而是必须实际调用 sub_agent_dispatch 工具。`
+                });
+            } else {
+                conversation.push({
+                    role: 'system',
+                    content: `## 执行指南
+
+这是一个简单的任务，请直接执行，不需要创建任务计划。
+
+### 执行流程
+1. 直接使用工具完成用户请求
+2. 执行完成后，调用 attempt_completion 提交结果总结
+
+### 关键规则
+- 不要调用 update_todo_list，直接开始执行
+- 用中文写总结
+- attempt_completion 的 result 字段必须包含清晰的中文总结
+- 永远不要在回复中使用 emoji
+- 当需要搜索文件、分析代码、搜索资源或分析崩溃日志时，必须调用 sub_agent_dispatch 工具，不要在文本中描述你要做什么，而是实际调用工具`
                 });
             }
         }
 
+        if (language && language !== 'en') {
+            const _langNames = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'ja': '日本語', 'ko': '한국어' };
+            const _langName = _langNames[language] || '简体中文';
+            conversation.push({
+                role: 'system',
+                content: `FINAL REMINDER — Language: You MUST respond entirely in ${_langName}. All explanations, todo descriptions, plan text, and completion summaries must be in ${_langName}. Only code, file paths, and technical identifiers stay in English.`
+            });
+        }
+
+        let _lastCompletionText = '';
+
         for (let round = 0; round < this.maxRounds; round++) {
             if (this._aborted) break;
             await new Promise(resolve => setImmediate(resolve));
+
+            if (apiFormat === 'openai') {
+                const toRemove = new Set();
+                for (let i = 0; i < conversation.length; i++) {
+                    const msg = conversation[i];
+                    if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+                        const expectedIds = new Set(msg.tool_calls.map(tc => tc.id));
+                        const foundIds = new Set();
+                        for (let j = i + 1; j < conversation.length; j++) {
+                            const next = conversation[j];
+                            if (next.role === 'assistant') break;
+                            if (next.role === 'tool' && expectedIds.has(next.tool_call_id)) {
+                                foundIds.add(next.tool_call_id);
+                            }
+                        }
+                        if (foundIds.size < expectedIds.size) {
+                            toRemove.add(i);
+                            for (let j = i + 1; j < conversation.length; j++) {
+                                if (conversation[j].role === 'assistant') break;
+                                if (conversation[j].role === 'tool') toRemove.add(j);
+                            }
+                        }
+                    }
+                }
+                for (let i = conversation.length - 1; i >= 0; i--) {
+                    if (toRemove.has(i)) conversation.splice(i, 1);
+                }
+                for (let i = conversation.length - 1; i >= 0; i--) {
+                    if (conversation[i].role === 'tool') {
+                        let hasAssistantBefore = false;
+                        for (let j = i - 1; j >= 0; j--) {
+                            if (conversation[j].role === 'assistant') {
+                                hasAssistantBefore = conversation[j].tool_calls && conversation[j].tool_calls.length > 0;
+                                break;
+                            }
+                        }
+                        if (!hasAssistantBefore) conversation.splice(i, 1);
+                    }
+                }
+            }
 
             let bodyStr;
             const hasTools = tools && tools.length > 0;
@@ -799,11 +1139,30 @@ Do NOT skip planning. Do NOT ask the user if you should continue. Execute autono
             }
 
             let res;
-            try {
-                this._send({ type: 'say', say: SayType.API_STARTED, text: '' });
-                res = await makeApiStreamRequest(this._apiUrl, bodyStr, this._apiHeaders);
-            } catch (e) {
-                this._send({ type: 'say', say: SayType.ERROR, text: e.message });
+            const MAX_RETRIES = 2;
+            let lastError = null;
+            for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    this._send({ type: 'say', say: SayType.API_STARTED, text: '' });
+                    res = await makeApiStreamRequest(this._apiUrl, bodyStr, this._apiHeaders);
+                    lastError = null;
+                    break;
+                } catch (e) {
+                    lastError = e;
+                    const isRetryable = e.message && (e.message.includes('ECONNRESET') || e.message.includes('ECONNREFUSED') || e.message.includes('ETIMEDOUT') || e.message.includes('socket hang up'));
+                    if (isRetryable && attempt < MAX_RETRIES) {
+                        this._send({ type: 'say', say: SayType.HEARTBEAT, text: `连接中断，正在重试 (${attempt + 1}/${MAX_RETRIES})...` });
+                        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+                        continue;
+                    }
+                    this._send({ type: 'say', say: SayType.ERROR, text: e.message });
+                    this._send({ type: 'say', say: SayType.API_FINISHED, text: '' });
+                    return;
+                }
+            }
+            if (lastError) {
+                this._send({ type: 'say', say: SayType.ERROR, text: lastError.message });
+                this._send({ type: 'say', say: SayType.API_FINISHED, text: '' });
                 return;
             }
 
@@ -833,7 +1192,7 @@ Do NOT skip planning. Do NOT ask the user if you should continue. Execute autono
                         type: 'say', say: SayType.TOOL_START,
                         text: JSON.stringify(roundData.toolCalls.map(tc => ({
                             id: tc.id, name: tc.name,
-                            displayName: TOOL_DISPLAY_NAMES[tc.name] || tc.name,
+                            displayName: TOOL_DISPLAY_NAMES[tc.name] || _getPluginDisplayNames()[tc.name] || tc.name,
                             args: tc.argsStr
                         })))
                     });
@@ -908,12 +1267,12 @@ Take action now. Do not explain your limitations.`
                 this._lastTextContent = roundData.fullContent;
             }
 
-            this._send({ type: 'say', say: SayType.COMPLETION, text: roundData.fullContent || '' });
+            this._send({ type: 'say', say: SayType.COMPLETION, text: roundData.fullContent || _lastCompletionText || '' });
             this._send({ type: 'say', say: SayType.API_FINISHED, text: '' });
             return;
         }
 
-        this._send({ type: 'say', say: SayType.COMPLETION, text: '' });
+        this._send({ type: 'say', say: SayType.COMPLETION, text: _lastCompletionText || '' });
         this._send({ type: 'say', say: SayType.API_FINISHED, text: '' });
     }
     // Context Builder
@@ -945,11 +1304,30 @@ Take action now. Do not explain your limitations.`
 
     _detectIntent(userMessage) {
         const lower = userMessage.toLowerCase();
-        const simplePatterns = /^(你好|hi|hello|hey|谢谢|感谢|ok|好的|知道了|你是谁|你叫什么|帮我解释|什么是|怎么理解|你是|说说|聊聊|讲讲|告诉我)/;
+        const simplePatterns = /^(你好|hi|hello|hey|谢谢|感谢|ok|好的|知道了|你是谁|你叫什么|帮我解释|你是|说说|聊聊|讲讲|告诉我)/;
         if (simplePatterns.test(lower)) return { intent: 'simple', reason: 'greeting', steps_needed: 0 };
-        if (userMessage.length < 15 && !/[安装|卸载|创建|删除|修改]/.test(userMessage)) return { intent: 'simple', reason: 'short', steps_needed: 0 };
-        const complexPatterns = /安装|卸载|创建|删除|修改|编辑|配置|部署|构建|编译|调试|搜索|查找|读取|写入|执行|运行|启动|停止|重启|更新|升级|迁移|导入|导出|备份|恢复|修复|优化|测试|分析|检查|扫描|监控|设置|初始化|clone|install|uninstall|create|delete|modify|edit|config|deploy|build|compile|debug|search|find|read|write|exec|run|start|stop|restart|update|upgrade|migrate|import|export|backup|restore|fix|optimize|test|analyze|check|scan|monitor|setup|init|git|npm|pip|docker|kubernetes|bash|terminal|command|script|file|folder|directory|code|project|package|module|dependency|api|database|server|deploy|ci|cd|pipeline|workflow|refactor|整合包|材质|光影|mod|MOD|forge|fabric|neoforge|版本|启动游戏|我的世界|minecraft|minecraft/i;
-        if (complexPatterns.test(lower)) return { intent: 'complex', reason: 'task', steps_needed: 2 };
+        if (userMessage.length < 10) return { intent: 'simple', reason: 'short', steps_needed: 0 };
+
+        const questionPatterns = /是什么|什么意思|有什么用|有什么区别|区别是什么|怎么理解|怎么用|怎么弄|怎么搞|能不能|可以吗|吗\?|吗？|请解释|请说明|请介绍|推荐|玩法|技巧|机制|原理|规则|教程|攻略|查看|看看|看一下|帮我查|查一下|查询/;
+        if (questionPatterns.test(lower)) return { intent: 'simple', reason: 'question', steps_needed: 0 };
+
+        const explicitMultiStep = /然后|接着|之后再|先.*再|先.*然后|之后再|第一步.*第二步|首先.*然后.*最后|一方面.*另一方面|不仅.*而且|既要.*也要/;
+        if (explicitMultiStep.test(lower)) {
+            const conjunctionCount = (lower.match(/然后|接着|之后再|再(?!次)/g) || []).length;
+            return { intent: 'complex', reason: 'explicit_multi_step', steps_needed: conjunctionCount + 1 };
+        }
+
+        const separateActions = /安装.*(?:并且|并|然后|再|接着)|(?:安装|配置|创建|修改|删除|修复|优化).*(?:安装|配置|创建|修改|删除|修复|优化)/;
+        if (separateActions.test(lower)) {
+            const actionCount = (lower.match(/(?:安装|卸载|创建|删除|修改|编辑|配置|部署|构建|编译|调试|修复|优化|迁移|升级)/g) || []).length;
+            if (actionCount >= 2) return { intent: 'complex', reason: 'multi_action', steps_needed: actionCount };
+        }
+
+        if (userMessage.length > 120) {
+            const actionCount = (lower.match(/(?:安装|卸载|创建|删除|修改|编辑|配置|部署|构建|编译|调试|修复|优化|迁移|升级|写|做|运行|执行)/g) || []).length;
+            if (actionCount >= 3) return { intent: 'complex', reason: 'long_multi_action', steps_needed: actionCount };
+        }
+
         return { intent: 'simple', reason: 'general', steps_needed: 0 };
     }
 
@@ -974,10 +1352,11 @@ Take action now. Do not explain your limitations.`
         let finishReason = null;
         let reasoningStarted = false;
         let doneReceived = false;
+        this._initReasoningThrottle();
 
         await new Promise((resolve) => {
-            let inactivityTimer = setTimeout(() => resolve('timeout'), 120000);
-            const TOTAL_TIMEOUT = 600000;
+            let inactivityTimer = setTimeout(() => resolve('timeout'), 60000);
+            const TOTAL_TIMEOUT = 300000;
             const totalTimer = setTimeout(() => resolve('timeout'), TOTAL_TIMEOUT);
             let finished = false;
             const finish = (reason) => {
@@ -991,7 +1370,7 @@ Take action now. Do not explain your limitations.`
             res.on('data', (chunk) => {
                 try {
                     clearTimeout(inactivityTimer);
-                    inactivityTimer = setTimeout(() => finish('timeout'), 120000);
+                    inactivityTimer = setTimeout(() => finish('timeout'), 60000);
                     buffer += chunk.toString();
                     const lines = buffer.split('\n');
                     buffer = lines.pop() || '';
@@ -1000,7 +1379,7 @@ Take action now. Do not explain your limitations.`
                         const trimmed = line.trim();
                         if (!trimmed || !trimmed.startsWith('data:')) continue;
                         const data = trimmed.slice(5).trim();
-                        if (data === '[DONE]') { finishReason = finishReason || 'stop'; doneReceived = true; }
+                        if (data === '[DONE]') { finishReason = finishReason || 'stop'; doneReceived = true; finish('done'); return; }
 
                         try {
                             const parsed = JSON.parse(data);
@@ -1012,20 +1391,13 @@ Take action now. Do not explain your limitations.`
 
                             if (delta?.content) {
                                 fullContent += delta.content;
-                                const newDelta = fullContent.slice(prevContentLen);
-                                prevContentLen = fullContent.length;
-                                this._send({ type: 'say', say: SayType.TEXT, text: newDelta, partial: true });
+                                this._send({ type: 'say', say: SayType.TEXT, text: fullContent, partial: true });
                             }
 
                             if (delta?.reasoning_content) {
-                                if (!reasoningStarted) {
-                                    reasoningStarted = true;
-                                    this._send({ type: 'say', say: SayType.REASONING, text: '', partial: true });
-                                }
+                                if (!reasoningStarted) reasoningStarted = true;
                                 fullReasoning += delta.reasoning_content;
-                                const newDelta = fullReasoning.slice(prevReasoningLen);
-                                prevReasoningLen = fullReasoning.length;
-                                this._send({ type: 'say', say: SayType.REASONING, text: newDelta, partial: true });
+                                this._sendReasoningDelta(delta.reasoning_content, fullReasoning);
                             }
 
                             if (delta?.tool_calls) {
@@ -1051,8 +1423,9 @@ Take action now. Do not explain your limitations.`
         if (fullContent) {
             this._send({ type: 'say', say: SayType.TEXT, text: fullContent, partial: false });
         }
+        this._finishReasoningThrottle();
         if (reasoningStarted) {
-            this._send({ type: 'say', say: SayType.REASONING, text: '', partial: false });
+            this.onChunk({ type: 'reasoning_end' });
         }
 
         return { fullContent, fullReasoning, toolCalls, finishReason: finishReason || 'stop' };
@@ -1067,14 +1440,20 @@ Take action now. Do not explain your limitations.`
         let prevReasoningLen = 0;
         let toolCalls = [];
         let finishReason = null;
+        let inputTokens = 0;
+        let outputTokens = 0;
+        let doneReceived = false;
+        this._initReasoningThrottle();
         let reasoningStarted = false;
 
         const currentTool = {};
         let activeToolId = null;
 
         await new Promise((resolve) => {
-            let inactivityTimer = setTimeout(() => resolve('timeout'), 120000);
-            const totalTimer = setTimeout(() => resolve('timeout'), TOTAL_TIMEOUT);
+            const STREAM_TIMEOUT = 60000;
+            const STREAM_TOTAL = 300000;
+            let inactivityTimer = setTimeout(() => resolve('timeout'), STREAM_TIMEOUT);
+            const totalTimer = setTimeout(() => resolve('timeout'), STREAM_TOTAL);
             let finished = false;
             const finish = (reason) => {
                 if (finished) return;
@@ -1087,7 +1466,7 @@ Take action now. Do not explain your limitations.`
             res.on('data', (chunk) => {
                 try {
                     clearTimeout(inactivityTimer);
-                    inactivityTimer = setTimeout(() => finish('timeout'), 120000);
+                    inactivityTimer = setTimeout(() => finish('timeout'), STREAM_TIMEOUT);
                     buffer += chunk.toString();
                     const lines = buffer.split('\n');
                     buffer = lines.pop() || '';
@@ -1114,9 +1493,7 @@ Take action now. Do not explain your limitations.`
                                     const delta = event.delta;
                                     if (delta.type === 'text_delta') {
                                         fullContent += delta.text || '';
-                                        const newDelta = fullContent.slice(prevContentLen);
-                                        prevContentLen = fullContent.length;
-                                        this._send({ type: 'say', say: SayType.TEXT, text: newDelta, partial: true });
+                                        this._send({ type: 'say', say: SayType.TEXT, text: fullContent, partial: true });
                                     } else if (delta.type === 'input_json_delta') {
                                         const toolId = activeToolId;
                                         if (toolId && currentTool[toolId]) {
@@ -1126,16 +1503,10 @@ Take action now. Do not explain your limitations.`
                                             } catch (e) { console.error('[Engine] SSE parse error:', e.message); }
                                         }
                                     } else if (delta.type === 'thinking_delta') {
-                                        if (!reasoningStarted) {
-                                            reasoningStarted = true;
-                                            this._send({ type: 'say', say: SayType.REASONING, text: '', partial: true });
-                                        }
+                                        if (!reasoningStarted) reasoningStarted = true;
                                         fullReasoning += delta.thinking || '';
-                                        const newDelta = fullReasoning.slice(prevReasoningLen);
-                                        prevReasoningLen = fullReasoning.length;
-                                        this._send({ type: 'say', say: SayType.REASONING, text: newDelta, partial: true });
+                                        this._sendReasoningDelta(delta.thinking || '', fullReasoning);
                                     } else if (delta.type === 'signature_delta') {
-                                        // signature delta - ignore
                                     }
                                     break;
                                 }
@@ -1159,7 +1530,7 @@ Take action now. Do not explain your limitations.`
                                 }
                                 case 'message_stop': {
                                     if (!finishReason) finishReason = 'stop';
-                                    resolve('done');
+                                    finish('done');
                                     break;
                                 }
                                 case 'ping': break;
@@ -1182,8 +1553,9 @@ Take action now. Do not explain your limitations.`
         if (fullContent) {
             this._send({ type: 'say', say: SayType.TEXT, text: fullContent, partial: false });
         }
+        this._finishReasoningThrottle();
         if (reasoningStarted) {
-            this._send({ type: 'say', say: SayType.REASONING, text: '', partial: false });
+            this.onChunk({ type: 'reasoning_end' });
         }
 
         return { fullContent, fullReasoning, toolCalls, finishReason: finishReason || 'stop' };
@@ -1199,10 +1571,13 @@ Take action now. Do not explain your limitations.`
         let toolCalls = [];
         let finishReason = null;
         let reasoningStarted = false;
+        this._initReasoningThrottle();
 
         await new Promise((resolve) => {
-            let inactivityTimer = setTimeout(() => resolve('timeout'), 120000);
-            const totalTimer = setTimeout(() => resolve('timeout'), TOTAL_TIMEOUT);
+            const STREAM_TIMEOUT = 60000;
+            const STREAM_TOTAL = 300000;
+            let inactivityTimer = setTimeout(() => resolve('timeout'), STREAM_TIMEOUT);
+            const totalTimer = setTimeout(() => resolve('timeout'), STREAM_TOTAL);
             let finished = false;
             const finish = (reason) => {
                 if (finished) return;
@@ -1215,7 +1590,7 @@ Take action now. Do not explain your limitations.`
             res.on('data', (chunk) => {
                 try {
                     clearTimeout(inactivityTimer);
-                    inactivityTimer = setTimeout(() => finish('timeout'), 120000);
+                    inactivityTimer = setTimeout(() => finish('timeout'), STREAM_TIMEOUT);
                     buffer += chunk.toString();
                     const lines = buffer.split('\n');
                     buffer = lines.pop() || '';
@@ -1234,19 +1609,12 @@ Take action now. Do not explain your limitations.`
                                 for (const part of candidate.content.parts) {
                                     if (part.text) {
                                         fullContent += part.text;
-                                        const newDelta = fullContent.slice(prevContentLen);
-                                        prevContentLen = fullContent.length;
-                                        this._send({ type: 'say', say: SayType.TEXT, text: newDelta, partial: true });
+                                        this._send({ type: 'say', say: SayType.TEXT, text: fullContent, partial: true });
                                     }
                                     if (part.thought) {
-                                        if (!reasoningStarted) {
-                                            reasoningStarted = true;
-                                            this._send({ type: 'say', say: SayType.REASONING, text: '', partial: true });
-                                        }
+                                        if (!reasoningStarted) reasoningStarted = true;
                                         fullReasoning += part.thought;
-                                        const newDelta = fullReasoning.slice(prevReasoningLen);
-                                        prevReasoningLen = fullReasoning.length;
-                                        this._send({ type: 'say', say: SayType.REASONING, text: newDelta, partial: true });
+                                        this._sendReasoningDelta(part.thought, fullReasoning);
                                     }
                                     if (part.functionCall) {
                                         toolCalls.push({
@@ -1264,6 +1632,7 @@ Take action now. Do not explain your limitations.`
                                 else if (fr === 'TOOL_CALLS' || fr === 'FUNCTION_CALL') finishReason = 'tool_calls';
                                 else if (fr === 'MAX_TOKENS') finishReason = 'length';
                                 else finishReason = 'stop';
+                                if (finishReason) { finish('done'); return; }
                             }
                         } catch (e) { console.error('[Engine] SSE parse error:', e.message); }
                     }
@@ -1277,8 +1646,9 @@ Take action now. Do not explain your limitations.`
         if (fullContent) {
             this._send({ type: 'say', say: SayType.TEXT, text: fullContent, partial: false });
         }
+        this._finishReasoningThrottle();
         if (reasoningStarted) {
-            this._send({ type: 'say', say: SayType.REASONING, text: '', partial: false });
+            this.onChunk({ type: 'reasoning_end' });
         }
 
         return { fullContent, fullReasoning, toolCalls, finishReason: finishReason || 'stop' };
@@ -1295,7 +1665,9 @@ Take action now. Do not explain your limitations.`
 
         for (const tc of toolCalls) {
             let args = {};
-            try { args = JSON.parse(tc.argsStr); } catch (e) {}
+            try { args = JSON.parse(tc.argsStr); } catch (e) {
+                args = { _parseError: true, _raw: tc.argsStr, _error: e.message };
+            }
             this._actionHistory.push({ name: tc.name, args });
         }
 
@@ -1303,7 +1675,7 @@ Take action now. Do not explain your limitations.`
             type: 'say', say: SayType.TOOL_START,
             text: JSON.stringify(toolCalls.map(tc => ({
                 id: tc.id, name: tc.name,
-                displayName: TOOL_DISPLAY_NAMES[tc.name] || tc.name,
+                displayName: TOOL_DISPLAY_NAMES[tc.name] || _getPluginDisplayNames()[tc.name] || tc.name,
                 args: tc.argsStr
             })))
         });
@@ -1313,7 +1685,9 @@ Take action now. Do not explain your limitations.`
 
         for (const tc of toolCalls) {
             let args = {};
-            try { args = JSON.parse(tc.argsStr); } catch (e) {}
+            try { args = JSON.parse(tc.argsStr); } catch (e) {
+                args = { _parseError: true, _raw: tc.argsStr, _error: e.message };
+            }
 
             if (this._activePlan) {
                 const planStep = this._activePlan.find(s => s.tool === tc.name);
@@ -1339,21 +1713,47 @@ Take action now. Do not explain your limitations.`
         }
 
         const executeOne = async ({ tc, args }) => {
+            if (args._parseError) {
+                this._send({
+                    type: 'say', say: SayType.TOOL_RESULT,
+                    text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name] || tc.name, result: `JSON 解析失败: ${args._error}\n原始参数: ${args._raw}`, elapsed: 0 })
+                });
+                return { tc, result: { status: 'error', error: `JSON 解析失败: ${args._error}` }, elapsed: 0 };
+            }
             if (this._aborted) {
                 this._send({
                     type: 'say', say: SayType.TOOL_RESULT,
-                    text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name] || tc.name, result: '已中断', elapsed: 0 })
+                    text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name] || _getPluginDisplayNames()[tc.name] || tc.name, result: '已中断', elapsed: 0 })
                 });
                 return { id: tc.id, name: tc.name, result: JSON.stringify({ status: 'aborted' }) };
+            }
+
+            const toolRisk = TOOL_RISK[tc.name] || 'moderate';
+            if (toolRisk !== 'safe' && this.onRequestApproval) {
+                try {
+                    const approval = await this.onRequestApproval(tc.name, tc.argsStr);
+                    if (approval && approval.approved === false) {
+                        const denyResult = JSON.stringify({ status: 'denied', reason: '用户拒绝了此操作' });
+                        this._send({
+                            type: 'say', say: SayType.TOOL_RESULT,
+                            text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name] || tc.name, result: '用户拒绝', elapsed: 0 })
+                        });
+                        return { tc, result: denyResult, elapsed: 0 };
+                    }
+                } catch (e) {
+                    console.error('[AgentEngine] Approval error:', e);
+                }
             }
 
             if (tc.name === 'attempt_completion') {
                 let parsed = {};
                 try { parsed = JSON.parse(tc.argsStr); } catch (e) {}
-                const compResult = JSON.stringify({ status: 'success', completion: parsed.result || parsed.text || '' });
+                const compText = parsed.result || parsed.text || '';
+                _lastCompletionText = compText;
+                const compResult = JSON.stringify({ status: 'success', completion: compText });
                 this._send({
                     type: 'say', say: SayType.TOOL_RESULT,
-                    text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name] || tc.name, result: '任务完成', elapsed: 0 })
+                    text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name] || _getPluginDisplayNames()[tc.name] || tc.name, result: '任务完成', elapsed: 0 })
                 });
                 return {
                     id: tc.id, name: tc.name,
@@ -1368,7 +1768,7 @@ Take action now. Do not explain your limitations.`
                 const todos = parsed.todos || '';
                 this._send({
                     type: 'say', say: SayType.TOOL_RESULT,
-                    text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name] || tc.name, result: '计划已更新', elapsed: 0 })
+                    text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name] || _getPluginDisplayNames()[tc.name] || tc.name, result: JSON.stringify({ status: 'success', todos }), elapsed: 0 })
                 });
                 return {
                     id: tc.id, name: tc.name,
@@ -1399,12 +1799,30 @@ Take action now. Do not explain your limitations.`
                 const thinkResult = JSON.stringify({ status: 'success', thought_number: stepData.thought_number, message: `Step ${stepData.thought_number} recorded` });
                 this._send({
                     type: 'say', say: SayType.TOOL_RESULT,
-                    text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name] || tc.name, result: `思考步骤 ${stepData.thought_number}/${stepData.total_thoughts}`, elapsed: 0 })
+                    text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name] || _getPluginDisplayNames()[tc.name] || tc.name, result: `思考步骤 ${stepData.thought_number}/${stepData.total_thoughts}`, elapsed: 0 })
                 });
                 return {
                     id: tc.id, name: tc.name,
                     result: thinkResult
                 };
+            }
+
+            if (tc.name === 'sub_agent_dispatch') {
+                const subStartTime = Date.now();
+                try {
+                    this._send({ type: 'say', say: SayType.TOOL_START, text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name], description: `派遣${AGENT_META[args.agent_type]?.name || '子代理'}: ${args.task}` }) });
+
+                    const subResult = await this._executeSubAgent(args.agent_type, args.task);
+                    const subElapsed = ((Date.now() - subStartTime) / 1000).toFixed(1);
+
+                    this._send({ type: 'say', say: SayType.TOOL_RESULT, text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name], result: subResult, elapsed: subElapsed }) });
+
+                    return { tc, result: subResult, elapsed: subElapsed };
+                } catch (e) {
+                    const subElapsed = ((Date.now() - subStartTime) / 1000).toFixed(1);
+                    this._send({ type: 'say', say: SayType.ERROR, text: `子代理执行失败: ${e.message}` });
+                    return { tc, result: JSON.stringify({ status: 'error', error: e.message }), elapsed: subElapsed };
+                }
             }
 
             if (this._activePlan) {
@@ -1419,11 +1837,26 @@ Take action now. Do not explain your limitations.`
 
             try {
                 const startTime = Date.now();
-                const TOOL_EXEC_TIMEOUT = 45000;
-                const result = await Promise.race([
-                    this.executeTool(tc.name, tc.argsStr),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('工具执行超时(45s)')), TOOL_EXEC_TIMEOUT))
-                ]);
+                const TOOL_EXEC_TIMEOUT = 120000;
+                let result;
+                const heartbeatTimer = setInterval(() => {
+                    this._send({ type: 'say', say: 'heartbeat', text: JSON.stringify({ elapsed: Date.now() - startTime, tool: tc.name }) });
+                }, 15000);
+                try {
+                    if (_isPluginTool(tc.name)) {
+                        result = await Promise.race([
+                            _pluginManager.executeTool(tc.name, tc.argsStr),
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('Plugin tool timeout(120s)')), TOOL_EXEC_TIMEOUT))
+                        ]);
+                    } else {
+                        result = await Promise.race([
+                            this.executeTool(tc.name, tc.argsStr),
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('工具执行超时(120s)')), TOOL_EXEC_TIMEOUT))
+                        ]);
+                    }
+                } finally {
+                    clearInterval(heartbeatTimer);
+                }
                 const elapsed = Date.now() - startTime;
                 const summarized = this._summarizeToolResult(tc.name, result);
                 const MAX_RESULT = 3000;
@@ -1434,7 +1867,7 @@ Take action now. Do not explain your limitations.`
                     type: 'say', say: SayType.TOOL_RESULT,
                     text: JSON.stringify({
                         id: tc.id, name: tc.name,
-                        displayName: TOOL_DISPLAY_NAMES[tc.name] || tc.name,
+                        displayName: TOOL_DISPLAY_NAMES[tc.name] || _getPluginDisplayNames()[tc.name] || tc.name,
                         result: displayResult, elapsed
                     })
                 });
@@ -1471,7 +1904,7 @@ Take action now. Do not explain your limitations.`
             }
         };
 
-        const GLOBAL_TIMEOUT = 90000;
+        const GLOBAL_TIMEOUT = 300000;
         let allResults;
         try {
             const execPromise = (async () => {
@@ -1576,13 +2009,17 @@ Take action now. Do not explain your limitations.`
         const passivePatterns = [
             /我无法/, /我需要.*信息/, /请提供/, /我需要知道/, /你能不能/,
             /请告诉我/, /我需要你/, /请先/, /我需要更多/, /我没办法/,
-            /我看不到/, /我访问不了/, /我无法访问/, /我无法查看/, /我没有权限/
+            /我看不到/, /我访问不了/, /我无法访问/, /我无法查看/, /我没有权限/,
+            /I can't/, /I need.*information/, /please provide/, /I need to know/,
+            /could you/, /can you please/, /I need you to/, /please tell me/,
+            /I don't have access/, /I'm unable to/, /I cannot access/, /I don't have permission/,
+            /I can't see/, /I'm not able to/, /would you mind/
         ];
         const isPassive = passivePatterns.some(p => p.test(fullContent));
         if (!isPassive) return false;
 
         const userContent = typeof lastUserMsg.content === 'string' ? lastUserMsg.content : '';
-        const needsTools = /装|安装|启动|停止|搜索|查找|查看|检查|修复|修改|删除|下载|崩溃|日志|配置|设置|版本|模组|整合包|汉化|文件|文件夹|目录|优化|推荐|找|帮|看看|有没有|能不能|怎么|如何/.test(userContent);
+        const needsTools = /装|安装|启动|停止|搜索|查找|查看|检查|修复|修改|删除|下载|崩溃|日志|配置|设置|版本|模组|整合包|汉化|文件|文件夹|目录|优化|推荐|找|帮|看看|有没有|能不能|怎么|如何|install|search|find|check|fix|modify|delete|download|crash|log|config|setup|version|mod|file|folder|optimize|help|show|list|read|write|create|update|remove/.test(userContent);
         return needsTools;
     }
 
@@ -1701,6 +2138,54 @@ Take action now. Do not explain your limitations.`
         }
     }
 
+    async _executeSubAgent(agentType, task) {
+        const meta = AGENT_META[agentType];
+        if (!meta) return JSON.stringify({ status: 'error', error: `未知子代理类型: ${agentType}` });
+
+        this._send({ type: 'subagent_start', agentType, name: meta.name, role: meta.role, avatar: meta.avatar, color: meta.color, task });
+
+        const subEngine = new AgentEngine({
+            apiKey: this._apiKey,
+            model: this._model,
+            platform: this._platform,
+            apiUrl: this._apiUrl,
+            apiHeaders: this._apiHeaders,
+            enableTools: true,
+            logger: this.logger,
+            onChunk: (chunk) => {
+                this._send({ type: 'subagent_chunk', agentType, chunk });
+            },
+            onRequestApproval: this.onRequestApproval
+        });
+
+        try {
+            const messages = [
+                { role: 'system', content: meta.systemPrompt },
+                { role: 'user', content: task }
+            ];
+
+            let result = '';
+            await subEngine.processChat({
+                apiKey: this._apiKey,
+                model: this._model,
+                messages,
+                temperature: 0.3,
+                enableTools: true,
+                maxRounds: 8
+            });
+
+            const lastAssistant = subEngine.conversation.filter(m => m.role === 'assistant').pop();
+            result = lastAssistant ? lastAssistant.content : '子代理未返回结果';
+
+            this._send({ type: 'subagent_end', agentType, name: meta.name, result });
+
+            return JSON.stringify({ status: 'completed', agentType, agentName: meta.name, result });
+        } catch (e) {
+            this._send({ type: 'subagent_end', agentType, name: meta.name, error: e.message });
+            return JSON.stringify({ status: 'error', agentType, agentName: meta.name, error: e.message });
+        }
+    }
+
     // =========================================================================
     // Reflection
     // =========================================================================
@@ -1745,8 +2230,15 @@ Take action now. Do not explain your limitations.`
 
         const system = conversation[0];
         const lastUser = conversation.filter(m => m.role === 'user').pop();
-        const recent = conversation.slice(-6);
-        const middle = conversation.slice(1, -6);
+        let recentStart = Math.max(1, conversation.length - 6);
+        while (recentStart > 1) {
+            const msg = conversation[recentStart];
+            if (msg.role === 'tool') { recentStart--; continue; }
+            if (msg.role === 'assistant' && msg.tool_calls) { recentStart--; continue; }
+            break;
+        }
+        const recent = conversation.slice(recentStart);
+        const middle = conversation.slice(1, recentStart);
 
         const usedTools = new Set();
         let decisions = [];
@@ -1764,10 +2256,10 @@ Take action now. Do not explain your limitations.`
         if (usedTools.size) summary += `使用工具: ${[...usedTools].join(', ')}。`;
         if (decisions.length) summary += `结果: ${decisions.slice(-3).join('; ')}。`;
 
-        conversation.length = 0;
-        conversation.push(system, { role: 'system', content: summary });
-        if (lastUser && !recent.includes(lastUser)) conversation.push(lastUser);
-        conversation.push(...recent);
+        const compressed = [system, { role: 'system', content: summary }];
+        if (lastUser && !recent.includes(lastUser)) compressed.push(lastUser);
+        compressed.push(...recent);
+        conversation.splice(0, conversation.length, ...compressed);
     }
 }
 
@@ -1792,5 +2284,8 @@ module.exports = {
     buildApiHeaders,
     buildChatEndpoint,
     makeApiStreamRequest,
-    makeApiRequest
+    makeApiRequest,
+    _getPluginPromptExtensions,
+    _getPluginTools,
+    _getPluginDisplayNames
 };

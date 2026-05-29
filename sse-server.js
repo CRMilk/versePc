@@ -7,7 +7,7 @@ const http = require('http');
 
 function createSSEServer(mainExports = {}) {
     const { executeTool = null } = mainExports;
-    const PORT = 3001;
+    const BASE_PORT = 3001;
     const approvalPendingMap = {};
 
     // JSON 解析请求体
@@ -33,13 +33,13 @@ function createSSEServer(mainExports = {}) {
             res.writeHead(204); res.end(); return;
         }
 
-        const url = new URL(req.url, `http://localhost:${PORT}`);
+        const url = new URL(req.url, `http://localhost:${BASE_PORT}`);
         const pathname = url.pathname;
 
         // 健康检查
         if (req.method === 'GET' && pathname === '/api/health') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ status: 'ok', port: PORT }));
+            res.end(JSON.stringify({ status: 'ok', port: BASE_PORT }));
             return;
         }
 
@@ -91,11 +91,34 @@ function createSSEServer(mainExports = {}) {
 
             res.on('close', cleanup);
 
-            const sendChunk = (data) => { res.write(`data: ${JSON.stringify(data)}\n\n`); };
+            let _resClosed = false;
+            res.on('close', () => { _resClosed = true; });
+            const sendChunk = (data) => {
+                if (_resClosed) return;
+                try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch (e) { _resClosed = true; }
+            };
 
-            const requestApproval = (toolName, args) => {
+            const onChunk = (processed) => {
+                if (!processed) return;
+                if (processed.type && processed.type !== 'say') {
+                    sendChunk(processed);
+                    return;
+                }
+                sendChunk(processed);
+            };
+
+            const TOOL_RISK_MAP = {
+                write_to_file: 'dangerous', replace_in_file: 'dangerous', delete_file: 'dangerous',
+                execute_command: 'moderate', spawn_process: 'moderate',
+                browser_action: 'moderate', mcp_tool: 'moderate',
+                search_files: 'safe', list_files: 'safe', list_code_definition_names: 'safe',
+                read_file: 'safe', ask_followup_question: 'safe', attempt_completion: 'safe',
+                update_todo_list: 'safe', sequential_thinking: 'safe',
+            };
+            const onRequestApproval = (toolName, argsStr) => {
+                const risk = TOOL_RISK_MAP[toolName] || 'moderate';
                 const aid = `apv_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 6)}`;
-                sendChunk({ type: 'approval_requested', approvalId: aid, toolName, args });
+                sendChunk({ type: 'approval_requested', approvalId: aid, toolName, risk, args: argsStr });
                 return new Promise((resolve) => {
                     const t = setTimeout(() => {
                         if (approvalPendingMap[aid]) { delete approvalPendingMap[aid]; resolve({ approved: false, toolName, timeout: true }); }
@@ -105,14 +128,14 @@ function createSSEServer(mainExports = {}) {
             };
 
             try {
-                const { AIEngine: EngineClass } = require('./agent-engine');
-                const engine = new EngineClass({ executeTool, requestApproval, sendChunk, logger: console });
+                const { AgentEngine: EngineClass } = require('./agent-engine');
+                const engine = new EngineClass({ executeTool, onRequestApproval, onChunk, logger: console });
                 await engine.processChat({ apiKey, model, messages, temperature, enableTools, maxRounds: 24 });
             } catch (e) {
                 sendChunk({ type: 'error', error: e.message });
             } finally {
                 cleanup();
-                res.end();
+                try { res.end(); } catch (e) {}
             }
             return;
         }
@@ -121,8 +144,23 @@ function createSSEServer(mainExports = {}) {
         res.end(JSON.stringify({ error: 'not found' }));
     });
 
-    server.listen(PORT, () => console.log(`[SSE] 启动: http://localhost:${PORT}`));
-    return { server, PORT };
+    function tryListen(port) {
+        server.removeAllListeners('error');
+        server.on('error', (err) => {
+            if (err.code === 'EADDRINUSE' && port < BASE_PORT + 100) {
+                console.log(`[SSE] 端口 ${port} 被占用，尝试 ${port + 1}`);
+                tryListen(port + 1);
+            } else {
+                console.error(`[SSE] 启动失败:`, err.message);
+            }
+        });
+        server.listen(port, () => {
+            server._actualPort = port;
+            console.log(`[SSE] 启动: http://localhost:${port}`);
+        });
+    }
+    tryListen(BASE_PORT);
+    return { server, get PORT() { return server._actualPort || BASE_PORT; } };
 }
 
 module.exports = { createSSEServer };

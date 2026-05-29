@@ -32,6 +32,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VersePC - Minecraft Launcher</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css">
     <link rel="stylesheet" href="css/themes.css">
     <link rel="stylesheet" href="css/file-browser.css">
     <link rel="stylesheet" href="css/modal.css">
@@ -119,6 +120,7 @@
         }
     </style>
     
+    <div id="wallpaper-bg" style="position:fixed;inset:0;z-index:0;background:var(--bg-primary,#0a0a0a);"></div>
     <canvas id="wallpaper-canvas" style="position:fixed;inset:0;z-index:0;pointer-events:none;width:100%;height:100%;"></canvas>
     <canvas id="wallpaper-canvas-gl" style="position:fixed;inset:0;z-index:0;pointer-events:none;width:100%;height:100%;display:none;"></canvas>
     <div id="wallpaper-overlay" style="position:fixed;inset:0;z-index:1;pointer-events:none;"></div>
@@ -1371,15 +1373,29 @@
                     <div class="rc-chat-container">
                         <div class="ai-sidebar-overlay" id="ai-sidebar-overlay" onclick="AIChat.toggleSidebar()"></div>
                         <div class="rc-chat-sidebar ai-chat-sidebar" id="ai-chat-sidebar">
-                            <div class="rc-sidebar-header">
-                                <button class="rc-btn rc-btn-primary rc-new-chat-btn" onclick="aiNewChat()">
-                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
-                                    新对话
+                            <div class="ai-sidebar-nav">
+                                <button class="ai-sidebar-nav-item" onclick="aiNewChat()">
+                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:16px;height:16px"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
+                                    <span>新建任务</span>
+                                </button>
+                                <button class="ai-sidebar-nav-item" onclick="AIChat.toggleTerminal()">
+                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:16px;height:16px"><rect x="1" y="2" width="14" height="12" rx="2"/><path d="M4 6l3 2-3 2"/><line x1="8" y1="10" x2="12" y2="10"/></svg>
+                                    <span>技能</span>
                                 </button>
                             </div>
-                            <input type="text" id="ai-chat-search" class="rc-search-input" placeholder="搜索对话..." oninput="aiSearchConversations(this.value)">
+                            <div class="ai-sidebar-section-header">
+                                <span>任务列表</span>
+                                <button class="ai-sidebar-section-btn" onclick="aiNewChat()" title="新建任务">
+                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
+                                </button>
+                            </div>
+                            <div class="ai-sidebar-project">
+                                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px"><path d="M2 4a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4z"/></svg>
+                                <span class="ai-sidebar-project-name">VersePC</span>
+                            </div>
+                            <input type="text" id="ai-chat-search" class="rc-search-input" placeholder="搜索对话..." oninput="aiSearchConversations(this.value)" style="display:none">
                             <div class="rc-chat-list" id="ai-chat-list"></div>
-                            <div class="rc-sidebar-footer">
+                            <div class="rc-sidebar-footer" style="display:none">
                                 <button class="rc-btn rc-btn-icon" onclick="aiClearAllChats()" title="清空所有对话">
                                     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px"><path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M13 4v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4"/></svg>
                                 </button>
@@ -1390,9 +1406,86 @@
                                 <button class="rc-top-toolbar-btn" id="ai-history-btn" onclick="AIChat.toggleSidebar()" title="历史对话">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
                                 </button>
+                                <button class="rc-top-toolbar-btn" id="ai-panel-btn" onclick="AIChat.toggleSidePanel()" title="任务面板">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                                </button>
                                 <button class="rc-top-toolbar-btn" id="ai-settings-btn" onclick="aiToggleSettings()" title="设置">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
                                 </button>
+                                <button class="rc-top-toolbar-btn" id="ai-editor-btn" onclick="toggleEditorPanel()" title="编辑器">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                                </button>
+                                <button class="rc-top-toolbar-btn" id="ai-terminal-btn" onclick="AIChat.toggleTerminal()" title="终端">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                                </button>
+                            </div>
+                            <div class="ai-side-panel" id="ai-side-panel">
+                                <div class="ai-side-panel-body">
+                                    <div class="ai-side-todo-section">
+                                        <div class="ai-side-todo-header">
+                                            <span class="ai-side-todo-title">待办</span>
+                                            <span class="ai-side-todo-info" title="任务计划由AI自动生成">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                            </span>
+                                        </div>
+                                        <div class="ai-side-todo-list" id="ai-side-todo-list"></div>
+                                    </div>
+                                    <div class="ai-side-divider"></div>
+                                    <div class="ai-side-context-section">
+                                        <div class="ai-side-context-header">
+                                            <span class="ai-side-context-title">上下文</span>
+                                            <span class="ai-side-context-info-icon" title="当前对话的上下文使用情况">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                            </span>
+                                            <button class="ai-side-compress-btn" id="ai-side-condense-btn" onclick="AIChat.condenseContext()">压缩</button>
+                                        </div>
+                                        <div class="ai-side-context-bar-wrap">
+                                            <div class="ai-side-context-bar">
+                                                <div class="ai-side-context-bar-fill" id="ai-side-context-bar-fill" style="width:0%"></div>
+                                            </div>
+                                            <span class="ai-side-context-bar-pct" id="ai-side-context-bar-pct">0%</span>
+                                        </div>
+                                        <div class="ai-side-context-legend">
+                                            <span class="ai-side-legend-item"><span class="ai-side-legend-dot" style="background:#3b82f6"></span>联网搜索</span>
+                                            <span class="ai-side-legend-item"><span class="ai-side-legend-dot" style="background:#14b8a6"></span>文件</span>
+                                            <span class="ai-side-legend-item"><span class="ai-side-legend-dot" style="background:#f97316"></span>其他</span>
+                                        </div>
+                                        <div class="ai-side-context-detail">
+                                            <div class="ai-side-context-detail-title">其他上下文</div>
+                                            <div class="ai-side-context-detail-desc" id="ai-side-context-detail-desc">用于系统级指令和后台处理的上下文</div>
+                                        </div>
+                                    </div>
+                                    <div class="ai-side-divider"></div>
+                                    <div class="ai-side-resources-section">
+                                        <div class="ai-side-context-header">
+                                            <span class="ai-side-context-title">使用资源</span>
+                                            <span class="ai-side-context-info-icon" title="当前任务使用的文件和工具">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                            </span>
+                                        </div>
+                                        <div class="ai-side-resource-list" id="ai-side-resource-list">
+                                            <div class="ai-side-resource-empty">暂无使用资源</div>
+                                        </div>
+                                    </div>
+                                    <div class="ai-side-divider"></div>
+                                    <div class="ai-side-terminal-section">
+                                        <div class="ai-side-terminal-header">
+                                            <span class="ai-side-context-title">终端</span>
+                                            <span class="ai-side-terminal-shell">powershell</span>
+                                            <div class="ai-side-terminal-actions">
+                                                <button class="ai-side-terminal-btn" onclick="AIChat.createTerminal()" title="新建终端">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                                </button>
+                                                <button class="ai-side-terminal-btn" onclick="AIChat.toggleTerminal()" title="关闭终端">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="ai-side-terminal-body" id="ai-terminal-body">
+                                            <div class="ai-terminal-hint" id="ai-terminal-hint">按 Ctrl+` 或点击终端按钮打开</div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="rc-topbar" id="ai-chat-topbar" style="display:none">
                                 <span id="ai-chat-title" class="rc-topbar-title"></span>
@@ -1428,48 +1521,106 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="rc-todo-bar" id="ai-todo-bar" style="display:none">
-                                <div class="rc-todo-header" onclick="AIChat.toggleTodoList()">
-                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;flex-shrink:0"><path d="M5.5 3.5l2.5 2.5 4-4"/><path d="M5.5 8.5l2.5 2.5 4-4"/><rect x="1" y="1" width="14" height="14" rx="2"/></svg>
-                                    <span class="rc-todo-summary" id="ai-todo-summary"></span>
-                                    <span class="rc-todo-count" id="ai-todo-count"></span>
-                                    <svg class="rc-todo-chevron" id="ai-todo-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;flex-shrink:0;transition:transform 0.2s"><polyline points="4 6 8 10 12 6"/></svg>
-                                </div>
-                                <div class="rc-todo-list" id="ai-todo-list"></div>
-                            </div>
                             <div class="rc-welcome" id="ai-welcome">
-                                <div class="rc-welcome-icon">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:36px;height:36px"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+                                <div class="ai-welcome-avatar">
+                                    <img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7&offline=1" alt="" class="ai-welcome-avatar-img" onerror="this.parentElement.innerHTML='<svg width=&quot;48&quot; height=&quot;48&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.5&quot;><circle cx=&quot;12&quot; cy=&quot;12&quot; r=&quot;10&quot/><polygon points=&quot;16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76&quot;/></svg>'">
                                 </div>
-                                <h2>VerseAI 助手</h2>
-                                <p>多平台 AI 模型，为你提供智能对话体验</p>
-                                <div class="rc-quick-prompts">
-                                    <button class="rc-quick-btn" onclick="aiSendQuick('介绍一下 Minecraft 的最新版本更新内容')">Minecraft 更新</button>
-                                    <button class="rc-quick-btn" onclick="aiSendQuick('推荐一些好玩的 Minecraft 模组')">模组推荐</button>
-                                    <button class="rc-quick-btn" onclick="aiSendQuick('如何优化 Minecraft 的性能和帧率？')">性能优化</button>
-                                    <button class="rc-quick-btn" onclick="aiSendQuick('Minecraft 红石电路入门教程')">红石教程</button>
+                                <div class="ai-welcome-typewriter" id="ai-welcome-typewriter"></div>
+                                <p class="ai-welcome-subtitle">我可以帮你下载模组，汉化模组，检查错误崩溃</p>
+                            </div>
+                            <div class="rc-messages" id="ai-messages" style="display:none">
+                                <div class="rc-todo-bar" id="ai-todo-bar" style="display:none">
+                                    <div class="rc-todo-header" onclick="AIChat.toggleTodoList()">
+                                        <span class="rc-todo-plan-icon" id="ai-todo-plan-icon"></span>
+                                        <span class="rc-todo-summary" id="ai-todo-summary">任务计划</span>
+                                        <span class="rc-todo-count" id="ai-todo-count"></span>
+                                        <span class="rc-todo-chevron" id="ai-todo-chevron"></span>
+                                    </div>
+                                    <div class="rc-todo-list" id="ai-todo-list"></div>
                                 </div>
                             </div>
-                            <div class="rc-messages" id="ai-messages" style="display:none"></div>
                             <div class="rc-input-area" id="ai-input-area">
                                 <div class="rc-input-container" ondragover="this.classList.add('drag-over');event.preventDefault()" ondragleave="this.classList.remove('drag-over')">
-                                    <textarea id="ai-input" class="rc-textarea" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" rows="1" onkeydown="aiHandleKeyDown(event)" oninput="aiAutoResize(this);AIChat._updateSendBtnState()" onpaste="AIChat.handlePaste(event)" ondrop="AIChat.handleDrop(event)" ondragover="event.preventDefault()"></textarea>
-                                    <div class="rc-input-actions-float">
-                                        <button class="rc-send-btn" id="ai-send-btn" onclick="aiSendMessage()" title="发送消息">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                                    <textarea id="ai-input" class="rc-textarea" placeholder="// 输入搜索..." rows="1" onkeydown="aiHandleKeyDown(event)" oninput="aiAutoResize(this);AIChat._updateSendBtnState()" onpaste="AIChat.handlePaste(event)" ondrop="AIChat.handleDrop(event)" ondragover="event.preventDefault()"></textarea>
+                                    <div class="rc-input-bottom-bar">
+                                        <div class="rc-input-bottom-left">
+                                            <button class="rc-icon-btn" id="ai-attach-btn" onclick="AIChat.triggerAttachment()" title="添加附件">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:15px;height:15px"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M3 9h18"/></svg>
+                                            </button>
+                                            <button class="rc-icon-btn" onclick="AIChat.triggerImageAttach && AIChat.triggerImageAttach()" title="上传图片">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:15px;height:15px"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                                            </button>
+                                        </div>
+                                        <div class="rc-input-bottom-right">
+                                            <button class="rc-model-btn" id="ai-model-select-btn" onclick="AIChat.showModelSelector()">
+                                                <span id="ai-current-model-label">GLM-4-Flash</span>
+                                                <svg class="rc-model-btn-arrow" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
+                                            </button>
+                                            <button class="rc-icon-btn" title="语音输入">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:15px;height:15px"><path d="M21 11c0 4.97-4.03 9-9 9s-9-4.03-9-9"/><path d="M3 11c0-4.97 4.03-9 9-9"/><circle cx="12" cy="11" r="1" fill="currentColor"/></svg>
+                                            </button>
+                                            <button class="rc-icon-btn" title="语音识别">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:15px;height:15px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                                            </button>
+                                            <button class="rc-send-btn" id="ai-send-btn" onclick="aiSendMessage()" title="发送消息">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                                            </button>
+                                            <button class="rc-stop-btn" id="ai-stop-btn" onclick="aiStopGeneration()" style="display:none" title="停止生成">
+                                                <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="rc-input-context-bar">
+                                    <div class="rc-context-left">
+                                        <button class="rc-context-item" title="切换环境">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                                            <span>本地</span>
+                                            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" style="width:9px;height:9px"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
                                         </button>
-                                        <button class="rc-stop-btn" id="ai-stop-btn" onclick="aiStopGeneration()" style="display:none" title="停止生成">
-                                            <svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                                        <span class="rc-context-sep"></span>
+                                        <button class="rc-context-item rc-context-item-folder" title="切换项目" onclick="AIChat._showFolderDropdown()">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                                            <span id="ai-folder-label">未选择</span>
+                                            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" style="width:9px;height:9px"><path d="M3 4.5L6 7.5L9 4.5"/></svg>
+                                        </button>
+                                    </div>
+                                    <div class="rc-context-right">
+                                        <button class="rc-context-item" title="分支">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                                            <span>main</span>
                                         </button>
                                     </div>
                                 </div>
-                                <div style="display:flex;align-items:center;gap:6px;padding:6px 4px 0">
-                                    <button class="rc-model-btn" id="ai-model-select-btn" onclick="AIChat.showModelSelector()">
-                                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M2 6h12M6 14V6"/></svg>
-                                        <span id="ai-current-model-label">GLM-4-Flash</span>
-                                    </button>
+                            </div>
+                        </div>
+                        <div class="editor-panel" id="editor-panel">
+                            <div class="editor-drag-handle" id="editor-drag-handle"></div>
+                            <div class="editor-panel-body">
+                                <div class="editor-panel-header">
+                                    <span class="editor-panel-title">编辑器</span>
+                                    <div class="editor-panel-header-actions">
+                                        <button class="editor-panel-header-btn" id="btn-toggle-explorer" onclick="toggleFileExplorer()" title="文件资源管理器 Ctrl+B">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                                        </button>
+                                        <button class="editor-panel-close" onclick="toggleEditorPanel()" title="关闭编辑器 Esc">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="editor-panel-content">
+                                    <div class="editor-fileexplorer" id="editor-fileexplorer">
+                                        <div class="editor-fileexplorer-header">资源管理器</div>
+                                        <div class="editor-fileexplorer-list" id="fileexplorer-list">
+                                            <div class="editor-fileexplorer-empty">打开文件夹以查看文件</div>
+                                        </div>
+                                    </div>
+                                    <div class="editor-main-area">
+                                        <iframe id="editor-iframe" class="editor-panel-iframe" src="editor.html" style="border:none;width:100%;height:100%;"></iframe>
+                                    </div>
                                 </div>
                             </div>
+                            <div class="editor-panel-toast" id="editor-toast"></div>
                         </div>
                     </div>
                 </div>
@@ -1484,21 +1635,21 @@
                         <h3 class="toolbox-category">百科攻略</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://zh.minecraft.wiki')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Minecraft Wiki</span>
                                     <span class="toolbox-desc">最权威的官方百科</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.mcmod.cn')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MC百科</span>
                                     <span class="toolbox-desc">中文 Mod 百科数据库</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.digminecraft.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">DigMinecraft</span>
                                     <span class="toolbox-desc">全物品/方块 ID 查询</span>
@@ -1511,35 +1662,35 @@
                         <h3 class="toolbox-category">模组与整合包</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.curseforge.com/minecraft')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">CurseForge</span>
                                     <span class="toolbox-desc">全球最大 Mod 整合包平台</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://modrinth.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Modrinth</span>
                                     <span class="toolbox-desc">新兴开源 Mod 平台</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.planetminecraft.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Planet Minecraft</span>
                                     <span class="toolbox-desc">全球最大 MC 社区</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.mcbbs.net')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MCBBS</span>
                                     <span class="toolbox-desc">国内最大 MC 中文论坛</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://mcpedl.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MCPEDL</span>
                                     <span class="toolbox-desc">基岩版资源大全</span>
@@ -1552,21 +1703,21 @@
                         <h3 class="toolbox-category">玩家社区</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.minebbs.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MineBBS</span>
                                     <span class="toolbox-desc">国内 MC 中文论坛</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://klpbbs.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">苦力怕论坛</span>
                                     <span class="toolbox-desc">资源丰富的中文社区</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://search.bilibili.com/all?keyword=我的世界')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Bilibili MC</span>
                                     <span class="toolbox-desc">视频教程 / 实况 / 攻略</span>
@@ -1579,21 +1730,21 @@
                         <h3 class="toolbox-category">材质与光影</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://resourcepack.net')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">ResourcePack</span>
                                     <span class="toolbox-desc">海量材质包下载</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://shadersmods.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">ShadersMods</span>
                                     <span class="toolbox-desc">光影资源合集</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://vanillatweaks.net')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Vanilla Tweaks</span>
                                     <span class="toolbox-desc">原版微调增强包</span>
@@ -1606,28 +1757,28 @@
                         <h3 class="toolbox-category">地图与建筑</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.plotz.co.uk')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Plotz</span>
                                     <span class="toolbox-desc">圆形/球形建造蓝图</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.blockpalettes.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Block Palettes</span>
                                     <span class="toolbox-desc">方块配色方案库</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://minecraftshapes.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MinecraftShapes</span>
                                     <span class="toolbox-desc">几何形状建造指南</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.minecraftmaps.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Minecraft Maps</span>
                                     <span class="toolbox-desc">冒险/解谜地图下载</span>
@@ -1640,63 +1791,63 @@
                         <h3 class="toolbox-category">在线工具</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.chunkbase.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Chunkbase</span>
                                     <span class="toolbox-desc">种子地图 / 结构定位</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://mcstacker.net')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MCStacker</span>
                                     <span class="toolbox-desc">命令在线生成器</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://minecraft.tools')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MC Tools</span>
                                     <span class="toolbox-desc">合成/烟花/药水/旗帜</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://misode.github.io')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Misode</span>
                                     <span class="toolbox-desc">数据包 / 世界编辑器</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://mclo.gs')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">mclo.gs</span>
                                     <span class="toolbox-desc">游戏日志分析工具</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://minecraft-heads.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Minecraft Heads</span>
                                     <span class="toolbox-desc">头颅数据库/give指令</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://colorize.fun')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Colorize FUN</span>
                                     <span class="toolbox-desc">MC 彩色文本生成器</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://textcraft.net')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Textcraft</span>
                                     <span class="toolbox-desc">MC 风格 Logo 生成</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.craftmc.net')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">CraftMC Tools</span>
                                     <span class="toolbox-desc">红石模拟/圆形生成</span>
@@ -1709,35 +1860,35 @@
                         <h3 class="toolbox-category">皮肤资源</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://namemc.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">NameMC</span>
                                     <span class="toolbox-desc">正版皮肤 / UUID 查询</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://littleskin.cn')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">LittleSkin</span>
                                     <span class="toolbox-desc">国内皮肤站</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://novaskin.me')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Nova Skin</span>
                                     <span class="toolbox-desc">3D 皮肤编辑器</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.minecraftskins.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">The Skindex</span>
                                     <span class="toolbox-desc">百万皮肤分享社区</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://skinmc.net')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">SkinMC</span>
                                     <span class="toolbox-desc">3D 皮肤查看器</span>
@@ -1750,28 +1901,28 @@
                         <h3 class="toolbox-category">服务器与插件</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://findmcserver.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">FindMCServer</span>
                                     <span class="toolbox-desc">Mojang 官方服务器列表</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://minecraftservers.org')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MC Servers</span>
                                     <span class="toolbox-desc">国际服务器列表</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.spigotmc.org')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">SpigotMC</span>
                                     <span class="toolbox-desc">服务器插件/Paper核心</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.mczfw.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">找服网</span>
                                     <span class="toolbox-desc">国内服务器大全</span>
@@ -1784,14 +1935,14 @@
                         <h3 class="toolbox-category">资源导航</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.mcnav.net')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MCNav</span>
                                     <span class="toolbox-desc">MC 资源大全一站导航</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.minecraftxz.com')">
-                                <img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%234a9eff%22%3E%3Cpath d=%22M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5%22/%3E%3C/svg%3E" alt="" class="toolbox-icon" onerror="this.style.display='none'">
+                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MinecraftXZ</span>
                                     <span class="toolbox-desc">中文资源下载站</span>
@@ -2372,21 +2523,21 @@
                         </div>
 
                         <div class="card">
-                            <h3>动态壁纸</h3>
+                            <h3>背景</h3>
                             <div class="form-group">
-                                <label>选择壁纸风格</label>
+                                <label>选择背景风格</label>
                                 <div class="wallpaper-picker-grid">
-                                    <div class="wallpaper-option active" data-wallpaper="starry" onclick="selectWallpaper(this)">
-                                        <div class="wallpaper-preview" id="wp-preview-starry">
-                                            <div class="wp-preview-icon">✦</div>
-                                        </div>
-                                        <span class="wallpaper-name">粒子星空</span>
-                                    </div>
-                                    <div class="wallpaper-option" data-wallpaper="panorama" onclick="selectWallpaper(this)">
+                                    <div class="wallpaper-option active" data-wallpaper="panorama" onclick="selectWallpaper(this)">
                                         <div class="wallpaper-preview" id="wp-preview-panorama">
                                             <div class="wp-preview-icon">◎</div>
                                         </div>
                                         <span class="wallpaper-name">MC全景</span>
+                                    </div>
+                                    <div class="wallpaper-option" data-wallpaper="none" onclick="selectWallpaper(this)">
+                                        <div class="wallpaper-preview" id="wp-preview-none">
+                                            <div class="wp-preview-icon">◻</div>
+                                        </div>
+                                        <span class="wallpaper-name">无背景</span>
                                     </div>
                                     <div class="wallpaper-option" data-wallpaper="customImage" onclick="selectWallpaper(this)">
                                         <div class="wallpaper-preview" id="wp-preview-custom-image">
@@ -2831,6 +2982,8 @@
     <link rel="stylesheet" href="css/hljs-theme.min.css">
     <script src="js/marked.min.js"></script>
     <script src="js/highlight.min.js"></script>
+    <script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script src="node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
     <script src="js/ai-chat.js"></script>
     <script src="js/app.js"></script>
     <script src="js/mod-chinese-names.js" defer></script>

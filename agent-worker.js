@@ -1,7 +1,7 @@
 /**
  * VersePC Agent Worker Thread
  * 
- * 在独立线程中运行 AI Agent，基于 Roo Code 架构模式
+ * 在独立线程中运行 AI Agent
  * 主进程事件循环始终保持响应，UI 不会冻结
  */
 
@@ -14,22 +14,44 @@ const os = require('os');
 const LOG_DIR = path.join(os.homedir(), '.versepc', 'logs');
 const LOG_FILE = path.join(LOG_DIR, `ai-agent-${new Date().toISOString().slice(0, 10)}.log`);
 try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch (e) {}
+const _logBuffer = [];
+let _logFlushScheduled = false;
+function _flushLogBuffer() {
+    _logFlushScheduled = false;
+    if (_logBuffer.length === 0) return;
+    const batch = _logBuffer.splice(0);
+    const data = batch.join('');
+    try { fs.appendFileSync(LOG_FILE, data); } catch (e) {}
+}
+function _flushLogBufferAsync() {
+    _logFlushScheduled = false;
+    if (_logBuffer.length === 0) return;
+    const batch = _logBuffer.splice(0);
+    const data = batch.join('');
+    try { fs.appendFile(LOG_FILE, data, () => {}); } catch (e) {}
+}
 function aiLog(tag, msg) {
     try {
         const line = `[${new Date().toISOString()}][${tag}] ${typeof msg === 'string' ? msg : JSON.stringify(msg)}\n`;
-        fs.appendFileSync(LOG_FILE, line);
+        _logBuffer.push(line);
+        if (!_logFlushScheduled) {
+            _logFlushScheduled = true;
+            setTimeout(_flushLogBufferAsync, 500);
+        }
     } catch (e) {}
 }
 aiLog('WORKER', '=== Worker thread started ===');
 
 process.on('uncaughtException', (err) => {
     aiLog('FATAL', { error: err.message || String(err), stack: err.stack || '' });
+    _flushLogBuffer();
     try { parentPort.postMessage({ type: 'error', error: err.message || String(err) }); } catch (e) {}
     try { parentPort.postMessage({ type: 'done' }); } catch (e) {}
 });
 process.on('unhandledRejection', (reason) => {
     const msg = reason instanceof Error ? reason.message : String(reason);
     aiLog('REJECT', { error: msg });
+    _flushLogBuffer();
     try { parentPort.postMessage({ type: 'error', error: msg }); } catch (e) {}
     try { parentPort.postMessage({ type: 'done' }); } catch (e) {}
 });
@@ -44,7 +66,6 @@ let approvalCounter = 0;
 
 function sendChunk(chunk) {
     if (!chunk) return;
-    aiLog('CHUNK', chunk);
     try { parentPort.postMessage({ type: 'chunk', chunk }); } catch (e) {}
 }
 
@@ -53,15 +74,24 @@ function execToolViaMain(name, argsStr) {
         const execId = String(++execCounter);
         const timer = setTimeout(() => {
             pendingExecs.delete(execId);
-            resolve(JSON.stringify({ status: 'error', error: '工具执行超时(30s)', type: 'timeout' }));
-        }, 30000);
+            resolve(JSON.stringify({ status: 'error', error: '工具执行超时(130s)', type: 'timeout' }));
+        }, 130000);
         pendingExecs.set(execId, { resolve, timer });
         parentPort.postMessage({ type: 'exec_tool', execId, name, args: argsStr });
     });
 }
 
 function requestApprovalViaMain(toolName, argsStr) {
-    return Promise.resolve(true);
+    return new Promise((resolve) => {
+        const aid = `apv_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 6)}`;
+        const risk = TOOL_RISK[toolName] || 'moderate';
+        const timer = setTimeout(() => {
+            pendingApprovals.delete(aid);
+            resolve({ approved: false, toolName, timeout: true });
+        }, 60000);
+        pendingApprovals.set(aid, { resolve, timer, toolName });
+        parentPort.postMessage({ type: 'approval_request', approvalId: aid, toolName, risk, args: argsStr });
+    });
 }
 
 let reasoningState = { started: false, fullText: '' };
@@ -136,6 +166,9 @@ function translateChunk(processed) {
             case 'tool_end': {
                 return { type: 'tool_calls_end' };
             }
+            case 'heartbeat': {
+                return { type: 'heartbeat', text };
+            }
             case 'error': {
                 return { error: text };
             }
@@ -190,6 +223,11 @@ function translateChunk(processed) {
 
 engine = new AgentEngine({
     onChunk(processed) {
+        if (processed.type && processed.type !== 'say') {
+            aiLog('DIRECT', { type: processed.type });
+            sendChunk(processed);
+            return;
+        }
         aiLog('ENGINE', { say: processed.say, partial: processed.partial, delta: processed.delta, textLen: (processed.text || '').length });
         const chunk = translateChunk(processed);
         if (chunk) sendChunk(chunk);

@@ -2,6 +2,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 let progressCallbackWrapper = null;
 let updaterStatusCallbackWrapper = null;
+let _ssePortCache = null;
+async function getSSEPort() {
+    if (_ssePortCache !== null) return _ssePortCache;
+    try { _ssePortCache = await ipcRenderer.invoke('ai:get-sse-port'); } catch (e) { _ssePortCache = 3001; }
+    return _ssePortCache;
+}
 
 contextBridge.exposeInMainWorld('electronAPI', {
     minimize: () => ipcRenderer.send('window-minimize'),
@@ -18,6 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getDroppedFilePath: (file) => file.path || '',
     getDefaultModPath: () => ipcRenderer.invoke('getDefaultModPath'),
     selectSaveFolder: (defaultPath) => ipcRenderer.invoke('dialog:select-folder', { title: '选择模组保存文件夹', defaultPath }),
+    selectFolder: (options) => ipcRenderer.invoke('dialog:select-folder', options || {}),
     selectFile: (options) => ipcRenderer.invoke('dialog:select-file', options),
     importModpack: (filePath, targetVersion = '') => ipcRenderer.invoke('import-modpack', filePath, targetVersion),
     onImportProgress: (callback) => {
@@ -77,6 +84,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     store: {
         get: (key) => ipcRenderer.invoke('store-get', key),
+        getMultiple: (keys) => ipcRenderer.invoke('store-get-multiple', keys),
         set: (key, value) => ipcRenderer.invoke('store-set', key, value),
         delete: (key) => ipcRenderer.invoke('store-delete', key),
     },
@@ -84,6 +92,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     memoryOptimize: () => ipcRenderer.invoke('memory-optimize'),
     getMemoryInfo: () => ipcRenderer.invoke('get-memory-info'),
     jvmPreheat: (javaPath, maxMemMB) => ipcRenderer.invoke('jvm-preheat', javaPath, maxMemMB),
+    editor: {
+        open: (filePath) => ipcRenderer.invoke('editor:open', filePath),
+        onShowDiff: (callback) => ipcRenderer.on('editor:show-diff', (event, filePath, original, modified) => callback(filePath, original, modified)),
+    },
+    terminal: {
+        create: (id, cols, rows) => ipcRenderer.invoke('terminal:create', id, cols, rows),
+        write: (id, data) => ipcRenderer.invoke('terminal:write', id, data),
+        resize: (id, cols, rows) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
+        kill: (id) => ipcRenderer.invoke('terminal:kill', id),
+        onData: (callback) => ipcRenderer.on('terminal:data', (event, id, data) => callback(id, data)),
+        onExit: (callback) => ipcRenderer.on('terminal:exit', (event, id, code) => callback(id, code)),
+    },
     ai: {
         chatStream: (params) => ipcRenderer.send('ai:chat-stream', params),
         chatAbort: () => ipcRenderer.invoke('ai:chat-abort'),
@@ -95,9 +115,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
             ipcRenderer.on('ai:chat-chunk', wrapper);
             return () => ipcRenderer.removeListener('ai:chat-chunk', wrapper);
         },
+        onSelectVersionRequest: (callback) => {
+            const wrapper = (event, data) => callback(data);
+            ipcRenderer.on('ai:select-version-request', wrapper);
+            return () => ipcRenderer.removeListener('ai:select-version-request', wrapper);
+        },
+        selectVersionResponse: (selId, selected) => {
+            ipcRenderer.send('ai:select-version-response', { selId, selected });
+        },
         // SSE 模式 - 绕过 IPC 序列化瓶颈
         chatStreamSSE: async (params, onChunk, onDone, onError) => {
-            const SSE_PORT = 3001;
+            const SSE_PORT = await getSSEPort();
             const chatId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             let abortController = new AbortController();
 
@@ -153,7 +181,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
             }
         },
         toolApproveSSE: async (approvalId, approved) => {
-            const SSE_PORT = 3001;
+            const SSE_PORT = await getSSEPort();
             try {
                 const r = await fetch(`http://localhost:${SSE_PORT}/api/chat/approve`, {
                     method: 'POST',

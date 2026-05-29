@@ -1,7 +1,8 @@
 function wpfilePath(filePath) {
     if (!filePath) return '';
     if (filePath.startsWith('wpfile://')) return filePath;
-    return 'wpfile:///' + filePath.replace(/\\/g, '/');
+    const normalized = filePath.replace(/\\/g, '/');
+    return 'wpfile:///' + normalized.split('/').map(encodeURIComponent).join('/');
 }
 
 class WallpaperEngine {
@@ -15,7 +16,7 @@ class WallpaperEngine {
         this.mouseY = 0;
         this.lastTime = 0;
         this.isDarkTheme = true;
-        this.currentMode = 'starry';
+        this.currentMode = 'panorama';
         this.renderer = null;
         this.transitionAlpha = 1;
         this.transitioning = false;
@@ -92,20 +93,31 @@ class WallpaperEngine {
         }
 
         const isGL = this.currentMode === 'panorama';
-        this.canvas.style.display = isGL ? 'none' : 'block';
+        const isNone = this.currentMode === 'none';
+        this.canvas.style.display = (isGL || isNone) ? 'none' : 'block';
         if (this.glCanvas) this.glCanvas.style.display = isGL ? 'block' : 'none';
 
+        if (isNone) {
+            this.renderer = null;
+            const app = document.getElementById('app');
+            if (app) {
+                app.classList.remove('wp-light', 'wp-dark');
+            }
+            const overlay = document.getElementById('wallpaper-overlay');
+            if (overlay) {
+                overlay.style.background = 'transparent';
+            }
+            return;
+        }
+
         const factories = {
-            starry: () => new StarryRenderer(this),
             panorama: () => new PanoramaRenderer(this),
             customImage: () => new CustomImageRenderer(this),
             customVideo: () => new CustomVideoRenderer(this)
         };
-        this.renderer = (factories[this.currentMode] || factories.starry)();
+        this.renderer = (factories[this.currentMode] || factories.panorama)();
 
-        if (this.currentMode === 'starry') {
-            this._notifyBrightness(0);
-        } else if (this.currentMode === 'panorama') {
+        if (this.currentMode === 'panorama') {
             this._notifyBrightness(0.5);
         }
     }
@@ -200,143 +212,6 @@ function drawFitMode(ctx, source, sourceW, sourceH, canvasW, canvasH, fitMode) {
         }
     }
 }
-
-class StarryRenderer {
-    constructor(engine) {
-        this.engine = engine;
-        this.particles = [];
-        this.shootingStars = [];
-        this.nebulaClouds = [];
-        this.STAR_COUNT = 280;
-        this.SHOOTING_STAR_INTERVAL = 4000;
-        this.NEBULA_COUNT = 4;
-        this.lastShootingStarTime = 0;
-        this._initParticles();
-        this._initNebula();
-    }
-
-    setTheme() { this._initNebula(); }
-    onResize() { this._initNebula(); }
-
-    _initParticles() {
-        this.particles = [];
-        for (let i = 0; i < this.STAR_COUNT; i++) {
-            this.particles.push(this._createStar());
-        }
-    }
-
-    _createStar() {
-        const layer = Math.random();
-        let size, speed, brightness;
-        if (layer < 0.6) { size = Math.random() * 1.2 + 0.3; speed = Math.random() * 0.08 + 0.01; brightness = Math.random() * 0.4 + 0.2; }
-        else if (layer < 0.9) { size = Math.random() * 1.8 + 0.8; speed = Math.random() * 0.15 + 0.05; brightness = Math.random() * 0.5 + 0.4; }
-        else { size = Math.random() * 2.5 + 1.2; speed = Math.random() * 0.25 + 0.1; brightness = Math.random() * 0.3 + 0.7; }
-        return { x: Math.random() * this.engine.canvas.width, y: Math.random() * this.engine.canvas.height, size, speed, brightness, baseBrightness: brightness, twinkleSpeed: Math.random() * 0.02 + 0.005, twinkleOffset: Math.random() * Math.PI * 2, parallaxFactor: speed * 3, color: this._getStarColor() };
-    }
-
-    _getStarColor() {
-        const r = Math.random();
-        if (r < 0.6) return { r: 255, g: 255, b: 255 };
-        if (r < 0.75) return { r: 200, g: 220, b: 255 };
-        if (r < 0.85) return { r: 255, g: 240, b: 200 };
-        if (r < 0.93) return { r: 180, g: 200, b: 255 };
-        return { r: 255, g: 200, b: 180 };
-    }
-
-    _initNebula() {
-        this.nebulaClouds = [];
-        for (let i = 0; i < this.NEBULA_COUNT; i++) {
-            this.nebulaClouds.push({ x: Math.random() * this.engine.canvas.width, y: Math.random() * this.engine.canvas.height, radius: Math.random() * 250 + 150, opacity: Math.random() * 0.03 + 0.01, driftX: (Math.random() - 0.5) * 0.1, driftY: (Math.random() - 0.5) * 0.05, hue: this.engine.isDarkTheme ? (Math.random() * 60 + 200) : (Math.random() * 40 + 200) });
-        }
-    }
-
-    _createShootingStar() {
-        const angle = Math.random() * 0.5 + 0.3;
-        const speed = Math.random() * 8 + 6;
-        return { x: Math.random() * this.engine.canvas.width * 0.8, y: Math.random() * this.engine.canvas.height * 0.4, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1.0, decay: Math.random() * 0.015 + 0.01, length: Math.random() * 60 + 40, width: Math.random() * 1.5 + 0.5 };
-    }
-
-    render(dt, timestamp) {
-        const ctx = this.engine.ctx;
-        const w = this.engine.canvas.width;
-        const h = this.engine.canvas.height;
-        const mx = this.engine.mouseX;
-        const my = this.engine.mouseY;
-        const dark = this.engine.isDarkTheme;
-
-        ctx.fillStyle = dark ? '#0a0a0a' : '#ffffff';
-        ctx.fillRect(0, 0, w, h);
-
-        for (const cloud of this.nebulaClouds) {
-            cloud.x += cloud.driftX * dt * 0.01;
-            cloud.y += cloud.driftY * dt * 0.01;
-            if (cloud.x > w + cloud.radius) cloud.x = -cloud.radius;
-            if (cloud.x < -cloud.radius) cloud.x = w + cloud.radius;
-            if (cloud.y > h + cloud.radius) cloud.y = -cloud.radius;
-            if (cloud.y < -cloud.radius) cloud.y = h + cloud.radius;
-            const px = cloud.x + mx * 5;
-            const py = cloud.y + my * 5;
-            const gradient = ctx.createRadialGradient(px, py, 0, px, py, cloud.radius);
-            if (dark) {
-                gradient.addColorStop(0, `hsla(${cloud.hue}, 40%, 50%, ${cloud.opacity})`);
-                gradient.addColorStop(0.5, `hsla(${cloud.hue}, 30%, 30%, ${cloud.opacity * 0.5})`);
-            } else {
-                gradient.addColorStop(0, `hsla(${cloud.hue}, 30%, 70%, ${cloud.opacity * 0.5})`);
-                gradient.addColorStop(0.5, `hsla(${cloud.hue}, 20%, 80%, ${cloud.opacity * 0.2})`);
-            }
-            gradient.addColorStop(1, 'transparent');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(px - cloud.radius, py - cloud.radius, cloud.radius * 2, cloud.radius * 2);
-        }
-
-        for (const star of this.particles) {
-            star.twinkleOffset += star.twinkleSpeed * dt * 0.1;
-            star.brightness = Math.max(0.05, Math.min(1, star.baseBrightness + Math.sin(star.twinkleOffset) * 0.2));
-            const px = star.x + mx * star.parallaxFactor;
-            const py = star.y + my * star.parallaxFactor;
-            const drawX = ((px % w) + w) % w;
-            const drawY = ((py % h) + h) % h;
-            const alpha = dark ? star.brightness : star.brightness * 0.3;
-            const { r, g, b } = star.color;
-            ctx.beginPath();
-            ctx.arc(drawX, drawY, star.size, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-            ctx.fill();
-            if (star.size > 1.5 && star.brightness > 0.6) {
-                const gs = star.size * 3;
-                const grad = ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, gs);
-                grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha * 0.15})`);
-                grad.addColorStop(1, 'transparent');
-                ctx.fillStyle = grad;
-                ctx.fillRect(drawX - gs, drawY - gs, gs * 2, gs * 2);
-            }
-        }
-
-        if (timestamp - this.lastShootingStarTime > this.SHOOTING_STAR_INTERVAL) {
-            this.shootingStars.push(this._createShootingStar());
-            this.lastShootingStarTime = timestamp;
-        }
-        for (let i = this.shootingStars.length - 1; i >= 0; i--) {
-            const ss = this.shootingStars[i];
-            ss.x += ss.vx * dt * 0.1;
-            ss.y += ss.vy * dt * 0.1;
-            ss.life -= ss.decay * dt * 0.1;
-            if (ss.life <= 0) { this.shootingStars.splice(i, 1); continue; }
-            const alpha = dark ? ss.life * 0.8 : ss.life * 0.3;
-            const tailX = ss.x - ss.vx * ss.length / 10;
-            const tailY = ss.y - ss.vy * ss.length / 10;
-            const grad = ctx.createLinearGradient(tailX, tailY, ss.x, ss.y);
-            grad.addColorStop(0, 'transparent');
-            grad.addColorStop(0.7, `rgba(255,255,255,${alpha * 0.3})`);
-            grad.addColorStop(1, `rgba(255,255,255,${alpha})`);
-            ctx.beginPath(); ctx.moveTo(tailX, tailY); ctx.lineTo(ss.x, ss.y);
-            ctx.strokeStyle = grad; ctx.lineWidth = ss.width; ctx.lineCap = 'round'; ctx.stroke();
-            ctx.beginPath(); ctx.arc(ss.x, ss.y, ss.width + 1, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(255,255,255,${alpha * 0.6})`; ctx.fill();
-        }
-    }
-}
-
 
 class PanoramaRenderer {
     constructor(engine) {
@@ -459,8 +334,13 @@ class CustomImageRenderer {
             this.loaded = true;
             this._sampleBrightness();
         };
-        this.image.onerror = () => { this.loaded = false; this.image = null; };
-        this.image.src = wpfilePath(filePath);
+        this.image.onerror = (e) => {
+            console.error('[Wallpaper] Image load failed:', filePath, e);
+            this.loaded = false;
+            this.image = null;
+        };
+        const url = wpfilePath(filePath);
+        this.image.src = url;
     }
 
     _sampleBrightness() {
@@ -555,11 +435,17 @@ class CustomVideoRenderer {
         this.video.preload = 'auto';
         this.video.oncanplay = () => {
             this.loaded = true;
-            this.video.play().catch(() => {});
+            this.video.play().catch((e) => {
+                console.warn('[Wallpaper] Video autoplay blocked:', e);
+            });
             this._startBrightnessSampling();
         };
-        this.video.onerror = () => { this.loaded = false; };
-        this.video.src = wpfilePath(filePath);
+        this.video.onerror = (e) => {
+            console.error('[Wallpaper] Video load failed:', filePath, e);
+            this.loaded = false;
+        };
+        const url = wpfilePath(filePath);
+        this.video.src = url;
     }
 
     _startBrightnessSampling() {
