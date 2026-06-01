@@ -3246,36 +3246,6 @@ Call attempt_completion when all operations are done and verified.
             if (this._lastReasoningEnd && (now - this._lastReasoningEnd) < 500) return;
             if (this._reasoningRAF) { cancelAnimationFrame(this._reasoningRAF); this._reasoningRAF = null; }
             this.thinkingStartTime = Date.now();
-
-            if (this.thinkingBubble && this.thinkingBubble.isConnected) {
-                this.thinkingBubble.dataset.state = 'streaming';
-                const label = this.thinkingBubble.querySelector('.ai-thinking-label');
-                if (label) label.textContent = '思考中...';
-                this._thinkingContentEl = this.thinkingBubble.querySelector('.ai-thinking-content');
-                this._thinkingTimerEl = this.thinkingBubble.querySelector('.ai-thinking-timer');
-            } else {
-                const CHEVRON_S = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><polyline points="6 9 12 15 18 9"/></svg>';
-                const bubble = document.createElement('div');
-                bubble.className = 'ai-thinking-block';
-                bubble.dataset.state = 'streaming';
-                bubble.dataset.thinkingContent = '';
-                const preview = document.createElement('div');
-                preview.className = 'ai-thinking-preview';
-                bubble.innerHTML = `<div class="ai-thinking-header" onclick="AIChat.toggleReasoningBlock(this.parentElement)"><span class="ai-thinking-label">思考中...</span><span class="ai-thinking-timer"></span><span class="ai-thinking-chevron">${CHEVRON_S}</span></div><div class="ai-thinking-body"><div class="ai-thinking-content"></div></div>`;
-                bubble.appendChild(preview);
-                this.thinkingBubble = bubble;
-                this._thinkingContentEl = bubble.querySelector('.ai-thinking-content');
-                this._thinkingTimerEl = bubble.querySelector('.ai-thinking-timer');
-                this._thinkingPreviewEl = preview;
-                this.appendWorkflowBlock(bubble);
-            }
-
-            this._reasoningTimer = setInterval(() => {
-                if (this.thinkingBubble && this.thinkingBubble.dataset.state === 'streaming' && this._thinkingTimerEl) {
-                    const s = Math.floor((Date.now() - this.thinkingStartTime) / 1000);
-                    this._thinkingTimerEl.textContent = s > 0 ? s + 's' : '';
-                }
-            }, 1000);
             return;
         }
 
