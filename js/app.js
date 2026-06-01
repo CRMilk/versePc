@@ -2015,6 +2015,9 @@ function navigateToPage(pageName) {
     }
     
     if (currentPage && currentPage !== target) {
+        if (currentPage.id === 'page-version-settings') {
+            document.querySelector('.content-area')?.classList.remove('no-scroll');
+        }
         _pageTransitionLock = true;
         console.log(`[PERF-NAV] transition start: ${currentPage.id} → page-${pageName}`);
         const _navT0 = performance.now();
