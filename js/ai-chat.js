@@ -1061,6 +1061,41 @@ const AIChat = {
         }
     },
 
+    _handleToolOutputStream(data) {
+        const row = document.getElementById('tool-' + data.toolCallId);
+        if (!row) return;
+
+        let streamEl = row.querySelector('.tool-stream-output');
+        if (!streamEl) {
+            streamEl = document.createElement('div');
+            streamEl.className = 'tool-stream-output';
+            const pre = document.createElement('pre');
+            pre.className = 'tool-stream-pre';
+            streamEl.appendChild(pre);
+            const contentWrapper = row.nextElementSibling;
+            if (contentWrapper && contentWrapper.classList.contains('ai-file-ops-content')) {
+                contentWrapper.parentNode.insertBefore(streamEl, contentWrapper);
+            } else {
+                row.parentNode.insertBefore(streamEl, row.nextSibling);
+            }
+        }
+
+        const pre = streamEl.querySelector('.tool-stream-pre');
+        if (!pre) return;
+
+        if (data.type === 'tool_output_chunk' && typeof data.data === 'string') {
+            pre.textContent += data.data;
+            streamEl.scrollTop = streamEl.scrollHeight;
+            if (!streamEl.classList.contains('visible')) {
+                streamEl.classList.add('visible');
+            }
+        }
+
+        if (data.type === 'tool_output_end') {
+            streamEl.classList.add('done');
+        }
+    },
+
     _applyToolCallStatus({ tcId, name, result, isError, toolStatus }) {
         const row = document.getElementById('tool-' + tcId);
         if (!row) return;
@@ -3000,6 +3035,11 @@ Call attempt_completion when all operations are done and verified.
     },
 
     _processChunk(data) {
+        if (data.type === 'tool_output_chunk' || data.type === 'tool_output_end') {
+            this._handleToolOutputStream(data);
+            return;
+        }
+
         const chunkType = data.done ? 'DONE' : data.error ? 'ERROR' : data.type || 'say';
         if (chunkType !== 'reasoning_content' && chunkType !== 'say' && chunkType !== 'tool_call_result') {
             console.log(`[AI-PROC] ${chunkType}`);

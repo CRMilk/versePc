@@ -4601,7 +4601,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                     return JSON.stringify({ success: true, completion: args.result || '' });
                 }
                 case 'bash': {
-                    const { exec, spawn } = require('child_process');
+                    const { spawn } = require('child_process');
                     const cmd = (args.command || '').trim();
                     const restart = args.restart || false;
                     if (!cmd) return JSON.stringify({ error: '命令不能为空' });
@@ -4610,6 +4610,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                     }
                     const workDir = args.cwd || global._bashSession.cwd || process.cwd();
                     const timeoutSec = Math.min(Math.max(args.timeout || 120, 5), 600);
+                    const streamId = args._streamId || null;
                     if (args.background) {
                         try {
                             const child = spawn(cmd, [], {
@@ -4634,26 +4635,54 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                         }
                     }
                     try {
-                        const out = await new Promise((resolve, reject) => {
-                            exec(cmd, {
-                                timeout: timeoutSec * 1000, maxBuffer: 1024 * 1024,
-                                shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
-                                encoding: 'utf-8', cwd: workDir
-                            }, (error, stdout, stderr) => {
-                                if (error) {
-                                    resolve({ stdout: stdout || '', stderr: stderr || error.message || '' });
-                                } else {
-                                    resolve({ stdout: stdout || '' });
-                                }
-                            });
+                        const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash';
+                        const shellArgs = process.platform === 'win32' ? ['/c', cmd] : ['-c', cmd];
+                        const child = spawn(shell, shellArgs, {
+                            cwd: workDir, windowsHide: true,
+                            stdio: ['ignore', 'pipe', 'pipe'],
+                            env: { ...process.env, PYTHONUNBUFFERED: '1' }
                         });
+                        let stdout = '', stderr = '';
+                        let killed = false;
+                        const timer = setTimeout(() => {
+                            killed = true;
+                            try { child.kill('SIGTERM'); } catch (e) {}
+                        }, timeoutSec * 1000);
+                        const _sendStream = (type, data) => {
+                            if (!streamId || !mainWindow || mainWindow.isDestroyed()) return;
+                            try {
+                                mainWindow.webContents.send('ai:chat-chunk', {
+                                    type: 'tool_output_' + type,
+                                    toolCallId: streamId,
+                                    data
+                                });
+                            } catch (e) {}
+                        };
+                        child.stdout.on('data', d => {
+                            const text = d.toString();
+                            stdout += text;
+                            _sendStream('chunk', text);
+                        });
+                        child.stderr.on('data', d => {
+                            const text = d.toString();
+                            stderr += text;
+                            _sendStream('chunk', text);
+                        });
+                        const exitCode = await new Promise(resolve => {
+                            child.on('close', code => resolve(code));
+                            child.on('error', () => resolve(-1));
+                        });
+                        clearTimeout(timer);
+                        _sendStream('end', { exitCode, killed });
                         global._bashSession.cwd = workDir;
-                        if (out.stderr) {
-                            global._bashSession.output = out.stdout;
-                            return JSON.stringify({ output: out.stdout.substring(0, 50000), error: out.stderr.substring(0, 20000) });
+                        if (killed) {
+                            return JSON.stringify({ output: stdout.substring(0, 50000), error: `命令超时(${timeoutSec}s)已被终止`, exitCode });
                         }
-                        global._bashSession.output = out.stdout;
-                        return JSON.stringify({ output: out.stdout.substring(0, 50000) });
+                        if (stderr && !stdout) {
+                            return JSON.stringify({ output: '', error: stderr.substring(0, 20000), exitCode });
+                        }
+                        global._bashSession.output = stdout;
+                        return JSON.stringify({ output: stdout.substring(0, 50000), stderr: stderr ? stderr.substring(0, 20000) : undefined, exitCode });
                     } catch (e) {
                         return JSON.stringify({ error: String(e) });
                     }

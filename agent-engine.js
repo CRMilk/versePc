@@ -2020,8 +2020,16 @@ Take action now. Do not explain your limitations.`
                             new Promise((_, reject) => setTimeout(() => reject(new Error('Plugin tool timeout(120s)')), TOOL_EXEC_TIMEOUT))
                         ]);
                     } else {
+                        let toolArgs = tc.argsStr;
+                        if (tc.name === 'bash' || tc.name === 'execute_command') {
+                            try {
+                                const parsed = JSON.parse(toolArgs);
+                                parsed._streamId = tc.id;
+                                toolArgs = JSON.stringify(parsed);
+                            } catch (e) {}
+                        }
                         result = await Promise.race([
-                            this.executeTool(tc.name, tc.argsStr),
+                            this.executeTool(tc.name, toolArgs),
                             new Promise((_, reject) => setTimeout(() => reject(new Error('工具执行超时(120s)')), TOOL_EXEC_TIMEOUT))
                         ]);
                     }

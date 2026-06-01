@@ -10554,6 +10554,30 @@ body {
     color: var(--ai-error, #ef4444);
 }
 
+.tool-stream-output {
+    display: none;
+    margin: 2px 0;
+    border-radius: 6px;
+    background: var(--ai-tool-call-bg, rgba(255,255,255,0.03));
+    border: 1px solid var(--border, rgba(255,255,255,0.06));
+    max-height: 200px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+.tool-stream-output.visible {
+    display: block;
+}
+.tool-stream-pre {
+    margin: 0;
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    font-family: var(--ai-font-mono, 'Cascadia Code', 'Fira Code', monospace);
+    color: var(--ai-text-secondary, #9d9d9d);
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
 /* ============================================================
    4. 思考块 (.ai-thinking-block)
    ============================================================ */
