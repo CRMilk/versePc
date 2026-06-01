@@ -673,6 +673,69 @@ const AIChat = {
         return this._FILE_OP_TOOLS.has(name);
     },
 
+    _getOrCreateToolCallsGroup() {
+        if (this._toolCallsGroup && this._toolCallsGroup.isConnected) {
+            return this._toolCallsGroup;
+        }
+        this._fileOpsGroup = null;
+        this._fileOpsGroupBody = null;
+        this._fileOpsGroupHeader = null;
+        this._fileOpsGroupTools = [];
+        const taskBody = this._currentTaskGroup ? this._currentTaskGroup.querySelector('.ai-task-body') : null;
+        const container = taskBody || this.currentWorkflowContent || this._messagesContainer;
+        if (!container) return null;
+
+        const group = document.createElement('div');
+        group.className = 'ai-file-ops-group';
+
+        const header = document.createElement('div');
+        header.className = 'ai-file-ops-header';
+        header.innerHTML = `<span class="ai-file-ops-spinner"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg></span><span class="ai-file-ops-label">正在执行工具...</span><span class="ai-file-ops-count"></span><span class="ai-file-ops-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>`;
+
+        const body = document.createElement('div');
+        body.className = 'ai-file-ops-body';
+
+        header.addEventListener('click', () => {
+            const isOpen = body.classList.toggle('open');
+            header.querySelector('.ai-file-ops-chevron').classList.toggle('open', isOpen);
+        });
+
+        group.appendChild(header);
+        group.appendChild(body);
+        container.appendChild(group);
+        this._toolCallsGroup = group;
+        this._toolCallsGroupBody = body;
+        this._toolCallsGroupHeader = header;
+        this._toolCallsGroupTools = [];
+        return group;
+    },
+
+    _updateToolCallsGroupHeader() {
+        if (!this._toolCallsGroupHeader) return;
+        const tools = this._toolCallsGroupTools || [];
+        const done = tools.filter(t => t.status === 'done' || t.status === 'error');
+        const running = tools.filter(t => t.status === 'running');
+        const label = this._toolCallsGroupHeader.querySelector('.ai-file-ops-label');
+        const count = this._toolCallsGroupHeader.querySelector('.ai-file-ops-count');
+        const spinner = this._toolCallsGroupHeader.querySelector('.ai-file-ops-spinner');
+
+        if (running.length > 0) {
+            if (spinner) spinner.style.display = '';
+            if (label) label.textContent = '正在执行工具...';
+        } else {
+            if (spinner) spinner.style.display = 'none';
+            if (label) label.textContent = `已执行 ${done.length} 个工具`;
+        }
+        if (count) count.textContent = running.length > 0 ? `${done.length}/${tools.length}` : '';
+    },
+
+    _closeToolCallsGroup() {
+        this._toolCallsGroup = null;
+        this._toolCallsGroupBody = null;
+        this._toolCallsGroupHeader = null;
+        this._toolCallsGroupTools = [];
+    },
+
     _getOrCreateFileOpsGroup() {
         if (this._fileOpsGroup && this._fileOpsGroup.isConnected) {
             return this._fileOpsGroup;
@@ -689,7 +752,7 @@ const AIChat = {
         header.innerHTML = `<span class="ai-file-ops-spinner"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg></span><span class="ai-file-ops-label">正在操作文件...</span><span class="ai-file-ops-count"></span><span class="ai-file-ops-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>`;
 
         const body = document.createElement('div');
-        body.className = 'ai-file-ops-body open';
+        body.className = 'ai-file-ops-body';
 
         header.addEventListener('click', () => {
             const isOpen = body.classList.toggle('open');
@@ -744,6 +807,7 @@ const AIChat = {
         this._fileOpsGroupBody = null;
         this._fileOpsGroupHeader = null;
         this._fileOpsGroupTools = [];
+        this._closeToolCallsGroup();
     },
 
     appendToolCallBubble(tc) {
@@ -826,6 +890,83 @@ const AIChat = {
     },
 
     _appendStandaloneToolCall(tc, iconSvg, typeClass) {
+        const _metaTools = new Set(['update_todo_list', 'sequential_thinking', 'attempt_completion', 'todo_write']);
+        if (_metaTools.has(tc.name)) {
+            const bubble = document.createElement('div');
+            bubble.className = 'ai-tool-call-row running';
+            bubble.id = `tool-${tc.id}`;
+            bubble.dataset.toolId = tc.id;
+            bubble.dataset.toolName = tc.name;
+            bubble.dataset.toolArgs = tc.arguments || '{}';
+            const desc = this.getToolActionDescription(tc.name, tc.arguments) || TOOL_DISPLAY_NAMES[tc.name] || tc.name;
+            const iconEl = document.createElement('span');
+            iconEl.className = `ai-tool-call-icon ${typeClass}`;
+            iconEl.innerHTML = iconSvg;
+            const statusEl = document.createElement('span');
+            statusEl.className = 'ai-tool-call-status running';
+            statusEl.innerHTML = desc;
+            const timeEl = document.createElement('span');
+            timeEl.className = 'ai-tool-call-time';
+            bubble.appendChild(iconEl);
+            bubble.appendChild(statusEl);
+            bubble.appendChild(timeEl);
+            bubble.style.cursor = 'default';
+            this._closeFileOpsGroup();
+            this._closeToolCallsGroup();
+            if (!this._toolBubbleFragment) {
+                this._toolBubbleFragment = document.createDocumentFragment();
+            }
+            this._toolBubbleFragment.appendChild(bubble);
+            this._pendingToolBubbles = (this._pendingToolBubbles || 0) + 1;
+            this.currentToolCalls.push({ id: tc.id, name: tc.name, bubble });
+            return;
+        }
+
+        const group = this._getOrCreateToolCallsGroup();
+        if (!group) {
+            this._appendStandaloneToolCallDirect(tc, iconSvg, typeClass);
+            return;
+        }
+
+        const desc = this.getToolActionDescription(tc.name, tc.arguments) || TOOL_DISPLAY_NAMES[tc.name] || tc.name;
+        const row = document.createElement('div');
+        row.className = 'ai-file-ops-item running';
+        row.id = `tool-${tc.id}`;
+        row.dataset.toolId = tc.id;
+        row.dataset.toolName = tc.name;
+        row.dataset.toolArgs = tc.arguments || '{}';
+
+        const iconEl = document.createElement('span');
+        iconEl.className = `ai-tool-call-icon ${typeClass}`;
+        iconEl.innerHTML = iconSvg;
+
+        const statusEl = document.createElement('span');
+        statusEl.className = 'ai-file-ops-status';
+        statusEl.innerHTML = desc;
+
+        row.appendChild(iconEl);
+        row.appendChild(statusEl);
+
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'ai-file-ops-content';
+        const resultArea = document.createElement('div');
+        resultArea.className = 'ai-tool-call-result';
+        resultArea.dataset.toolId = tc.id;
+        contentWrapper.appendChild(resultArea);
+
+        row.addEventListener('click', () => {
+            const isOpen = contentWrapper.classList.toggle('open');
+            if (isOpen) this._lazyRenderToolResult(row);
+        });
+
+        this._toolCallsGroupBody.appendChild(row);
+        this._toolCallsGroupBody.appendChild(contentWrapper);
+        this._toolCallsGroupTools.push({ id: tc.id, name: tc.name, status: 'running' });
+        this._updateToolCallsGroupHeader();
+        this.currentToolCalls.push({ id: tc.id, name: tc.name, bubble: row });
+    },
+
+    _appendStandaloneToolCallDirect(tc, iconSvg, typeClass) {
         const bubble = document.createElement('div');
         bubble.className = 'ai-tool-call-row running';
         bubble.id = `tool-${tc.id}`;
@@ -959,6 +1100,12 @@ const AIChat = {
             const toolEntry = this._fileOpsGroupTools.find(t => t.id === tcId);
             if (toolEntry) toolEntry.status = st;
             this._updateFileOpsGroupHeader();
+        }
+
+        if (row.classList.contains('ai-file-ops-item') && this._toolCallsGroupTools) {
+            const toolEntry2 = this._toolCallsGroupTools.find(t => t.id === tcId);
+            if (toolEntry2) toolEntry2.status = st;
+            this._updateToolCallsGroupHeader();
         }
 
         if ((st === 'error' || st === 'denied') && result) {
