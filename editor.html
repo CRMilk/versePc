@@ -107,6 +107,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
     <span class="statusbar-item" id="statusPos">Ln 1, Col 1</span>
     <span class="statusbar-item statusbar-ai-mark" id="statusAIMark" style="display:none" title="AI 修改标记">● AI 修改</span>
     <span style="flex:1"></span>
+    <span class="statusbar-item statusbar-btn" id="statusCompletion" title="AI 代码补全 (Ctrl+Shift+Space)">AI 补全</span>
+    <span class="statusbar-item statusbar-btn" id="statusSendToAI" title="发送选中代码到 AI (Ctrl+Shift+I)" style="cursor:pointer;opacity:0.6;" onclick="sendSelectionToAI()">AI 修改</span>
     <span class="statusbar-item statusbar-btn" id="btnTerminalStatus" onclick="toggleTerminal()" title="切换终端 (Ctrl+`)">🖥️ 终端</span>
     <span class="statusbar-item" id="statusEncoding">UTF-8</span>
     <span class="statusbar-item" id="statusEOL">LF</span>
@@ -117,8 +119,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
 <script src="node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script>
-const { ipcRenderer } = require('electron');
-const path = require('path');
+const ipcRenderer = window.editorAPI;
+const path = { extname: (f) => { const i = f.lastIndexOf('.'); return i >= 0 ? f.slice(i) : ''; }, join: (...args) => args.join('/'), basename: (f) => f.split('/').pop() };
 
 let editor = null;
 const openFiles = new Map();
@@ -203,6 +205,34 @@ require(['vs/editor/editor.main'], function () {
         document.getElementById('statusPos').textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
     });
 
+    editor.addAction({
+        id: 'send-to-ai',
+        label: '发送到 AI 修改',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyI],
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.5,
+        run: function(ed) {
+            const selection = ed.getSelection();
+            if (!selection || selection.isEmpty()) return;
+            const model = ed.getModel();
+            const selectedText = model.getValueInRange(selection);
+            if (!selectedText.trim()) return;
+            const filePath = activeFile || '';
+            const language = model.getLanguageId();
+            const startLine = selection.startLineNumber;
+            const endLine = selection.endLineNumber;
+            window.parent.postMessage({
+                type: 'editor:send-to-ai',
+                selectedText: selectedText,
+                filePath: filePath,
+                language: language,
+                startLine: startLine,
+                endLine: endLine,
+                totalLines: model.getLineCount()
+            }, '*');
+        }
+    });
+
     editor.onDidChangeModelContent(() => {
         if (activeFile && openFiles.has(activeFile)) {
             const data = openFiles.get(activeFile);
@@ -230,10 +260,91 @@ require(['vs/editor/editor.main'], function () {
         const filePath = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
         if (filePath) loadFile(filePath.replace('file:///', '').replace(/\//g, '\\'));
     });
+
+    let _completionEnabled = true;
+    let _completionAbortController = null;
+    let _completionDebounceTimer = null;
+
+    const completionProvider = languages.registerInlineCompletionsProvider('*', {
+        provideInlineCompletions: async (model, position, context, token) => {
+            if (!_completionEnabled) return { items: [] };
+
+            const lineContent = model.getLineContent(position.lineNumber);
+            const beforeCursor = lineContent.substring(0, position.column - 1);
+            const trimmed = beforeCursor.trimStart();
+            if (trimmed.startsWith('//') || trimmed.startsWith('#') || trimmed.startsWith('/*') || trimmed.startsWith('*')) {
+                return { items: [] };
+            }
+
+            if (_completionDebounceTimer) clearTimeout(_completionDebounceTimer);
+
+            return new Promise((resolve) => {
+                _completionDebounceTimer = setTimeout(async () => {
+                    if (_completionAbortController) _completionAbortController.abort();
+                    _completionAbortController = new AbortController();
+
+                    if (token.isCancellationRequested) { resolve({ items: [] }); return; }
+
+                    const prefix = model.getValueInRange({
+                        startLineNumber: 1, startColumn: 1,
+                        endLineNumber: position.lineNumber, endColumn: position.column
+                    });
+
+                    const suffix = model.getValueInRange({
+                        startLineNumber: position.lineNumber, startColumn: position.column,
+                        endLineNumber: model.getLineCount(),
+                        endColumn: model.getLineMaxColumn(model.getLineCount())
+                    });
+
+                    const language = model.getLanguageId();
+                    const filePath = activeFile || '';
+
+                    try {
+                        const result = await ipcRenderer.codeComplete({
+                            prefix, suffix, language, filePath
+                        });
+
+                        if (token.isCancellationRequested || !result || !result.text) {
+                            resolve({ items: [] });
+                            return;
+                        }
+
+                        const text = result.text;
+                        if (!text || text.length === 0) { resolve({ items: [] }); return; }
+
+                        resolve({
+                            items: [{
+                                insertText: text,
+                                range: new monaco.Range(
+                                    position.lineNumber, position.column,
+                                    position.lineNumber, position.column
+                                )
+                            }]
+                        });
+                    } catch (e) {
+                        resolve({ items: [] });
+                    }
+                }, 500);
+            });
+        },
+        freeInlineCompletions: (completions) => {}
+    });
+
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Space, () => {
+        _completionEnabled = !_completionEnabled;
+        const status = document.getElementById('statusCompletion');
+        if (status) status.textContent = _completionEnabled ? 'AI 补全' : '补全关';
+    });
+
+    document.getElementById('statusCompletion')?.addEventListener('click', () => {
+        _completionEnabled = !_completionEnabled;
+        const status = document.getElementById('statusCompletion');
+        if (status) status.textContent = _completionEnabled ? 'AI 补全' : '补全关';
+    });
 });
 
 async function openFile() {
-    const filePath = await ipcRenderer.invoke('editor:open-file-dialog');
+    const filePath = await ipcRenderer.openFileDialog();
     if (filePath) loadFile(filePath);
 }
 
@@ -243,7 +354,7 @@ async function loadFile(filePath) {
         switchToFile(filePath);
         return;
     }
-    const result = await ipcRenderer.invoke('editor:read-file', filePath);
+    const result = await ipcRenderer.readFile(filePath);
     if (result.error) {
         alert('无法读取文件: ' + result.error);
         return;
@@ -291,7 +402,7 @@ async function saveCurrentFile() {
     const data = openFiles.get(activeFile);
     if (!data) return;
     const content = data.model.getValue();
-    const result = await ipcRenderer.invoke('editor:write-file', activeFile, content);
+    const result = await ipcRenderer.writeFile(activeFile, content);
     if (result.error) {
         alert('保存失败: ' + result.error);
         return;
@@ -318,11 +429,11 @@ function updateTabUI() {
     }
 }
 
-ipcRenderer.on('editor:open-file', (event, filePath) => {
+ipcRenderer.onOpenFile((filePath) => {
     loadFile(filePath);
 });
 
-ipcRenderer.on('editor:update-content', (event, filePath, newContent) => {
+ipcRenderer.onUpdateContent((filePath, newContent) => {
     if (openFiles.has(filePath)) {
         const data = openFiles.get(filePath);
         data.model.setValue(newContent);
@@ -440,7 +551,7 @@ async function acceptDiff() {
     if (!diffPendingPath || !diffModifiedModel) return;
     const origContent = diffOriginalModel.getValue();
     const newContent = diffModifiedModel.getValue();
-    const result = await ipcRenderer.invoke('editor:write-file', diffPendingPath, newContent);
+    const result = await ipcRenderer.writeFile(diffPendingPath, newContent);
     if (result.error) { alert('保存失败: ' + result.error); return; }
     if (openFiles.has(diffPendingPath)) {
         openFiles.get(diffPendingPath).model.setValue(newContent);
@@ -475,7 +586,7 @@ function applyDiff() {
 
 function rejectDiff() { closeDiff(); clearAILines(); }
 
-ipcRenderer.on('editor:show-diff', (event, filePath, original, modified) => {
+ipcRenderer.onShowDiff((filePath, original, modified) => {
     showDiff(filePath, original, modified);
 });
 
@@ -525,14 +636,14 @@ function initTerminal() {
     xtermInstance.open(body);
     fitAddon.fit();
     terminalSessionId = 'term-' + Date.now();
-    ipcRenderer.invoke('terminal:create', terminalSessionId, xtermInstance.cols, xtermInstance.rows);
+    ipcRenderer.createTerminal(terminalSessionId, xtermInstance.cols, xtermInstance.rows);
     xtermInstance.onData((data) => {
-        ipcRenderer.invoke('terminal:write', terminalSessionId, data);
+        ipcRenderer.writeTerminal(terminalSessionId, data);
     });
-    ipcRenderer.on('terminal:data', (event, id, data) => {
+    ipcRenderer.onTerminalData((id, data) => {
         if (id === terminalSessionId && xtermInstance) xtermInstance.write(data);
     });
-    ipcRenderer.on('terminal:exit', (event, id, code) => {
+    ipcRenderer.onTerminalExit((id, code) => {
         if (id === terminalSessionId && xtermInstance) {
             xtermInstance.write(`\r\n\x1b[33m[进程已退出，代码 ${code}]\x1b[0m\r\n`);
         }
@@ -547,7 +658,7 @@ function clearTerminal() {
 
 function createTerminal() {
     if (terminalSessionId) {
-        ipcRenderer.invoke('terminal:kill', terminalSessionId);
+        ipcRenderer.killTerminal(terminalSessionId);
     }
     if (xtermInstance) { xtermInstance.dispose(); xtermInstance = null; fitAddon = null; }
     terminalSessionId = null;
@@ -651,7 +762,7 @@ function getFileIcon(name) {
 
 async function scanProjectFiles() {
     try {
-        const result = await ipcRenderer.invoke('editor:scan-dir', process.cwd() || '.');
+        const result = await ipcRenderer.scanDir('.');
         return result || [];
     } catch (e) { return []; }
 }
@@ -660,7 +771,7 @@ async function refreshFileExplorer(dirPath) {
     const list = document.getElementById('fileexplorer-list');
     if (!list) return;
     try {
-        const files = await ipcRenderer.invoke('editor:scan-dir', dirPath || process.cwd() || '.');
+        const files = await ipcRenderer.scanDir(dirPath || '.');
         if (!files || !files.length) { list.innerHTML = '<div class="editor-fileexplorer-empty">空目录</div>'; return; }
         list.innerHTML = files.map(f => {
             const icon = f.isDir ? '📁' : getFileIcon(f.name);
@@ -694,6 +805,30 @@ document.addEventListener('keydown', (e) => {
         toggleTerminal();
     }
 });
+
+function sendSelectionToAI() {
+    if (!editor) return;
+    const selection = editor.getSelection();
+    if (!selection || selection.isEmpty()) {
+        const msg = document.getElementById('editor-toast');
+        if (msg) { msg.textContent = '请先选中代码'; msg.classList.add('show'); setTimeout(() => msg.classList.remove('show'), 2000); }
+        return;
+    }
+    const model = editor.getModel();
+    const selectedText = model.getValueInRange(selection);
+    if (!selectedText.trim()) return;
+    window.parent.postMessage({
+        type: 'editor:send-to-ai',
+        selectedText: selectedText,
+        filePath: activeFile || '',
+        language: model.getLanguageId(),
+        startLine: selection.startLineNumber,
+        endLine: selection.endLineNumber,
+        totalLines: model.getLineCount()
+    }, '*');
+    const msg = document.getElementById('editor-toast');
+    if (msg) { msg.textContent = '已发送到 AI'; msg.classList.add('show'); setTimeout(() => msg.classList.remove('show'), 2000); }
+}
 </script>
 </body>
 </html>

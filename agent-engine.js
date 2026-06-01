@@ -537,7 +537,7 @@ function _toGoogleTools(tools) {
 // =============================================================================
 
 const AI_TOOLS = [
-    { type: 'function', function: { name: 'bash', description: 'Execute a bash command in a persistent shell session. State is preserved across calls. Use & for long-running commands.', parameters: { type: 'object', properties: { command: { type: 'string', description: 'The bash command to execute' }, restart: { type: 'boolean', description: 'Set true to restart the shell session' } }, required: ['command'] } } },
+    { type: 'function', function: { name: 'bash', description: 'Execute a shell command. Supports any CLI tool (git, npm, node, python, pip, etc.). For long-running processes (dev servers, watchers), use background=true. Use manage_processes(action="list") to see running processes, manage_processes(action="output", pid=N) to read output, manage_processes(action="stop", pid=N) to stop.', parameters: { type: 'object', properties: { command: { type: 'string', description: 'The command to execute' }, cwd: { type: 'string', description: 'Working directory (absolute path). Defaults to previous cwd or project root.' }, timeout: { type: 'number', description: 'Timeout in seconds (default 120, max 600). For long-running commands use background=true instead.' }, background: { type: 'boolean', description: 'Run in background (for dev servers, watchers). Returns immediately with process info. Use bash(command="taskkill /PID <pid> /F") to stop.' }, restart: { type: 'boolean', description: 'Reset shell session state (cwd, env)' } }, required: ['command'] } } },
     { type: 'function', function: { name: 'str_replace_based_edit_tool', description: 'File editing tool: view, create, and edit files. Commands: view (read file), create (new file), str_replace (exact string replacement), insert (insert at line). create cannot be used on existing files.', parameters: { type: 'object', properties: { command: { type: 'string', enum: ['view', 'create', 'str_replace', 'insert'], description: 'Command to execute' }, path: { type: 'string', description: 'Absolute path to file or directory' }, file_text: { type: 'string', description: 'Required for create: file content' }, old_str: { type: 'string', description: 'Required for str_replace: exact string to replace (must be unique)' }, new_str: { type: 'string', description: 'New string for str_replace/insert' }, insert_line: { type: 'integer', description: 'Required for insert: line number to insert after' }, view_range: { type: 'array', items: { type: 'integer' }, description: 'Optional for view: line range [start, end]' } }, required: ['command', 'path'] } } },
     { type: 'function', function: { name: 'json_edit_tool', description: 'JSON file editing tool using JSONPath expressions. Operations: view, set, add, remove. Examples: $.users[0].name, $.config.database', parameters: { type: 'object', properties: { operation: { type: 'string', enum: ['view', 'set', 'add', 'remove'], description: 'Operation to perform' }, file_path: { type: 'string', description: 'Absolute path to JSON file' }, json_path: { type: 'string', description: 'JSONPath expression' }, value: { type: 'object', description: 'Value to set or add (required for set/add)' }, pretty_print: { type: 'boolean', description: 'Format output (default true)' } }, required: ['operation', 'file_path'] } } },
     { type: 'function', function: { name: 'sequential_thinking', description: 'Break down complex problems into sequential thinking steps. Each step produces a conclusion. Supports revising previous steps. Use when deep analysis is needed.', parameters: { type: 'object', properties: { thought: { type: 'string', description: 'Thinking content for current step' }, thought_number: { type: 'number', description: 'Current step number' }, total_thoughts: { type: 'number', description: 'Estimated total steps' }, next_thought_needed: { type: 'boolean', description: 'Whether another step is needed' }, is_revision: { type: 'boolean', description: 'Whether revising a previous step' }, revises_thought: { type: 'number', description: 'Step number being revised (when is_revision=true)' }, branch_from_thought: { type: 'number', description: 'Branch from this step (optional)' }, branch_id: { type: 'string', description: 'Branch identifier (optional)' } }, required: ['thought', 'thought_number', 'total_thoughts', 'next_thought_needed'] } } },
@@ -548,14 +548,14 @@ const AI_TOOLS = [
         type: 'function',
         function: {
             name: 'sub_agent_dispatch',
-            description: '派遣子代理执行特定任务。file_search: 在代码库中搜索文件和目录, code_analysis: 分析代码结构和调用链, resource_download: 搜索Minecraft资源, crash_analysis: 分析崩溃日志',
+            description: '派遣子代理执行特定任务。file_search: 在代码库中搜索文件和目录, code_analysis: 分析代码结构和调用链, resource_download: 搜索Minecraft资源, crash_analysis: 分析崩溃日志, code_completion: 代码补全和优化, auto: 自动选择最合适的子代理类型',
             parameters: {
                 type: 'object',
                 properties: {
                     agent_type: {
                         type: 'string',
-                        enum: ['file_search', 'code_analysis', 'resource_download', 'crash_analysis'],
-                        description: '子代理类型'
+                        enum: ['file_search', 'code_analysis', 'resource_download', 'crash_analysis', 'code_completion', 'auto'],
+                        description: '子代理类型。使用 auto 可自动根据任务描述选择最合适的子代理'
                     },
                     task: {
                         type: 'string',
@@ -566,6 +566,15 @@ const AI_TOOLS = [
             }
         }
     },
+    { type: 'function', function: { name: 'start_preview', description: 'Start a local HTTP server to preview web files (HTML/CSS/JS). Opens a browser preview panel in the UI. Use this when the user wants to see how their web code looks. Use command="stop" to stop the server.', parameters: { type: 'object', properties: { command: { type: 'string', enum: ['start', 'stop'], description: 'start to begin preview, stop to end it' }, root: { type: 'string', description: 'Absolute path to the directory to serve (required for start)' }, port: { type: 'number', description: 'Port number (default 8080)' } }, required: ['command'] } } },
+    { type: 'function', function: { name: 'manage_processes', description: 'List and manage background processes started by bash. Use to check dev server output, list running processes, or stop processes.', parameters: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'output', 'stop', 'stop_all'], description: 'list: show running processes. output: get stdout/stderr of a process. stop: kill a process by PID. stop_all: kill all background processes.' }, pid: { type: 'number', description: 'Process ID (required for output and stop actions)' }, tail: { type: 'number', description: 'Number of last lines to return for output (default 50)' } }, required: ['action'] } } },
+    { type: 'function', function: { name: 'ask_user', description: 'Ask the user a question to get clarification or make a decision. Use when you need user input to proceed. Supports free text or multiple choice.', parameters: { type: 'object', properties: { question: { type: 'string', description: 'The question to ask the user' }, options: { type: 'array', items: { type: 'string' }, description: 'Optional multiple choice options. If provided, user can select one. If omitted, user can type free text.' }, context: { type: 'string', description: 'Optional context or explanation for why you are asking' } }, required: ['question'] } } },
+    { type: 'function', function: { name: 'undo_edit', description: 'Manage file edit backups. List recent AI file changes, view diffs, and restore previous versions. Use action="list" to see history, action="restore" to rollback, action="diff" to compare versions.', parameters: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'restore', 'diff', 'session'], description: 'list: show backup history. restore: rollback to a backup. diff: compare backup with current. session: show session summary.' }, backup_id: { type: 'string', description: 'Backup ID (required for restore and diff actions)' }, file_path: { type: 'string', description: 'Filter backups by file path (optional for list)' } }, required: ['action'] } } },
+    { type: 'function', function: { name: 'view_history', description: 'View change history and audit log. Track all AI file modifications, tool executions, and session activity.', parameters: { type: 'object', properties: { action: { type: 'string', enum: ['changes', 'audit', 'summary'], description: 'changes: file modification history. audit: tool execution log. summary: session statistics.' }, file_path: { type: 'string', description: 'Filter changes by file path (optional)' }, tool_name: { type: 'string', description: 'Filter by tool name (optional)' }, limit: { type: 'number', description: 'Max results to return (default 20)' } }, required: ['action'] } } },
+    { type: 'function', function: { name: 'validate_code', description: 'Validate code syntax before writing. Checks JS/TS/JSON/CSS/HTML for syntax errors. Use before large file writes to catch errors early.', parameters: { type: 'object', properties: { content: { type: 'string', description: 'The code content to validate' }, file_path: { type: 'string', description: 'File path (used to determine language for validation)' } }, required: ['content', 'file_path'] } } },
+    { type: 'function', function: { name: 'build_index', description: 'Build a searchable index of the codebase. Must be called before semantic_search. Indexes all code files in the directory for fast semantic search.', parameters: { type: 'object', properties: { root_dir: { type: 'string', description: 'Absolute path to the root directory to index' } }, required: ['root_dir'] } } },
+    { type: 'function', function: { name: 'semantic_search', description: 'Search the codebase using natural language queries. Finds files by meaning, not just keywords. Requires build_index to be called first. Use for queries like "find authentication code", "where is the database connection", "error handling logic".', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Natural language search query describing what you are looking for' }, root_dir: { type: 'string', description: 'Limit search to this directory (optional)' }, max_results: { type: 'number', description: 'Maximum results to return (default 10)' } }, required: ['query'] } } },
+    { type: 'function', function: { name: 'index_stats', description: 'Get statistics about the current code index (number of files, tokens, memory usage).', parameters: { type: 'object', properties: {} } } },
 ];
 
 let _pluginManager = null;
@@ -614,7 +623,14 @@ const TOOL_RISK = {
     str_replace_based_edit_tool: 'safe', json_edit_tool: 'safe', ckg: 'safe',
     sequential_thinking: 'safe', attempt_completion: 'safe',
     bash: 'safe', update_todo_list: 'safe',
-    sub_agent_dispatch: 'safe'
+    sub_agent_dispatch: 'safe', start_preview: 'safe', manage_processes: 'safe',
+    ask_user: 'safe',
+    undo_edit: 'safe',
+    view_history: 'safe',
+    validate_code: 'safe',
+    build_index: 'safe',
+    semantic_search: 'safe',
+    index_stats: 'safe'
 };
 
 const TOOL_DISPLAY_NAMES = {
@@ -622,7 +638,16 @@ const TOOL_DISPLAY_NAMES = {
     json_edit_tool: '编辑JSON', sequential_thinking: '分步思考',
     attempt_completion: '完成任务', ckg: '代码图谱',
     update_todo_list: '更新计划',
-    sub_agent_dispatch: '派遣子代理'
+    sub_agent_dispatch: '派遣子代理',
+    start_preview: '启动预览',
+    manage_processes: '进程管理',
+    ask_user: '询问用户',
+    undo_edit: '撤销编辑',
+    view_history: '查看历史',
+    validate_code: '验证代码',
+    build_index: '构建索引',
+    semantic_search: '语义搜索',
+    index_stats: '索引统计'
 };
 
 const AGENT_META = {
@@ -746,6 +771,34 @@ const AGENT_META = {
 - 用中文输出分析结果
 - 引用关键日志行（文件:行号）
 - 修复步骤要具体可操作`
+    },
+    code_completion: {
+        name: '代码补全代理', role: 'Code Completion', avatar: 'robot', color: '#00bcd4',
+        systemPrompt: `你是 VersePC 项目的代码补全代理。你的任务是代码重写、优化、补全和重构。
+
+## 工作流程
+1. 阅读并理解目标代码的上下文和意图
+2. 分析代码结构、变量作用域、依赖关系
+3. 生成高质量的补全/优化代码
+4. 验证生成的代码语法正确性
+
+## 支持的任务类型
+- 代码补全：根据上下文补全未完成的代码
+- 代码重写：重构现有代码以提升可读性或性能
+- 代码优化：优化算法、减少冗余、提升效率
+- 模式匹配：按照项目现有代码风格生成新代码
+
+## 输出格式
+- 原始代码（简要引用）
+- 修改后的完整代码
+- 修改说明：改了什么、为什么改
+- 影响范围：可能受影响的文件和函数
+
+## 注意事项
+- 用中文输出说明，代码本身保持原语言
+- 保持与项目现有代码风格一致
+- 不要引入项目中未使用的新依赖
+- 代码片段保留原始缩进格式`
     }
 };
 
@@ -838,6 +891,7 @@ class AgentEngine {
     constructor(options = {}) {
         this.onChunk = options.onChunk || (() => {});
         this.onRequestApproval = options.onRequestApproval || null;
+        this.onAskUser = options.onAskUser || null;
         this.executeTool = options.executeTool || null;
         this.output = new OutputManager();
 
@@ -978,12 +1032,63 @@ class AgentEngine {
         const contextSummary = this._buildContextSummary();
         if (contextSummary) conversation.push({ role: 'system', content: contextSummary });
 
-        conversation.push({ role: 'system', content: 'OS: Windows. Use CMD commands only: dir (not ls), type (not cat), findstr (not grep), copy (not cp), move (not mv), del (not rm), mkdir, rmdir, more (not head/tail). Pipe: | more. Redirect: > file 2>&1. NEVER use Unix/Linux commands.' });
+        conversation.push({ role: 'system', content: `OS: Windows. You can use both CMD and Unix-style commands (git, npm, node, python, pip, npx, etc. all work in the bash tool). Common commands: dir/ls, type/cat, findstr/grep, copy/cp, move/mv, del/rm, mkdir. Use bash tool for all CLI operations including git, npm, python, testing, and formatting.` });
 
         const pluginPrompts = _getPluginPromptExtensions();
         if (pluginPrompts.length > 0) {
             conversation.push({ role: 'system', content: '## Plugin Capabilities\n\n' + pluginPrompts.join('\n\n') });
         }
+
+        conversation.push({
+            role: 'system',
+            content: `## 全栈开发能力
+
+你具备完整的全栈开发能力。所有 CLI 操作通过 bash 工具执行。
+
+### 文件操作
+- 查看文件：str_replace_based_edit_tool(command="view", path="绝对路径")
+- 创建文件：str_replace_based_edit_tool(command="create", path="绝对路径", file_text="内容")
+- 编辑文件：str_replace_based_edit_tool(command="str_replace", path="绝对路径", old_str="原文", new_str="新文")
+- 写入/覆盖文件：str_replace_based_edit_tool(command="create", ...) 或通过 bash 使用 echo/重定向
+- 搜索文件：bash(command="dir /s /b *.js") 或 bash(command="findstr /s /n \"pattern\" *.js")
+- 搜索文件内容：bash(command="findstr /s /n \"keyword\" *.*") 
+
+### 版本控制 (Git)
+- 查看状态：bash(command="git status")
+- 查看差异：bash(command="git diff") 或 bash(command="git diff --cached")
+- 提交更改：bash(command="git add . && git commit -m \"message\"")
+- 查看日志：bash(command="git log --oneline -20")
+- 分支操作：bash(command="git branch") / bash(command="git checkout -b new-branch")
+- 合并分支：bash(command="git merge branch-name")
+
+### 包管理
+- npm: bash(command="npm install package-name") / bash(command="npm run build") / bash(command="npm test")
+- pip: bash(command="pip install package-name") / bash(command="pip list")
+- npx: bash(command="npx create-react-app my-app")
+
+### 开发服务器
+- 启动开发服务器（后台运行）：bash(command="npm run dev", background=true)
+- 启动 HTTP 预览：start_preview(command="start", root="项目目录路径")
+- 停止预览：start_preview(command="stop")
+
+### 代码质量
+- 运行测试：bash(command="npm test") 或 bash(command="npx jest --verbose")
+- 代码检查：bash(command="npx eslint src/") 或 bash(command="npx eslint --fix src/")
+- 代码格式化：bash(command="npx prettier --write \"src/**/*.{js,ts,css,json}\"")
+- TypeScript 检查：bash(command="npx tsc --noEmit")
+
+### 构建与部署
+- 构建项目：bash(command="npm run build")
+- 查看构建输出：bash(command="dir dist") 或 bash(command="ls dist")
+- 启动生产服务器：bash(command="node server.js", background=true)
+
+### 工作流最佳实践
+1. 收到开发任务后，先用 str_replace_based_edit_tool(view) 了解项目结构
+2. 使用 update_todo_list 创建任务计划
+3. 逐步执行：编辑文件 → 运行测试 → 修复错误 → 提交代码
+4. 对于需要长时间运行的服务（dev server、watcher），使用 background=true
+5. 完成后用 attempt_completion 提交总结`
+        });
 
         if (this.enablePlanning && lastUserMsg && tools) {
             const intent = this._detectIntent(lastUserMsg.content);
@@ -1022,7 +1127,22 @@ class AgentEngine {
 - 分析代码结构 → sub_agent_dispatch(agent_type="code_analysis", task="具体任务描述")
 - 搜索Minecraft资源 → sub_agent_dispatch(agent_type="resource_download", task="具体任务描述")
 - 分析崩溃日志 → sub_agent_dispatch(agent_type="crash_analysis", task="具体任务描述")
-绝对不要在文本中写"[执行] 调用子代理"，而是必须实际调用 sub_agent_dispatch 工具。`
+- 代码补全/优化 → sub_agent_dispatch(agent_type="code_completion", task="具体任务描述")
+
+**推荐：使用 agent_type="auto" 可自动选择最合适的子代理类型**，系统会根据任务描述智能匹配。例如：
+- sub_agent_dispatch(agent_type="auto", task="在项目中搜索所有配置文件")
+- sub_agent_dispatch(agent_type="auto", task="分析这个崩溃日志的错误原因")
+
+绝对不要在文本中写"[执行] 调用子代理"，而是必须实际调用 sub_agent_dispatch 工具。
+
+### 子代理使用场景指南
+- **复杂搜索任务** → file_search：查找文件、搜索代码、定位资源
+- **代码理解任务** → code_analysis：分析函数调用链、理解模块依赖、代码审查
+- **Minecraft资源任务** → resource_download：搜索模组、整合包、材质包、光影包
+- **崩溃诊断任务** → crash_analysis：分析崩溃日志、定位错误原因、提供修复建议
+- **代码补全任务** → code_completion：代码重写、优化、补全建议
+
+**最佳实践**：对于大多数任务，推荐使用 agent_type="auto"，系统会根据任务描述自动选择最合适的子代理类型。`
                 });
             } else {
                 conversation.push({
@@ -1040,7 +1160,8 @@ class AgentEngine {
 - 用中文写总结
 - attempt_completion 的 result 字段必须包含清晰的中文总结
 - 永远不要在回复中使用 emoji
-- 当需要搜索文件、分析代码、搜索资源或分析崩溃日志时，必须调用 sub_agent_dispatch 工具，不要在文本中描述你要做什么，而是实际调用工具`
+- 当需要搜索文件、分析代码、搜索资源或分析崩溃日志时，必须调用 sub_agent_dispatch 工具，不要在文本中描述你要做什么，而是实际调用工具
+- 使用 sub_agent_dispatch 时，agent_type 设为 'auto' 可自动选择最合适的子代理类型`
                 });
             }
         }
@@ -1054,7 +1175,7 @@ class AgentEngine {
             });
         }
 
-        let _lastCompletionText = '';
+        let totalUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, rounds: 0 };
 
         for (let round = 0; round < this.maxRounds; round++) {
             if (this._aborted) break;
@@ -1128,7 +1249,8 @@ class AgentEngine {
                     model: this._requestModel,
                     messages: conversation,
                     temperature: temperature != null ? temperature : 0.7,
-                    stream: true
+                    stream: true,
+                    stream_options: { include_usage: true }
                 };
                 if (hasTools) { reqBody.tools = tools; reqBody.tool_choice = 'auto'; }
                 if (this._provider.thinkingParams && Object.keys(this._provider.thinkingParams).length > 0) {
@@ -1168,6 +1290,13 @@ class AgentEngine {
 
             const roundData = await this._processStream(res, apiFormat);
             if (this._aborted) break;
+
+            if (roundData.usage) {
+                totalUsage.prompt_tokens += roundData.usage.prompt_tokens || 0;
+                totalUsage.completion_tokens += roundData.usage.completion_tokens || 0;
+                totalUsage.total_tokens += roundData.usage.total_tokens || 0;
+            }
+            totalUsage.rounds++;
 
             if (roundData.toolCalls.length > 0 && roundData.finishReason === 'tool_calls') {
                 const assistantMsg = {
@@ -1222,7 +1351,7 @@ class AgentEngine {
                     });
                 }
 
-                this._evaluateAndGuide(toolResults, conversation, lastUserMsg, round);
+                await this._evaluateAndGuide(toolResults, conversation, lastUserMsg, round);
 
                 if (toolResults.some(r => r.isCompletion)) break;
 
@@ -1267,12 +1396,21 @@ Take action now. Do not explain your limitations.`
                 this._lastTextContent = roundData.fullContent;
             }
 
-            this._send({ type: 'say', say: SayType.COMPLETION, text: roundData.fullContent || _lastCompletionText || '' });
+            const completionFromTool = toolResults.find(r => r.isCompletion);
+            const completionText = completionFromTool ? completionFromTool.completionText : '';
+            this._send({ type: 'say', say: SayType.COMPLETION, text: roundData.fullContent || completionText || '' });
+            if (totalUsage.total_tokens > 0) {
+                this._send({ type: 'usage', usage: totalUsage });
+            }
             this._send({ type: 'say', say: SayType.API_FINISHED, text: '' });
             return;
         }
 
-        this._send({ type: 'say', say: SayType.COMPLETION, text: _lastCompletionText || '' });
+        const finalCompletion = toolResults.find(r => r.isCompletion);
+        this._send({ type: 'say', say: SayType.COMPLETION, text: finalCompletion ? finalCompletion.completionText : '' });
+        if (totalUsage.total_tokens > 0) {
+            this._send({ type: 'usage', usage: totalUsage });
+        }
         this._send({ type: 'say', say: SayType.API_FINISHED, text: '' });
     }
     // Context Builder
@@ -1352,6 +1490,7 @@ Take action now. Do not explain your limitations.`
         let finishReason = null;
         let reasoningStarted = false;
         let doneReceived = false;
+        let usage = null;
         this._initReasoningThrottle();
 
         await new Promise((resolve) => {
@@ -1383,6 +1522,9 @@ Take action now. Do not explain your limitations.`
 
                         try {
                             const parsed = JSON.parse(data);
+                            if (parsed.usage) {
+                                usage = { prompt_tokens: parsed.usage.prompt_tokens || 0, completion_tokens: parsed.usage.completion_tokens || 0, total_tokens: parsed.usage.total_tokens || 0 };
+                            }
                             const choice = parsed.choices?.[0];
                             if (!choice) continue;
 
@@ -1428,7 +1570,7 @@ Take action now. Do not explain your limitations.`
             this.onChunk({ type: 'reasoning_end' });
         }
 
-        return { fullContent, fullReasoning, toolCalls, finishReason: finishReason || 'stop' };
+        return { fullContent, fullReasoning, toolCalls, finishReason: finishReason || 'stop', usage };
     }
 
     // Anthropic SSE
@@ -1440,9 +1582,8 @@ Take action now. Do not explain your limitations.`
         let prevReasoningLen = 0;
         let toolCalls = [];
         let finishReason = null;
-        let inputTokens = 0;
-        let outputTokens = 0;
         let doneReceived = false;
+        let usage = null;
         this._initReasoningThrottle();
         let reasoningStarted = false;
 
@@ -1526,6 +1667,9 @@ Take action now. Do not explain your limitations.`
                                 case 'message_delta': {
                                     if (event.delta?.stop_reason === 'end_turn') finishReason = 'stop';
                                     if (event.delta?.stop_reason === 'tool_use') finishReason = 'tool_calls';
+                                    if (event.usage) {
+                                        usage = { prompt_tokens: event.usage.input_tokens || 0, completion_tokens: event.usage.output_tokens || 0, total_tokens: (event.usage.input_tokens || 0) + (event.usage.output_tokens || 0) };
+                                    }
                                     break;
                                 }
                                 case 'message_stop': {
@@ -1558,7 +1702,7 @@ Take action now. Do not explain your limitations.`
             this.onChunk({ type: 'reasoning_end' });
         }
 
-        return { fullContent, fullReasoning, toolCalls, finishReason: finishReason || 'stop' };
+        return { fullContent, fullReasoning, toolCalls, finishReason: finishReason || 'stop', usage };
     }
 
     // Google Gemini SSE
@@ -1571,6 +1715,7 @@ Take action now. Do not explain your limitations.`
         let toolCalls = [];
         let finishReason = null;
         let reasoningStarted = false;
+        let usage = null;
         this._initReasoningThrottle();
 
         await new Promise((resolve) => {
@@ -1626,6 +1771,11 @@ Take action now. Do not explain your limitations.`
                                 }
                             }
 
+                            if (parsed.usageMetadata) {
+                                const um = parsed.usageMetadata;
+                                usage = { prompt_tokens: um.promptTokenCount || 0, completion_tokens: um.candidatesTokenCount || 0, total_tokens: um.totalTokenCount || 0 };
+                            }
+
                             if (candidate.finishReason) {
                                 const fr = candidate.finishReason;
                                 if (fr === 'STOP') finishReason = 'stop';
@@ -1651,7 +1801,7 @@ Take action now. Do not explain your limitations.`
             this.onChunk({ type: 'reasoning_end' });
         }
 
-        return { fullContent, fullReasoning, toolCalls, finishReason: finishReason || 'stop' };
+        return { fullContent, fullReasoning, toolCalls, finishReason: finishReason || 'stop', usage };
     }
 
     // =========================================================================
@@ -1745,11 +1895,28 @@ Take action now. Do not explain your limitations.`
                 }
             }
 
+            if (tc.name === 'ask_user') {
+                let parsed = {};
+                try { parsed = JSON.parse(tc.argsStr); } catch (e) {}
+                const question = parsed.question || '';
+                const options = parsed.options || null;
+                const context = parsed.context || '';
+                if (!question) return { id: tc.id, name: tc.name, result: JSON.stringify({ error: '问题不能为空' }) };
+                if (this.onAskUser) {
+                    try {
+                        const answer = await this.onAskUser(question, options, context);
+                        return { id: tc.id, name: tc.name, result: JSON.stringify({ status: 'success', answer }) };
+                    } catch (e) {
+                        return { id: tc.id, name: tc.name, result: JSON.stringify({ error: String(e) }) };
+                    }
+                }
+                return { id: tc.id, name: tc.name, result: JSON.stringify({ status: 'success', answer: '(用户交互不可用)' }) };
+            }
+
             if (tc.name === 'attempt_completion') {
                 let parsed = {};
                 try { parsed = JSON.parse(tc.argsStr); } catch (e) {}
                 const compText = parsed.result || parsed.text || '';
-                _lastCompletionText = compText;
                 const compResult = JSON.stringify({ status: 'success', completion: compText });
                 this._send({
                     type: 'say', say: SayType.TOOL_RESULT,
@@ -1758,7 +1925,8 @@ Take action now. Do not explain your limitations.`
                 return {
                     id: tc.id, name: tc.name,
                     result: compResult,
-                    isCompletion: true
+                    isCompletion: true,
+                    completionText: compText
                 };
             }
 
@@ -1858,6 +2026,26 @@ Take action now. Do not explain your limitations.`
                     clearInterval(heartbeatTimer);
                 }
                 const elapsed = Date.now() - startTime;
+                if (tc.name === 'bash' || tc.name === 'execute_command') {
+                    try {
+                        const parsed = JSON.parse(result);
+                        const errText = (parsed.error || '') + ' ' + (parsed.stderr || '');
+                        const nodeMatch = errText.match(/Cannot find module ['"]([^'"]+)['"]/);
+                        const pyMatch = errText.match(/ModuleNotFoundError.*?['"]([^'"]+)['"]/);
+                        const importMatch = errText.match(/ModuleNotFoundError.*?No module named ['"]([^'"]+)['"]/);
+                        if (nodeMatch) {
+                            const moduleName = nodeMatch[1].split('/')[0];
+                            this._send({ type: 'say', say: SayType.TOOL_START, text: JSON.stringify([{ id: 'auto_install', name: 'bash', displayName: '自动安装依赖', args: `npm install ${moduleName}` }]) });
+                            const installResult = await this.executeTool('bash', JSON.stringify({ command: `npm install ${moduleName}` }));
+                            this._send({ type: 'say', say: SayType.TOOL_RESULT, text: JSON.stringify({ id: 'auto_install', name: 'bash', result: installResult.substring(0, 500), elapsed: 0 }) });
+                        } else if (pyMatch || importMatch) {
+                            const moduleName = (pyMatch || importMatch)[1];
+                            this._send({ type: 'say', say: SayType.TOOL_START, text: JSON.stringify([{ id: 'auto_install', name: 'bash', displayName: '自动安装依赖', args: `pip install ${moduleName}` }]) });
+                            const installResult = await this.executeTool('bash', JSON.stringify({ command: `pip install ${moduleName}` }));
+                            this._send({ type: 'say', say: SayType.TOOL_RESULT, text: JSON.stringify({ id: 'auto_install', name: 'bash', result: installResult.substring(0, 500), elapsed: 0 }) });
+                        }
+                    } catch (e) {}
+                }
                 const summarized = this._summarizeToolResult(tc.name, result);
                 const MAX_RESULT = 3000;
                 const trimmed = summarized.length > MAX_RESULT ? summarized.slice(0, MAX_RESULT) + '...[截断]' : summarized;
@@ -1953,15 +2141,45 @@ Take action now. Do not explain your limitations.`
     // Tool Result Summarization
     // =========================================================================
 
-    _summarizeToolResult(name, rawResult) {
+    _summarizeToolResult(toolName, result) {
+        if (!result || typeof result !== 'string') return String(result || '');
+        if (result.length <= 2000) return result;
         try {
-            const parsed = typeof rawResult === 'string' ? JSON.parse(rawResult) : rawResult;
-            if (parsed.error) return JSON.stringify(parsed);
-            const str = JSON.stringify(parsed);
-            if (str.length > 2000) return JSON.stringify({ summary: str.slice(0, 1500) + '...[truncated]', truncated: true });
-            return str;
+            const parsed = JSON.parse(result);
+            if (parsed.error) {
+                const errStr = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
+                const kept = { error: errStr.slice(0, 500) };
+                if (parsed.success !== undefined) kept.success = parsed.success;
+                if (parsed.output) kept.output = typeof parsed.output === 'string' ? parsed.output.slice(0, 500) : '[output truncated]';
+                return JSON.stringify(kept) + '...[summarized]';
+            }
+            if (parsed.output && typeof parsed.output === 'string') {
+                const output = parsed.output;
+                if (output.length > 1500) {
+                    const lines = output.split('\n');
+                    const firstLines = lines.slice(0, 30).join('\n');
+                    const lastLines = lines.slice(-10).join('\n');
+                    parsed.output = firstLines + '\n...[' + (lines.length - 40) + ' lines omitted]\n' + lastLines;
+                }
+                return JSON.stringify(parsed);
+            }
+            const keys = Object.keys(parsed);
+            const summary = {};
+            for (const k of keys) {
+                const v = parsed[k];
+                if (typeof v === 'string' && v.length > 200) summary[k] = v.slice(0, 200) + '...[truncated]';
+                else if (Array.isArray(v) && v.length > 5) { summary[k] = v.slice(0, 5); summary[k + '_total'] = v.length; }
+                else summary[k] = v;
+            }
+            return JSON.stringify(summary);
         } catch (e) {
-            return rawResult;
+            const lines = result.split('\n');
+            if (lines.length > 40) {
+                const first = lines.slice(0, 25).join('\n');
+                const last = lines.slice(-10).join('\n');
+                return first + '\n...[' + (lines.length - 35) + ' lines omitted]\n' + last;
+            }
+            return result.slice(0, 1500) + '\n...[truncated ' + (result.length - 1500) + ' chars]';
         }
     }
 
@@ -2070,7 +2288,7 @@ Take action now. Do not explain your limitations.`
     // Evaluation & Guidance
     // =========================================================================
 
-    _evaluateAndGuide(allResults, conversation, lastUserMsg, round) {
+    async _evaluateAndGuide(allResults, conversation, lastUserMsg, round) {
         const errorCount = allResults.filter(r => {
             try {
                 const p = JSON.parse(r.result);
@@ -2111,6 +2329,26 @@ Take action now. Do not explain your limitations.`
                 content: `All tool calls failed for ${this.maxConsecutiveFailures} consecutive rounds. Stop trying the same approach. Call attempt_completion to report what you've done and what difficulties you encountered.`
             });
             this._consecutiveFailures = 0;
+        } else if (this._consecutiveFailures >= 2 && errorCount > 0) {
+            const failedResult = allResults.find(r => {
+                try { const p = JSON.parse(r.result); return p.status === 'error' || p.error; } catch (e) { return false; }
+            });
+            if (failedResult) {
+                try {
+                    const goal = typeof lastUserMsg === 'string' ? lastUserMsg : (lastUserMsg?.content || '');
+                    const reflection = await this._reflectOnResult(failedResult.name, failedResult.result, goal);
+                    if (reflection && reflection.next_action !== 'continue') {
+                        let reflGuidance = `[自动反思] 工具 ${failedResult.name} 连续失败。`;
+                        reflGuidance += ` 评估: ${reflection.assessment}。`;
+                        if (reflection.reasoning) reflGuidance += ` 原因: ${reflection.reasoning}。`;
+                        if (reflection.suggestion) reflGuidance += ` 建议: ${reflection.suggestion}。`;
+                        if (reflection.next_action === 'retry') reflGuidance += ' 请修正参数后重试。';
+                        else if (reflection.next_action === 'alternative') reflGuidance += ' 请尝试完全不同的方法。';
+                        else if (reflection.next_action === 'ask_user') reflGuidance += ' 请向用户确认需求。';
+                        conversation.push({ role: 'system', content: reflGuidance });
+                    }
+                } catch (e) { console.error('[Engine] _reflectOnResult error:', e.message); }
+            }
         }
 
         if (!this._activePlan && round < 4) {
@@ -2138,7 +2376,44 @@ Take action now. Do not explain your limitations.`
         }
     }
 
+    _selectSubAgentType(task) {
+        const taskLower = task.toLowerCase();
+
+        // Code completion patterns
+        if (/补全|completion|fim|ghost.?text|inline.?suggest|代码重写|rewrite|optimize.*code/i.test(task)) {
+            return 'code_completion';
+        }
+
+        // Crash analysis patterns
+        if (/崩溃|crash|日志|log|错误报告|error.?report|异常|exception/i.test(task)) {
+            return 'crash_analysis';
+        }
+
+        // Resource download patterns
+        if (/下载|download|模组|mod|整合包|modpack|资源包|resource.?pack|材质包|shader|光影/i.test(task)) {
+            return 'resource_download';
+        }
+
+        // Code analysis patterns
+        if (/分析|analyze|代码|code|函数|function|类|class|方法|method|架构|architecture|依赖|dependency/i.test(task)) {
+            return 'code_analysis';
+        }
+
+        // File search patterns (default for search-like tasks)
+        if (/搜索|search|查找|find|文件|file|目录|directory|路径|path/i.test(task)) {
+            return 'file_search';
+        }
+
+        // Default to file_search for unknown tasks
+        return 'file_search';
+    }
+
     async _executeSubAgent(agentType, task) {
+        // Auto-detect agent type if 'auto' is passed or invalid type
+        if (agentType === 'auto' || !AGENT_META[agentType]) {
+            agentType = this._selectSubAgentType(task);
+        }
+
         const meta = AGENT_META[agentType];
         if (!meta) return JSON.stringify({ status: 'error', error: `未知子代理类型: ${agentType}` });
 
@@ -2222,43 +2497,142 @@ Take action now. Do not explain your limitations.`
     // Message Compression
     // =========================================================================
 
-    _compressIfNeeded(conversation) {
-        const MAX_CHARS = 12000;
-        const MAX_MSGS = 40;
-        let total = conversation.reduce((s, m) => s + (typeof m.content === 'string' ? m.content.length : 0), 0);
-        if (total <= MAX_CHARS && conversation.length <= MAX_MSGS) return;
-
-        const system = conversation[0];
-        const lastUser = conversation.filter(m => m.role === 'user').pop();
-        let recentStart = Math.max(1, conversation.length - 6);
-        while (recentStart > 1) {
-            const msg = conversation[recentStart];
-            if (msg.role === 'tool') { recentStart--; continue; }
-            if (msg.role === 'assistant' && msg.tool_calls) { recentStart--; continue; }
-            break;
+    _estimateTokens(text) {
+        if (!text) return 0;
+        const str = typeof text === 'string' ? text : JSON.stringify(text);
+        let tokens = 0;
+        for (let i = 0; i < str.length; i++) {
+            const code = str.charCodeAt(i);
+            if (code > 0x4e00 && code < 0x9fff) tokens += 1.5;
+            else if (code > 0x3000 && code < 0x303f) tokens += 1.5;
+            else if (code > 0xff00 && code < 0xffef) tokens += 1.5;
+            else if (code < 128) tokens += 0.25;
+            else tokens += 0.5;
         }
-        const recent = conversation.slice(recentStart);
-        const middle = conversation.slice(1, recentStart);
+        return Math.ceil(tokens);
+    }
+
+    _estimateMessageTokens(msg) {
+        let tokens = 4;
+        if (msg.role) tokens += 2;
+        if (msg.name) tokens += this._estimateTokens(msg.name);
+        if (msg.tool_calls) {
+            for (const tc of msg.tool_calls) {
+                tokens += 4;
+                if (tc.function) {
+                    tokens += this._estimateTokens(tc.function.name || '');
+                    tokens += this._estimateTokens(tc.function.arguments || '');
+                }
+            }
+        }
+        if (msg.content) {
+            tokens += this._estimateTokens(typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content));
+        }
+        return tokens;
+    }
+
+    _getContextBudget(conversation) {
+        let modelTokens = 128000;
+        try {
+            const model = this.model || '';
+            if (model.includes('gpt-4o')) modelTokens = 128000;
+            else if (model.includes('gpt-4-turbo') || model.includes('gpt-4-1106')) modelTokens = 128000;
+            else if (model.includes('gpt-4-32k')) modelTokens = 32000;
+            else if (model.includes('gpt-4')) modelTokens = 8192;
+            else if (model.includes('gpt-3.5')) modelTokens = 16385;
+            else if (model.includes('claude-3.5') || model.includes('claude-sonnet-4') || model.includes('claude-opus-4')) modelTokens = 200000;
+            else if (model.includes('claude-3')) modelTokens = 200000;
+            else if (model.includes('claude')) modelTokens = 100000;
+            else if (model.includes('gemini-1.5')) modelTokens = 1000000;
+            else if (model.includes('gemini')) modelTokens = 32000;
+            else if (model.includes('deepseek')) modelTokens = 64000;
+            else if (model.includes('qwen')) modelTokens = 128000;
+        } catch (e) {}
+        const reserveForOutput = 4096;
+        const reserveForSystem = 8192;
+        return Math.max(4000, modelTokens - reserveForOutput - reserveForSystem);
+    }
+
+    _scoreMessage(msg, index, total) {
+        let score = 0;
+        if (msg.role === 'user') score += 100;
+        else if (msg.role === 'system') score += 200;
+        else if (msg.role === 'assistant') score += 30;
+        else if (msg.role === 'tool') score += 20;
+        const recency = (index / Math.max(total - 1, 1)) * 50;
+        score += recency;
+        if (msg.role === 'tool' && typeof msg.content === 'string') {
+            if (msg.content.includes('"error"') || msg.content.includes('"error":')) score += 30;
+        }
+        if (msg.role === 'assistant' && msg.tool_calls) score += 40;
+        if (msg.role === 'user' && index === total - 1) score += 200;
+        return score;
+    }
+
+    _compressIfNeeded(conversation) {
+        const budget = this._getContextBudget(conversation);
+        let totalTokens = 0;
+        for (const msg of conversation) totalTokens += this._estimateMessageTokens(msg);
+        if (totalTokens <= budget && conversation.length <= 60) return;
+
+        const systemMsgs = [];
+        let systemEnd = 0;
+        for (let i = 0; i < conversation.length; i++) {
+            if (conversation[i].role === 'system') { systemMsgs.push(conversation[i]); systemEnd = i + 1; }
+            else break;
+        }
+        let systemTokens = 0;
+        for (const msg of systemMsgs) systemTokens += this._estimateMessageTokens(msg);
+        const availableBudget = budget - systemTokens;
+        if (availableBudget < 2000) return;
+
+        const dialogMsgs = conversation.slice(systemEnd);
+        const keepCount = Math.max(6, Math.min(20, Math.floor(dialogMsgs.length * 0.3)));
+        const recentMsgs = dialogMsgs.slice(-keepCount);
+        let recentTokens = 0;
+        for (const msg of recentMsgs) recentTokens += this._estimateMessageTokens(msg);
+        while (recentTokens > availableBudget * 0.7 && recentMsgs.length > 4) {
+            const removed = recentMsgs.shift();
+            recentTokens -= this._estimateMessageTokens(removed);
+        }
+
+        const recentStartIdx = dialogMsgs.length - recentMsgs.length;
+        const middleMsgs = dialogMsgs.slice(0, recentStartIdx);
+        if (middleMsgs.length === 0) return;
 
         const usedTools = new Set();
-        let decisions = [];
-        for (const m of middle) {
+        const errors = [];
+        const userIntents = [];
+        const keyFindings = [];
+        for (const m of middleMsgs) {
             if (m.tool_calls) m.tool_calls.forEach(tc => usedTools.add(tc.function.name));
+            if (m.role === 'user' && typeof m.content === 'string' && m.content.length < 300) {
+                userIntents.push(m.content.slice(0, 100));
+            }
             if (m.role === 'tool' && typeof m.content === 'string') {
                 try {
                     const p = JSON.parse(m.content);
-                    if (p.error) decisions.push(p.error.slice(0, 60));
+                    if (p.error) errors.push(p.error.slice(0, 80));
+                    if (p.success && p.message) keyFindings.push(p.message.slice(0, 80));
                 } catch (e) {}
+            }
+            if (m.role === 'assistant' && typeof m.content === 'string' && m.content.length > 50) {
+                const lines = m.content.split('\n').filter(l => l.trim() && !l.startsWith('```'));
+                if (lines.length > 0) keyFindings.push(lines[0].slice(0, 80));
             }
         }
 
-        let summary = '[对话压缩] ';
-        if (usedTools.size) summary += `使用工具: ${[...usedTools].join(', ')}。`;
-        if (decisions.length) summary += `结果: ${decisions.slice(-3).join('; ')}。`;
+        let summary = '[上下文压缩]\n';
+        if (userIntents.length) summary += `用户意图: ${userIntents.slice(-2).join(' | ')}\n`;
+        if (usedTools.size) summary += `已使用工具: ${[...usedTools].join(', ')}\n`;
+        if (keyFindings.length) summary += `关键发现: ${keyFindings.slice(-3).join('; ')}\n`;
+        if (errors.length) summary += `遇到错误: ${errors.slice(-2).join('; ')}\n`;
+        summary += `共 ${middleMsgs.length} 条消息已压缩`;
 
-        const compressed = [system, { role: 'system', content: summary }];
-        if (lastUser && !recent.includes(lastUser)) compressed.push(lastUser);
-        compressed.push(...recent);
+        const lastUser = dialogMsgs.filter(m => m.role === 'user').pop();
+        const compressed = [...systemMsgs, { role: 'system', content: summary }];
+        if (lastUser && !recentMsgs.includes(lastUser)) compressed.push(lastUser);
+        compressed.push(...recentMsgs);
         conversation.splice(0, conversation.length, ...compressed);
     }
 }

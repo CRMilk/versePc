@@ -96,6 +96,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
         open: (filePath) => ipcRenderer.invoke('editor:open', filePath),
         onShowDiff: (callback) => ipcRenderer.on('editor:show-diff', (event, filePath, original, modified) => callback(filePath, original, modified)),
     },
+    onPreviewOpen: (callback) => ipcRenderer.on('preview:open', (event, url) => callback(url)),
+    onPreviewClose: (callback) => ipcRenderer.on('preview:close', (event) => callback()),
+    stopPreview: () => ipcRenderer.invoke('preview:stop'),
+    backup: {
+        list: (filePath) => ipcRenderer.invoke('backup:list', filePath),
+        restore: (backupId) => ipcRenderer.invoke('backup:restore', backupId),
+        diff: (backupId) => ipcRenderer.invoke('backup:diff', backupId),
+    },
+    history: {
+        getChanges: (filter) => ipcRenderer.invoke('history:changes', filter),
+        getAuditLog: (filter) => ipcRenderer.invoke('history:audit', filter),
+        getSummary: () => ipcRenderer.invoke('history:summary'),
+    },
     terminal: {
         create: (id, cols, rows) => ipcRenderer.invoke('terminal:create', id, cols, rows),
         write: (id, data) => ipcRenderer.invoke('terminal:write', id, data),
@@ -108,6 +121,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         chatStream: (params) => ipcRenderer.send('ai:chat-stream', params),
         chatAbort: () => ipcRenderer.invoke('ai:chat-abort'),
         toolApprove: (approvalId, approved, alwaysAllow) => ipcRenderer.invoke('ai:tool-approve', { approvalId, approved, alwaysAllow }),
+        askUserRespond: (askId, answer) => ipcRenderer.invoke('ai:ask-user-respond', { askId, answer }),
         getProviders: () => ipcRenderer.invoke('ai:get-providers'),
         getVersions: () => ipcRenderer.invoke('ai:get-versions'),
         onChunk: (callback) => {

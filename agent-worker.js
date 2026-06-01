@@ -94,6 +94,19 @@ function requestApprovalViaMain(toolName, argsStr) {
     });
 }
 
+function askUserViaMain(question, options, context) {
+    return new Promise((resolve) => {
+        const askId = `ask_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 6)}`;
+        const timer = setTimeout(() => {
+            pendingAsks.delete(askId);
+            resolve('(用户未在规定时间内回答)');
+        }, 120000);
+        pendingAsks.set(askId, { resolve, timer });
+        parentPort.postMessage({ type: 'ask_user_request', askId, question, options, context });
+    });
+}
+const pendingAsks = new Map();
+
 let reasoningState = { started: false, fullText: '' };
 
 function translateChunk(processed) {
@@ -236,6 +249,9 @@ engine = new AgentEngine({
         aiLog('APPROVAL', { toolName });
         return requestApprovalViaMain(toolName, argsStr);
     },
+    onAskUser(question, options, context) {
+        return askUserViaMain(question, options, context);
+    },
     executeTool(name, argsStr) {
         aiLog('EXEC_TOOL', { name, argsLen: (argsStr || '').length });
         return execToolViaMain(name, argsStr);
@@ -272,6 +288,11 @@ parentPort.on('message', (msg) => {
                     pending.resolve(JSON.stringify({ status: 'aborted' }));
                 }
                 pendingExecs.clear();
+                for (const [, pending] of pendingAsks) {
+                    clearTimeout(pending.timer);
+                    pending.resolve('(已中断)');
+                }
+                pendingAsks.clear();
                 parentPort.postMessage({ type: 'done' });
                 break;
             case 'approval_response':
@@ -294,6 +315,14 @@ parentPort.on('message', (msg) => {
                     }
                 }
                 break;
+        }
+        if (msg.type === 'ask_user_response') {
+            const pending = pendingAsks.get(msg.askId);
+            if (pending) {
+                clearTimeout(pending.timer);
+                pendingAsks.delete(msg.askId);
+                pending.resolve(msg.answer);
+            }
         }
     } catch (e) {
         try {

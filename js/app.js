@@ -1301,12 +1301,13 @@ function setupLaunchBar() {
 function setupModBrowse() {
     const modSearchBtn = document.getElementById('mod-search-btn');
     if (!modSearchBtn) return;
+    const modSearchInput = document.getElementById('mod-search-input');
     modSearchBtn.addEventListener('click', () => {
-        modSearchQuery = document.getElementById('mod-search-input').value.trim();
+        modSearchQuery = modSearchInput ? modSearchInput.value.trim() : '';
         modSearchOffset = 0;
         loadMods();
     });
-    document.getElementById('mod-search-input').addEventListener('keydown', (e) => {
+    if (modSearchInput) modSearchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             modSearchQuery = e.target.value.trim();
             modSearchOffset = 0;
@@ -1340,14 +1341,18 @@ function setupAccountButtons() {
     const addMsBtn = document.getElementById('add-ms-account-btn');
     if (!addMsBtn) return;
     addMsBtn.addEventListener('click', startMsAuth);
-    document.getElementById('add-thirdparty-account-btn').addEventListener('click', () => {
+    const addThirdPartyBtn = document.getElementById('add-thirdparty-account-btn');
+    if (addThirdPartyBtn) addThirdPartyBtn.addEventListener('click', () => {
         showModal('thirdparty-account-modal');
     });
-    document.getElementById('add-offline-account-btn').addEventListener('click', () => {
+    const addOfflineBtn = document.getElementById('add-offline-account-btn');
+    if (addOfflineBtn) addOfflineBtn.addEventListener('click', () => {
         showModal('offline-account-modal');
     });
-    document.getElementById('create-offline-btn').addEventListener('click', async () => {
-        const username = document.getElementById('offline-username-input').value.trim();
+    const createOfflineBtn = document.getElementById('create-offline-btn');
+    if (createOfflineBtn) createOfflineBtn.addEventListener('click', async () => {
+        const offlineUsernameInput = document.getElementById('offline-username-input');
+        const username = offlineUsernameInput ? offlineUsernameInput.value.trim() : '';
         if (!username) { showToast('请输入用户名', 'error'); return; }
         try {
             const result = await API.addOfflineAccount(username);
@@ -1383,10 +1388,14 @@ function setupAccountButtons() {
         });
     }
 
-    document.getElementById('tp-login-btn').addEventListener('click', async () => {
-        const serverUrl = document.getElementById('tp-server-url').value.trim();
-        const username = document.getElementById('tp-username-input').value.trim();
-        const password = document.getElementById('tp-password-input').value;
+    const tpLoginBtn = document.getElementById('tp-login-btn');
+    if (tpLoginBtn) tpLoginBtn.addEventListener('click', async () => {
+        const tpServerUrl = document.getElementById('tp-server-url');
+        const tpUsernameInput = document.getElementById('tp-username-input');
+        const tpPasswordInput = document.getElementById('tp-password-input');
+        const serverUrl = tpServerUrl ? tpServerUrl.value.trim() : '';
+        const username = tpUsernameInput ? tpUsernameInput.value.trim() : '';
+        const password = tpPasswordInput ? tpPasswordInput.value : '';
         if (!serverUrl) { showToast('请输入认证服务器地址', 'error'); return; }
         if (!username) { showToast('请输入邮箱或用户名', 'error'); return; }
         if (!password) { showToast('请输入密码', 'error'); return; }
@@ -1873,7 +1882,7 @@ function updateVersionSelects() {
                 <div class="version-item-left">
                     <div class="version-item-icon"><img src="${iconUrl}" alt="" class="version-icon-img"></div>
                     <div class="version-item-info">
-                        <span class="version-item-name">${displayName}</span>
+                        <span class="version-item-name">${escapeHtml(displayName)}</span>
                         <span class="version-item-meta"><span class="v-badge ${badgeClass}">${badge}</span>${externalBadge}</span>
                     </div>
                 </div>
@@ -4624,7 +4633,7 @@ function showProfileSelectModal(accessToken, clientToken, serverUrl, profiles) {
         const pSkinUrl = `/api/avatar?uuid=${pUuid}${pServerParam}${pUsernameParam}`;
         return `
         <div class="profile-select-item" onclick="selectThirdPartyProfile('${escapeOnclick(p.id)}', '${escapeOnclick(p.name)}')">
-            <img src="${pSkinUrl}" alt="" class="profile-select-avatar" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <img src="${escapeHtml(pSkinUrl)}" alt="" class="profile-select-avatar" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
             <div class="profile-select-avatar-fallback" style="display:none;width:40px;height:40px;background:var(--bg-tertiary);border-radius:6px;align-items:center;justify-content:center;font-size:18px;color:var(--text-secondary);">${p.name.charAt(0).toUpperCase()}</div>
             <div class="profile-select-info">
                 <div class="profile-select-name">${escapeHtml(p.name)}</div>
@@ -6091,21 +6100,25 @@ function setupWindowControls() {
     const windowModeCheckbox = document.getElementById('setting-window-mode');
     const exitLauncherBtn = document.getElementById('exit-launcher-btn');
 
-    windowControls.style.display = 'flex';
+    if (windowControls) windowControls.style.display = 'flex';
 
-    document.getElementById('win-btn-minimize').addEventListener('click', () => {
+    const winBtnMinimize = document.getElementById('win-btn-minimize');
+    if (winBtnMinimize) winBtnMinimize.addEventListener('click', () => {
         window.electronAPI.minimize();
     });
 
-    document.getElementById('win-btn-maximize').addEventListener('click', () => {
+    const winBtnMaximize = document.getElementById('win-btn-maximize');
+    if (winBtnMaximize) winBtnMaximize.addEventListener('click', () => {
         window.electronAPI.maximize();
     });
 
-    document.getElementById('win-btn-restore').addEventListener('click', () => {
+    const winBtnRestore = document.getElementById('win-btn-restore');
+    if (winBtnRestore) winBtnRestore.addEventListener('click', () => {
         window.electronAPI.maximize();
     });
 
-    document.getElementById('win-btn-close').addEventListener('click', () => {
+    const winBtnClose = document.getElementById('win-btn-close');
+    if (winBtnClose) winBtnClose.addEventListener('click', () => {
         window.electronAPI.close();
     });
 

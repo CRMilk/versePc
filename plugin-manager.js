@@ -144,13 +144,25 @@ class PluginManager {
 function httpGetJson(url) {
     return new Promise((resolve, reject) => {
         const proto = url.startsWith('https') ? https : http;
-        proto.get(url, { headers: { 'User-Agent': 'VersePC/1.0' } }, (res) => {
+        const maxSize = 10 * 1024 * 1024;
+        let size = 0;
+        const req = proto.get(url, { headers: { 'User-Agent': 'VersePC/1.0' }, timeout: 15000 }, (res) => {
             let data = '';
-            res.on('data', chunk => data += chunk);
+            res.on('data', chunk => {
+                size += chunk.length;
+                if (size > maxSize) {
+                    req.destroy();
+                    reject(new Error('Response too large'));
+                    return;
+                }
+                data += chunk;
+            });
             res.on('end', () => {
                 try { resolve(JSON.parse(data)); } catch (e) { reject(new Error('JSON parse error')); }
             });
-        }).on('error', reject);
+        });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
     });
 }
 

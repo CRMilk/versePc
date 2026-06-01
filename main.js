@@ -193,6 +193,7 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             webSecurity: true,
+            webviewTag: true,
             preload: path.join(__dirname, 'preload.cjs'),
         },
     });
@@ -533,6 +534,43 @@ ipcMain.handle('store-delete', async (event, key) => {
     return true;
 });
 
+    ipcMain.handle('preview:stop', async () => {
+        if (global._previewServer) {
+            global._previewServer.close();
+            const oldPort = global._previewPort;
+            global._previewServer = null;
+            global._previewPort = null;
+            return { success: true, port: oldPort };
+        }
+        return { success: false, message: '没有运行中的预览服务器' };
+    });
+
+    ipcMain.handle('backup:list', async (event, filePath) => {
+        return BackupManager.listBackups(filePath || null);
+    });
+    ipcMain.handle('backup:restore', async (event, backupId) => {
+        const result = BackupManager.restoreBackup(backupId);
+        if (result.success && mainWindow && !mainWindow.isDestroyed()) {
+            try {
+                const content = fs.readFileSync(result.restoredPath, 'utf-8');
+                mainWindow.webContents.send('editor:show-diff', result.restoredPath, '', content);
+            } catch (e) {}
+        }
+        return result;
+    });
+    ipcMain.handle('backup:diff', async (event, backupId) => {
+        return BackupManager.getDiff(backupId);
+    });
+    ipcMain.handle('history:changes', async (event, filter) => {
+        return ChangeTracker.getChanges(filter || null);
+    });
+    ipcMain.handle('history:audit', async (event, filter) => {
+        return ChangeTracker.getAuditLog(filter || null);
+    });
+    ipcMain.handle('history:summary', async () => {
+        return ChangeTracker.getSessionSummary();
+    });
+
 // 在系统默认浏览器中打开外部链接
 ipcMain.handle('shell-open-external', async (event, url) => {
     try {
@@ -564,9 +602,10 @@ function createEditorWindow(filePath) {
         backgroundColor: '#1e1e1e',
         show: false,
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
-            webviewTag: false
+            nodeIntegration: false,
+            contextIsolation: true,
+            webviewTag: false,
+            preload: path.join(__dirname, 'editor-preload.cjs')
         }
     });
     editorWindow.loadFile('editor.html');
@@ -600,7 +639,11 @@ ipcMain.handle('editor:open-file-dialog', async (event) => {
 
 ipcMain.handle('editor:read-file', async (event, filePath) => {
     try {
-        const content = fs.readFileSync(filePath, 'utf-8');
+        const resolved = path.resolve(filePath);
+        if (resolved.includes('..') || !fs.existsSync(resolved)) {
+            return { error: '无效的文件路径' };
+        }
+        const content = fs.readFileSync(resolved, 'utf-8');
         return { content };
     } catch (e) {
         return { error: e.message };
@@ -609,7 +652,13 @@ ipcMain.handle('editor:read-file', async (event, filePath) => {
 
 ipcMain.handle('editor:write-file', async (event, filePath, content) => {
     try {
-        fs.writeFileSync(filePath, content, 'utf-8');
+        const resolved = path.resolve(filePath);
+        if (resolved.includes('..')) {
+            return { error: '无效的文件路径' };
+        }
+        const dir = path.dirname(resolved);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(resolved, content, 'utf-8');
         return { success: true };
     } catch (e) {
         return { error: e.message };
@@ -934,6 +983,17 @@ app.on('window-all-closed', () => {
 app.on('before-quit', async (event) => {
     if (shuttingDown) return;
     shuttingDown = true;
+
+                    if (global._previewServer) {
+                        try { global._previewServer.close(); } catch (e) {}
+                        global._previewServer = null;
+                    }
+                    if (global._bgProcesses) {
+                        for (const [pid, proc] of Object.entries(global._bgProcesses)) {
+                            try { process.kill(Number(pid)); } catch (e) {}
+                        }
+                        global._bgProcesses = {};
+                    }
 
     if (serverModuleCache && serverModuleCache.cleanupOnShutdown) {
         try {
@@ -2429,6 +2489,23 @@ function registerAIChatIPC() {
                     required: ['result']
                 }
             }
+        },
+        {
+            type: 'function',
+            function: {
+                name: 'manage_core_memory',
+                description: '管理长期记忆。记录可复用的项目知识、架构模式、诊断方法等，提高跨会话性能。禁止存储当前任务计划/进度（由任务系统管理）。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        action: { type: 'string', enum: ['add', 'update', 'delete', 'list'], description: '操作类型' },
+                        id: { type: 'string', description: '记忆条目ID（update/delete时必填）' },
+                        category: { type: 'string', enum: ['knowledge', 'architecture', 'diagnosis', 'preference', 'rule'], description: '记忆分类' },
+                        content: { type: 'string', description: '记忆内容（add/update时必填）' }
+                    },
+                    required: ['action']
+                }
+            }
         }
     ];
 
@@ -2446,7 +2523,8 @@ function registerAIChatIPC() {
         web_search_general: '通用网络搜索', todo_write: '任务管理', update_todo_list: '更新计划', agent: '子代理',
         translate_mod: '模组汉化', download_cfpa_pack: '下载社区汉化包',
         explore_environment: '探索环境',
-        select_version: '选择版本'
+        select_version: '选择版本',
+        manage_core_memory: '管理记忆'
     };
 
     const TOOL_CONFIG = {
@@ -2487,6 +2565,7 @@ function registerAIChatIPC() {
         web_search_general:{ timeout: 15000, retries: 1, risk: 'safe' },
         todo_write:        { timeout: 5000,  retries: 0, risk: 'safe' },
         update_todo_list:  { timeout: 5000,  retries: 0, risk: 'safe' },
+        manage_core_memory:{ timeout: 5000,  retries: 0, risk: 'safe' },
         agent:             { timeout: 120000,retries: 0, risk: 'moderate' },
         translate_mod:     { timeout: 120000,retries: 0, risk: 'moderate' },
         download_cfpa_pack:{ timeout: 60000, retries: 1, risk: 'safe' },
@@ -2755,6 +2834,7 @@ function registerAIChatIPC() {
 
         const maxRetries = config.retries;
         let lastError;
+        const _toolStartTime = Date.now();
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
             let timeoutId;
@@ -2777,6 +2857,15 @@ function registerAIChatIPC() {
                     }
                 }
 
+                ChangeTracker.recordAudit({
+                    category: 'tool_call',
+                    toolName: name,
+                    args: typeof args === 'string' ? args.substring(0, 500) : JSON.stringify(args).substring(0, 500),
+                    success: true,
+                    elapsed: Date.now() - _toolStartTime,
+                    resultLength: typeof result === 'string' ? result.length : 0
+                });
+
                 return result;
             } catch (e) {
                 clearTimeout(timeoutId);
@@ -2786,6 +2875,16 @@ function registerAIChatIPC() {
                 }
             }
         }
+
+        ChangeTracker.recordAudit({
+            category: 'tool_call',
+            toolName: name,
+            args: typeof args === 'string' ? args.substring(0, 500) : JSON.stringify(args).substring(0, 500),
+            success: false,
+            elapsed: Date.now() - _toolStartTime,
+            error: String(lastError)
+        });
+
         return JSON.stringify({ status: 'error', error: lastError?.message || '工具执行失败', type: 'timeout_or_failure' });
     }
     sseExecuteTool = executeTool;
@@ -2812,26 +2911,631 @@ function registerAIChatIPC() {
         const os = require('os');
         const resolved = path.resolve(path.normalize(inputPath));
         const lower = resolved.toLowerCase();
-        const dataDir = path.join(os.homedir(), '.versepc').toLowerCase();
-        const mcDir = path.join(os.homedir(), '.minecraft').toLowerCase();
-        const readExtraDirs = [
-            path.join(os.homedir(), 'Desktop').toLowerCase(),
-            path.join(os.homedir(), 'Documents').toLowerCase(),
-            path.join(os.homedir(), 'Downloads').toLowerCase()
-        ];
-        const allowedDirs = options.write ? [dataDir, mcDir] : [dataDir, mcDir, ...readExtraDirs];
-        let allowed = false;
-        for (const prefix of allowedDirs) {
-            if (lower.startsWith(prefix)) { allowed = true; break; }
-        }
-        if (!allowed) return { valid: false, error: `无权直接访问该路径。你可以使用 execute_command 工具执行 dir/type 等命令来查看（需要用户确认）`, resolved };
-
+        const home = os.homedir().toLowerCase();
         const sensitivePatterns = ['.ssh', '.gnupg', '.env', '.aws', '.kube', 'credentials', 'id_rsa', 'id_ed25519'];
         for (const pattern of sensitivePatterns) {
             if (lower.includes(pattern.toLowerCase())) return { valid: false, error: '无权访问敏感文件，此路径被安全策略禁止', resolved };
         }
+        const blockedRoots = ['c:\\windows', 'c:\\program files', 'c:\\program files (x86)', 'c:\\programdata', '/etc', '/usr', '/bin', '/sbin', '/boot'];
+        for (const br of blockedRoots) {
+            if (lower.startsWith(br)) return { valid: false, error: `禁止访问系统目录: ${br}`, resolved };
+        }
+        if (!lower.startsWith(home)) return { valid: false, error: '只能访问用户主目录下的文件', resolved };
         return { valid: true, resolved };
     }
+
+    const BackupManager = {
+        baseDir: null,
+        sessionId: null,
+        history: [],
+        init() {
+            const os = require('os');
+            this.baseDir = path.join(os.homedir(), '.versepc', 'snapshots');
+            this.sessionId = Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6);
+            try { fs.mkdirSync(this.baseDir, { recursive: true }); } catch (e) {}
+        },
+        createBackup(filePath, toolName, args) {
+            try {
+                if (!this.baseDir) this.init();
+                if (!fs.existsSync(filePath)) return null;
+                const content = fs.readFileSync(filePath, 'utf-8');
+                const stat = fs.statSync(filePath);
+                const safeName = filePath.replace(/[\\\/:]/g, '_').replace(/^_+/, '');
+                const ts = Date.now();
+                const backupFileName = `${safeName}_${ts}.bak`;
+                const backupPath = path.join(this.baseDir, backupFileName);
+                fs.writeFileSync(backupPath, content, 'utf-8');
+                const meta = {
+                    id: `${this.sessionId}_${ts}`,
+                    sessionId: this.sessionId,
+                    originalPath: filePath,
+                    backupPath: backupPath,
+                    toolName: toolName,
+                    args: args ? (typeof args === 'string' ? args.substring(0, 500) : JSON.stringify(args).substring(0, 500)) : '',
+                    timestamp: ts,
+                    size: stat.size,
+                    lines: content.split('\n').length,
+                    restored: false
+                };
+                const metaPath = backupPath + '.json';
+                fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+                this.history.push(meta);
+                if (this.history.length > 500) {
+                    const old = this.history.splice(0, 100);
+                    for (const m of old) {
+                        try { fs.unlinkSync(m.backupPath); } catch (e) {}
+                        try { fs.unlinkSync(m.backupPath + '.json'); } catch (e) {}
+                    }
+                }
+                return meta;
+            } catch (e) {
+                return null;
+            }
+        },
+        restoreBackup(backupId) {
+            try {
+                if (!this.baseDir) this.init();
+                let meta = this.history.find(m => m.id === backupId);
+                if (!meta) {
+                    const files = fs.readdirSync(this.baseDir).filter(f => f.endsWith('.json'));
+                    for (const f of files) {
+                        try {
+                            const m = JSON.parse(fs.readFileSync(path.join(this.baseDir, f), 'utf-8'));
+                            if (m.id === backupId) { meta = m; break; }
+                        } catch (e) {}
+                    }
+                }
+                if (!meta) return { error: `备份 ${backupId} 不存在` };
+                if (!fs.existsSync(meta.backupPath)) return { error: `备份文件已被删除` };
+                const backupContent = fs.readFileSync(meta.backupPath, 'utf-8');
+                const dir = path.dirname(meta.originalPath);
+                try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+                fs.writeFileSync(meta.originalPath, backupContent, 'utf-8');
+                meta.restored = true;
+                const metaPath = meta.backupPath + '.json';
+                try { fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8'); } catch (e) {}
+                return { success: true, restoredPath: meta.originalPath, size: backupContent.length };
+            } catch (e) {
+                return { error: `恢复失败: ${e.message}` };
+            }
+        },
+        listBackups(filePath) {
+            try {
+                if (!this.baseDir) this.init();
+                const files = fs.readdirSync(this.baseDir).filter(f => f.endsWith('.json'));
+                const results = [];
+                for (const f of files) {
+                    try {
+                        const meta = JSON.parse(fs.readFileSync(path.join(this.baseDir, f), 'utf-8'));
+                        if (filePath && meta.originalPath !== filePath) continue;
+                        results.push(meta);
+                    } catch (e) {}
+                }
+                results.sort((a, b) => b.timestamp - a.timestamp);
+                return results.slice(0, 50);
+            } catch (e) {
+                return [];
+            }
+        },
+        getDiff(backupId) {
+            try {
+                if (!this.baseDir) this.init();
+                let meta = this.history.find(m => m.id === backupId);
+                if (!meta) {
+                    const files = fs.readdirSync(this.baseDir).filter(f => f.endsWith('.json'));
+                    for (const f of files) {
+                        try {
+                            const m = JSON.parse(fs.readFileSync(path.join(this.baseDir, f), 'utf-8'));
+                            if (m.id === backupId) { meta = m; break; }
+                        } catch (e) {}
+                    }
+                }
+                if (!meta) return { error: '备份不存在' };
+                const backupContent = fs.readFileSync(meta.backupPath, 'utf-8');
+                let currentContent = '';
+                try { currentContent = fs.readFileSync(meta.originalPath, 'utf-8'); } catch (e) { currentContent = '(文件不存在)'; }
+                return { original: backupContent, current: currentContent, path: meta.originalPath };
+            } catch (e) {
+                return { error: e.message };
+            }
+        },
+        getSessionSummary() {
+            return {
+                sessionId: this.sessionId,
+                totalBackups: this.history.length,
+                files: [...new Set(this.history.map(m => m.originalPath))],
+                recentBackups: this.history.slice(-10).map(m => ({
+                    id: m.id, path: m.originalPath, tool: m.toolName,
+                    time: m.timestamp, restored: m.restored
+                }))
+            };
+        }
+    };
+
+    const ChangeTracker = {
+        changes: [],
+        auditLog: [],
+        sessionId: null,
+        logDir: null,
+        init() {
+            const os = require('os');
+            this.sessionId = Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6);
+            this.logDir = path.join(os.homedir(), '.versepc', 'logs');
+            try { fs.mkdirSync(this.logDir, { recursive: true }); } catch (e) {}
+            this.auditLog = [];
+            this.changes = [];
+        },
+        recordChange(entry) {
+            const change = {
+                id: `chg_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 6)}`,
+                sessionId: this.sessionId,
+                timestamp: Date.now(),
+                ...entry
+            };
+            this.changes.push(change);
+            if (this.changes.length > 1000) {
+                this.changes = this.changes.slice(-500);
+            }
+            this._persistChanges();
+            return change;
+        },
+        recordAudit(entry) {
+            const log = {
+                id: `aud_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 6)}`,
+                sessionId: this.sessionId,
+                timestamp: Date.now(),
+                ...entry
+            };
+            this.auditLog.push(log);
+            if (this.auditLog.length > 2000) {
+                this.auditLog = this.auditLog.slice(-1000);
+            }
+            this._persistAudit();
+            return log;
+        },
+        _persistChanges() {
+            try {
+                const filePath = path.join(this.logDir, `changes_${this.sessionId}.json`);
+                fs.writeFileSync(filePath, JSON.stringify(this.changes, null, 0), 'utf-8');
+            } catch (e) {}
+        },
+        _persistAudit() {
+            try {
+                const filePath = path.join(this.logDir, `audit_${this.sessionId}.json`);
+                fs.writeFileSync(filePath, JSON.stringify(this.auditLog, null, 0), 'utf-8');
+            } catch (e) {}
+        },
+        getChanges(filter) {
+            let results = [...this.changes];
+            if (filter) {
+                if (filter.filePath) results = results.filter(c => c.filePath === filter.filePath);
+                if (filter.toolName) results = results.filter(c => c.toolName === filter.toolName);
+                if (filter.type) results = results.filter(c => c.type === filter.type);
+                if (filter.since) results = results.filter(c => c.timestamp >= filter.since);
+            }
+            return results.sort((a, b) => b.timestamp - a.timestamp);
+        },
+        getAuditLog(filter) {
+            let results = [...this.auditLog];
+            if (filter) {
+                if (filter.category) results = results.filter(l => l.category === filter.category);
+                if (filter.toolName) results = results.filter(l => l.toolName === filter.toolName);
+                if (filter.success !== undefined) results = results.filter(l => l.success === filter.success);
+                if (filter.since) results = results.filter(l => l.timestamp >= filter.since);
+            }
+            return results.sort((a, b) => b.timestamp - a.timestamp).slice(0, 200);
+        },
+        getSessionSummary() {
+            const toolCalls = {};
+            const fileChanges = {};
+            let errors = 0;
+            let successes = 0;
+            for (const log of this.auditLog) {
+                if (log.category === 'tool_call') {
+                    toolCalls[log.toolName] = (toolCalls[log.toolName] || 0) + 1;
+                    if (log.success) successes++;
+                    else errors++;
+                }
+            }
+            for (const ch of this.changes) {
+                fileChanges[ch.filePath] = (fileChanges[ch.filePath] || 0) + 1;
+            }
+            return {
+                sessionId: this.sessionId,
+                startTime: this.changes.length > 0 ? this.changes[0].timestamp : Date.now(),
+                totalChanges: this.changes.length,
+                totalAuditEntries: this.auditLog.length,
+                toolCalls,
+                fileChanges,
+                errors,
+                successes,
+                successRate: successes + errors > 0 ? Math.round(successes / (successes + errors) * 100) : 0
+            };
+        }
+    };
+    ChangeTracker.init();
+
+    const CodeValidator = {
+        validate(content, filePath) {
+            if (!content || !filePath) return { valid: true };
+            const ext = (filePath.split('.').pop() || '').toLowerCase();
+            try {
+                switch (ext) {
+                    case 'json':
+                    case 'jsonc':
+                        return this._validateJSON(content);
+                    case 'js':
+                    case 'mjs':
+                    case 'cjs':
+                        return this._validateJS(content);
+                    case 'ts':
+                    case 'tsx':
+                        return this._validateTS(content);
+                    case 'css':
+                        return this._validateCSS(content);
+                    case 'html':
+                    case 'htm':
+                        return this._validateHTML(content);
+                    default:
+                        return { valid: true };
+                }
+            } catch (e) {
+                return { valid: true, warning: `验证器内部错误: ${e.message}` };
+            }
+        },
+        _validateJSON(content) {
+            try {
+                JSON.parse(content);
+                return { valid: true };
+            } catch (e) {
+                const match = e.message.match(/position (\d+)/);
+                let line = 1, col = 1;
+                if (match) {
+                    const pos = parseInt(match[1]);
+                    const lines = content.substring(0, pos).split('\n');
+                    line = lines.length;
+                    col = lines[lines.length - 1].length + 1;
+                }
+                return {
+                    valid: false,
+                    error: `JSON 语法错误: ${e.message}`,
+                    line, column: col,
+                    suggestion: '检查 JSON 格式：引号、逗号、括号是否匹配'
+                };
+            }
+        },
+        _validateJS(content) {
+            const issues = [];
+            const lines = content.split('\n');
+            let openBraces = 0, openParens = 0, openBrackets = 0;
+            let inBlockComment = false, inString = false, stringChar = '';
+            let templateDepth = 0;
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                let inLineComment = false;
+                for (let j = 0; j < line.length; j++) {
+                    const ch = line[j];
+                    const prev = j > 0 ? line[j - 1] : '';
+                    if (inBlockComment) {
+                        if (ch === '/' && prev === '*') inBlockComment = false;
+                        continue;
+                    }
+                    if (inLineComment) continue;
+                    if (inString) {
+                        if (ch === stringChar && prev !== '\\') inString = false;
+                        continue;
+                    }
+                    if (ch === '/' && j + 1 < line.length) {
+                        if (line[j + 1] === '/') { inLineComment = true; break; }
+                        if (line[j + 1] === '*') { inBlockComment = true; j++; continue; }
+                    }
+                    if (ch === '"' || ch === "'" || ch === '`') {
+                        inString = true;
+                        stringChar = ch;
+                        continue;
+                    }
+                    if (ch === '{') openBraces++;
+                    if (ch === '}') openBraces--;
+                    if (ch === '(') openParens++;
+                    if (ch === ')') openParens--;
+                    if (ch === '[') openBrackets++;
+                    if (ch === ']') openBrackets--;
+                }
+                if (openBraces < 0) {
+                    issues.push({ line: i + 1, error: '多余的右花括号 }', severity: 'error' });
+                    openBraces = 0;
+                }
+                if (openParens < 0) {
+                    issues.push({ line: i + 1, error: '多余的右圆括号 )', severity: 'error' });
+                    openParens = 0;
+                }
+                if (openBrackets < 0) {
+                    issues.push({ line: i + 1, error: '多余的右方括号 ]', severity: 'error' });
+                    openBrackets = 0;
+                }
+            }
+            if (openBraces > 0) issues.push({ line: lines.length, error: `缺少 ${openBraces} 个右花括号 }`, severity: 'error' });
+            if (openParens > 0) issues.push({ line: lines.length, error: `缺少 ${openParens} 个右圆括号 )`, severity: 'error' });
+            if (openBrackets > 0) issues.push({ line: lines.length, error: `缺少 ${openBrackets} 个右方括号 ]`, severity: 'error' });
+            if (inBlockComment) issues.push({ line: lines.length, error: '未闭合的块注释 /*', severity: 'error' });
+            if (inString) issues.push({ line: lines.length, error: `未闭合的字符串 ${stringChar}`, severity: 'error' });
+            const errors = issues.filter(i => i.severity === 'error');
+            if (errors.length > 0) {
+                return { valid: false, errors: errors.slice(0, 5), error: errors[0].error, line: errors[0].line, suggestion: '检查括号匹配和字符串闭合' };
+            }
+            return { valid: true, warnings: issues.filter(i => i.severity === 'warning') };
+        },
+        _validateTS(content) {
+            return this._validateJS(content);
+        },
+        _validateCSS(content) {
+            const issues = [];
+            const lines = content.split('\n');
+            let openBraces = 0;
+            let inComment = false;
+            let inString = false;
+            let stringChar = '';
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                for (let j = 0; j < line.length; j++) {
+                    const ch = line[j];
+                    const prev = j > 0 ? line[j - 1] : '';
+                    if (inComment) {
+                        if (ch === '/' && prev === '*') inComment = false;
+                        continue;
+                    }
+                    if (inString) {
+                        if (ch === stringChar && prev !== '\\') inString = false;
+                        continue;
+                    }
+                    if (ch === '/' && j + 1 < line.length && line[j + 1] === '*') {
+                        inComment = true;
+                        j++;
+                        continue;
+                    }
+                    if (ch === '"' || ch === "'") {
+                        inString = true;
+                        stringChar = ch;
+                        continue;
+                    }
+                    if (ch === '{') openBraces++;
+                    if (ch === '}') {
+                        openBraces--;
+                        if (openBraces < 0) {
+                            issues.push({ line: i + 1, error: '多余的右花括号 }', severity: 'error' });
+                            openBraces = 0;
+                        }
+                    }
+                }
+            }
+            if (openBraces > 0) issues.push({ line: lines.length, error: `缺少 ${openBraces} 个右花括号 }`, severity: 'error' });
+            if (inComment) issues.push({ line: lines.length, error: '未闭合的块注释 /*', severity: 'error' });
+            const errors = issues.filter(i => i.severity === 'error');
+            if (errors.length > 0) {
+                return { valid: false, errors: errors.slice(0, 5), error: errors[0].error, line: errors[0].line, suggestion: '检查 CSS 选择器和属性块的花括号匹配' };
+            }
+            return { valid: true };
+        },
+        _validateHTML(content) {
+            const issues = [];
+            const voidTags = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+            const tagStack = [];
+            const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9]*)[^>]*\/?>/g;
+            let match;
+            let lineNum = 1;
+            while ((match = tagRegex.exec(content)) !== null) {
+                const fullTag = match[0];
+                const tagName = match[1].toLowerCase();
+                const beforeMatch = content.substring(0, match.index);
+                lineNum = beforeMatch.split('\n').length;
+                if (fullTag.startsWith('<!') || fullTag.startsWith('<?')) continue;
+                if (voidTags.has(tagName)) continue;
+                if (fullTag.endsWith('/>')) continue;
+                if (fullTag.startsWith('</')) {
+                    if (tagStack.length === 0) {
+                        issues.push({ line: lineNum, error: `多余的闭合标签 </${tagName}>`, severity: 'error' });
+                    } else {
+                        const last = tagStack[tagStack.length - 1];
+                        if (last.name !== tagName) {
+                            issues.push({ line: lineNum, error: `标签不匹配: 期望 </${last.name}> 但找到 </${tagName}>`, severity: 'error' });
+                        }
+                        tagStack.pop();
+                    }
+                } else {
+                    tagStack.push({ name: tagName, line: lineNum });
+                }
+            }
+            if (tagStack.length > 0) {
+                const unclosed = tagStack.slice(0, 3).map(t => `<${t.name}> (行 ${t.line})`).join(', ');
+                issues.push({ line: tagStack[0].line, error: `未闭合的标签: ${unclosed}${tagStack.length > 3 ? '...' : ''}`, severity: 'error' });
+            }
+            const errors = issues.filter(i => i.severity === 'error');
+            if (errors.length > 0) {
+                return { valid: false, errors: errors.slice(0, 5), error: errors[0].error, line: errors[0].line, suggestion: '检查 HTML 标签是否正确闭合' };
+            }
+            return { valid: true };
+        }
+    };
+
+    const CodeIndexer = {
+        index: new Map(),
+        fileMeta: new Map(),
+        idf: new Map(),
+        indexed: false,
+        indexDir: null,
+        maxFileSize: 100000,
+        maxFiles: 2000,
+        async buildIndex(rootDir) {
+            const startTime = Date.now();
+            this.index.clear();
+            this.fileMeta.clear();
+            this.idf.clear();
+            this.indexed = false;
+            if (!this.indexDir) {
+                const os = require('os');
+                this.indexDir = path.join(os.homedir(), '.versepc', 'index');
+                try { fs.mkdirSync(this.indexDir, { recursive: true }); } catch (e) {}
+            }
+            const codeExtensions = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.json', '.css', '.scss', '.less', '.html', '.htm', '.vue', '.svelte', '.py', '.java', '.go', '.rs', '.c', '.cpp', '.h', '.hpp', '.cs', '.rb', '.php', '.swift', '.kt', '.md', '.txt', '.yaml', '.yml', '.toml', '.xml', '.sql']);
+            const ignoreDirs = new Set(['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', '.versepc', 'vendor', '.idea', '.vscode', 'coverage']);
+            const files = [];
+            const walk = (dir, depth) => {
+                if (depth > 8 || files.length >= this.maxFiles) return;
+                let entries;
+                try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+                for (const entry of entries) {
+                    if (files.length >= this.maxFiles) break;
+                    const fullPath = path.join(dir, entry.name);
+                    if (entry.isDirectory()) {
+                        if (!ignoreDirs.has(entry.name) && !entry.name.startsWith('.')) {
+                            walk(fullPath, depth + 1);
+                        }
+                    } else if (entry.isFile()) {
+                        const ext = path.extname(entry.name).toLowerCase();
+                        if (codeExtensions.has(ext)) {
+                            try {
+                                const stat = fs.statSync(fullPath);
+                                if (stat.size <= this.maxFileSize) {
+                                    files.push({ path: fullPath, ext, size: stat.size, mtime: stat.mtimeMs });
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+            };
+            walk(rootDir, 0);
+            const docCount = files.length;
+            const docFreq = new Map();
+            for (const file of files) {
+                try {
+                    const content = fs.readFileSync(file.path, 'utf-8');
+                    const tokens = this._tokenize(content, file.ext);
+                    const uniqueTokens = new Set(tokens);
+                    this.index.set(file.path, { tokens, content: content.substring(0, 500), lines: content.split('\n').length });
+                    this.fileMeta.set(file.path, { ext: file.ext, size: file.size, mtime: file.mtime, relPath: path.relative(rootDir, file.path) });
+                    for (const token of uniqueTokens) {
+                        docFreq.set(token, (docFreq.get(token) || 0) + 1);
+                    }
+                } catch (e) {}
+            }
+            for (const [token, freq] of docFreq) {
+                this.idf.set(token, Math.log((docCount + 1) / (freq + 1)) + 1);
+            }
+            this.indexed = true;
+            return { files: docCount, tokens: this.idf.size, elapsed: Date.now() - startTime };
+        },
+        _tokenize(content, ext) {
+            const tokens = [];
+            const lines = content.split('\n');
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (ext === '.py' && (trimmed.startsWith('#') || trimmed.startsWith('"""') || trimmed.startsWith("'''"))) {
+                    tokens.push(...this._extractWords(trimmed));
+                    continue;
+                }
+                if ((ext === '.js' || ext === '.ts' || ext === '.css') && (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*'))) {
+                    tokens.push(...this._extractWords(trimmed));
+                    continue;
+                }
+                if (ext === '.html' && trimmed.startsWith('<!--')) {
+                    tokens.push(...this._extractWords(trimmed));
+                    continue;
+                }
+                const funcMatch = trimmed.match(/(?:function|def|func|fn|async\s+function|const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/);
+                if (funcMatch) tokens.push(funcMatch[1].toLowerCase());
+                const classMatch = trimmed.match(/(?:class|interface|struct|enum|type)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/);
+                if (classMatch) tokens.push(classMatch[1].toLowerCase());
+                const importMatch = trimmed.match(/(?:import|require|from|include|use)\s+['"]([^'"]+)['"]/);
+                if (importMatch) tokens.push(...importMatch[1].split(/[\/\\.-]/).filter(Boolean).map(w => w.toLowerCase()));
+                const stringMatches = trimmed.match(/['"]([^'"]{3,50})['"]/g);
+                if (stringMatches) {
+                    for (const s of stringMatches) {
+                        const inner = s.slice(1, -1);
+                        if (/^[a-zA-Z_\s-]+$/.test(inner)) tokens.push(inner.toLowerCase());
+                    }
+                }
+                tokens.push(...this._extractWords(trimmed));
+            }
+            return tokens;
+        },
+        _extractWords(text) {
+            const words = [];
+            const camelParts = text.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_\-./\\]/g, ' ');
+            const matches = camelParts.match(/[a-zA-Z]{2,}/g);
+            if (matches) {
+                for (const w of matches) {
+                    const lower = w.toLowerCase();
+                    if (lower.length >= 2 && !this._stopWords.has(lower)) {
+                        words.push(lower);
+                    }
+                }
+            }
+            return words;
+        },
+        _stopWords: new Set(['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'has', 'have', 'from', 'that', 'this', 'with', 'they', 'been', 'said', 'each', 'which', 'their', 'will', 'other', 'about', 'many', 'then', 'them', 'would', 'like', 'into', 'could', 'time', 'very', 'when', 'come', 'made', 'after', 'also', 'did', 'just', 'than', 'what', 'your', 'way', 'may', 'new', 'now', 'old', 'see', 'him', 'two', 'how', 'its', 'let', 'say', 'she', 'too', 'use', 'var', 'const', 'let', 'function', 'return', 'import', 'export', 'from', 'class', 'extends', 'implements', 'interface', 'type', 'enum', 'module', 'require', 'true', 'false', 'null', 'undefined', 'void', 'async', 'await', 'try', 'catch', 'throw', 'finally', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'default', 'new', 'delete', 'typeof', 'instanceof', 'in', 'of', 'yield', 'this', 'super', 'static', 'public', 'private', 'protected', 'abstract', 'readonly', 'override']),
+        search(query, options = {}) {
+            if (!this.indexed) return { error: '索引未构建，请先调用 build_index' };
+            const maxResults = options.maxResults || 10;
+            const rootDir = options.rootDir || '';
+            const queryTokens = this._extractWords(query);
+            if (queryTokens.length === 0) return { results: [], query };
+            const queryVec = new Map();
+            for (const token of queryTokens) {
+                queryVec.set(token, (queryVec.get(token) || 0) + 1);
+            }
+            for (const [token, count] of queryVec) {
+                const idf = this.idf.get(token) || 1;
+                queryVec.set(token, count * idf);
+            }
+            const scores = [];
+            for (const [filePath, docData] of this.index) {
+                if (rootDir && !filePath.startsWith(rootDir)) continue;
+                const meta = this.fileMeta.get(filePath);
+                let score = 0;
+                const docTokenFreq = new Map();
+                for (const t of docData.tokens) {
+                    docTokenFreq.set(t, (docTokenFreq.get(t) || 0) + 1);
+                }
+                for (const [token, queryWeight] of queryVec) {
+                    const tf = docTokenFreq.get(token) || 0;
+                    const idf = this.idf.get(token) || 1;
+                    const normalizedTf = tf > 0 ? 1 + Math.log(tf) : 0;
+                    score += queryWeight * normalizedTf * idf;
+                }
+                const relPath = meta ? meta.relPath : filePath;
+                const pathTokens = this._extractWords(relPath.replace(/[\\/]/g, ' '));
+                for (const token of queryTokens) {
+                    if (pathTokens.includes(token)) score *= 1.5;
+                }
+                const contentSnippet = docData.content.toLowerCase();
+                for (const token of queryTokens) {
+                    if (contentSnippet.includes(token)) score *= 1.1;
+                }
+                if (score > 0) {
+                    scores.push({ filePath, score, meta, lines: docData.lines, snippet: docData.content.substring(0, 150) });
+                }
+            }
+            scores.sort((a, b) => b.score - a.score);
+            const results = scores.slice(0, maxResults).map((r, i) => ({
+                rank: i + 1,
+                file: r.filePath,
+                relativePath: r.meta ? r.meta.relPath : r.filePath,
+                score: Math.round(r.score * 100) / 100,
+                lines: r.lines,
+                extension: r.meta ? r.meta.ext : '',
+                snippet: r.snippet
+            }));
+            return { results, totalMatches: scores.length, query, queryTokens };
+        },
+        getStats() {
+            return {
+                indexed: this.indexed,
+                files: this.index.size,
+                tokens: this.idf.size,
+                memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB'
+            };
+        }
+    };
 
     async function executeToolInner(name, args) {
         await new Promise(r => setImmediate(r));
@@ -3155,125 +3859,76 @@ function registerAIChatIPC() {
                     const command = (args.command || '').trim();
                     if (!command) return JSON.stringify({ error: '命令不能为空' });
 
-                    const COMMAND_WHITELIST = [
-                        'java', 'javac', 'javaw', 'jar',
-                        'minecraft', 'mc',
-                        'dir', 'ls', 'type', 'cat', 'tree',
-                        'echo', 'where', 'which',
-                        'systeminfo', 'tasklist', 'tasklist /fi',
-                        'netstat',
-                        'cd', 'pwd', 'chdir',
-                        'find', 'findstr', 'grep', 'select-string'
-                    ];
-                    const COMMAND_BLACKLIST = [
-                        'rm', 'del', 'rmdir', 'rd', 'erase',
+                    const BLOCKED_COMMANDS = [
                         'format', 'mkfs', 'fdisk', 'diskpart',
-                        'shutdown', 'restart', 'reboot',
-                        'reg', 'regedit', 'regedt32',
+                        'reg', 'regedit',
                         'net user', 'net localgroup', 'netsh',
-                        'powershell', 'cmd', 'cmd.exe',
-                        'bash', 'sh', 'zsh', 'fish',
-                        'curl', 'wget', 'nc', 'ncat',
-                        'ssh', 'scp', 'sftp', 'telnet',
-                        'python', 'python3', 'perl', 'ruby', 'node',
-                        'certutil', 'bitsadmin',
-                        'icacls', 'cacls', 'takeown',
                         'schtasks', 'at',
                         'wmic', 'mshta', 'cscript', 'wscript',
                         'rundll32', 'regsvr32',
-                        'ping -t', 'tracert'
+                        'certutil', 'bitsadmin',
+                        'icacls', 'cacls', 'takeown'
                     ];
-                    const DANGEROUS_PATTERNS = [
-                        /;\s*(rm|del|format|shutdown|reg|net user)/i,
-                        /\|\s*(rm|del|format|shutdown|reg)/i,
-                        /&&\s*(rm|del|format|shutdown|reg)/i,
-                        />\s*\w:/,
-                        />>\s*\w:/,
-                        /\$\(/,
-                        /`/,
-                        /&\s*$/,
-                        /\bexec\b/i,
-                        /\beval\b/i,
-                        /\bsudo\b/i,
-                        /\brunas\b/i
+                    const DESTRUCTIVE_PATTERNS = [
+                        /rm\s+(-[rf]+\s+)?\/(\s|$)/i,
+                        /del\s+\/[sfq]+\s+[a-z]:\\/i,
+                        /format\s+[a-z]:/i,
+                        /shutdown\s+/i,
+                        /;\s*(rm|del|format|shutdown)/i,
+                        /\|\s*(rm|del|format|shutdown)/i,
+                        /&&\s*(rm|del|format|shutdown)/i
                     ];
 
-                    const cmdBase = command.split(/\s+/)[0].toLowerCase();
-                    const cmdBaseNoExt = cmdBase.replace(/\.(exe|bat|cmd|com|ps1)$/i, '');
+                    const cmdLower = command.toLowerCase().trim();
+                    const cmdBase = cmdLower.split(/\s+/)[0].replace(/\.(exe|bat|cmd|com|ps1)$/i, '');
 
-                    let isBlacklisted = false;
-                    for (const bl of COMMAND_BLACKLIST) {
-                        if (cmdBase === bl.toLowerCase() || cmdBaseNoExt === bl.toLowerCase() || command.toLowerCase().startsWith(bl.toLowerCase())) {
-                            isBlacklisted = true;
-                            break;
+                    for (const bl of BLOCKED_COMMANDS) {
+                        if (cmdBase === bl.toLowerCase() || cmdLower.startsWith(bl.toLowerCase() + ' ')) {
+                            return JSON.stringify({ error: `安全策略禁止执行: ${bl}` });
                         }
                     }
-                    if (isBlacklisted) return JSON.stringify({ error: `禁止执行命令: ${cmdBase}。该命令在黑名单中，不允许执行。` });
-
-                    for (const pattern of DANGEROUS_PATTERNS) {
-                        if (pattern.test(command)) return JSON.stringify({ error: `命令包含危险模式，不允许执行。请使用简单命令，禁止管道、重定向和命令链接。` });
-                    }
-
-                    let isWhitelisted = false;
-                    for (const wl of COMMAND_WHITELIST) {
-                        if (cmdBase === wl.toLowerCase() || cmdBaseNoExt === wl.toLowerCase()) {
-                            isWhitelisted = true;
-                            break;
+                    for (const pat of DESTRUCTIVE_PATTERNS) {
+                        if (pat.test(command)) {
+                            return JSON.stringify({ error: '命令包含潜在危险操作，已被安全策略阻止' });
                         }
                     }
-                    if (!isWhitelisted) return JSON.stringify({ error: `命令 "${cmdBase}" 不在允许列表中。仅允许: ${COMMAND_WHITELIST.join(', ')}` });
 
                     const dataDir = path.join(os.homedir(), '.versepc');
-                    const mcDir = path.join(os.homedir(), '.minecraft');
-                    const allowedCwdDirs = [dataDir.toLowerCase(), mcDir.toLowerCase()];
-
                     let workDir = args.cwd ? path.resolve(args.cwd) : dataDir;
-                    const lowerWorkDir = workDir.toLowerCase();
-                    let cwdAllowed = false;
-                    for (const prefix of allowedCwdDirs) {
-                        if (lowerWorkDir.startsWith(prefix)) { cwdAllowed = true; break; }
-                    }
-                    if (!cwdAllowed) {
-                        workDir = dataDir;
-                    }
 
-                    const timeout = Math.min(Math.max(args.timeout || 10000, 3000), 30000);
+                    const timeout = Math.min(Math.max(args.timeout || 30000, 3000), 120000);
 
                     return await new Promise((resolve) => {
                         let child;
                         const timer = setTimeout(() => {
                             child?.kill();
-                            resolve(JSON.stringify({ error: `命令执行超时(${timeout}ms)，已终止`, timedOut: true }));
+                            resolve(JSON.stringify({ error: `命令执行超时(${timeout}ms)`, timedOut: true }));
                         }, timeout);
-
-                        let stdout = '';
-                        let stderr = '';
 
                         child = exec(command, {
                             cwd: workDir,
                             timeout: timeout,
-                            maxBuffer: 512 * 1024,
+                            maxBuffer: 1024 * 1024,
                             windowsHide: true,
-                            env: { ...process.env, PATH: process.env.PATH }
-                        }, (error, out, err) => {
+                            env: { ...process.env }
+                        }, (error, stdout, stderr) => {
                             clearTimeout(timer);
-                            if (out) stdout = out;
-                            if (err) stderr = err;
-
-                            const maxOutput = 4000;
-                            if (stdout.length > maxOutput) stdout = stdout.slice(0, maxOutput) + '\n...[输出已截断]';
-                            if (stderr.length > maxOutput) stderr = stderr.slice(0, maxOutput) + '\n...[输出已截断]';
+                            let out = stdout || '';
+                            let err = stderr || '';
+                            const maxOutput = 50000;
+                            if (out.length > maxOutput) out = out.slice(0, maxOutput) + '\n...[截断]';
+                            if (err.length > maxOutput) err = err.slice(0, maxOutput) + '\n...[截断]';
 
                             const result = {
                                 success: !error || error.killed,
                                 command,
                                 cwd: workDir,
                                 exitCode: error ? (error.code || 1) : 0,
-                                stdout: stdout.trim(),
-                                stderr: stderr.trim()
+                                stdout: out.trim(),
+                                stderr: err.trim()
                             };
                             if (error && !error.killed) {
-                                result.error = `命令执行失败: ${error.message}`;
+                                result.error = `命令执行失败(exit ${error.code || 1})`;
                                 result.success = false;
                             }
                             resolve(JSON.stringify(result));
@@ -3289,7 +3944,18 @@ function registerAIChatIPC() {
                     try {
                         const dir = path.dirname(filePath);
                         await fs.promises.mkdir(dir, { recursive: true });
+                        if (fs.existsSync(filePath)) BackupManager.createBackup(filePath, 'write_file', {});
+                        const validation = CodeValidator.validate(content, filePath);
+                        if (!validation.valid) {
+                            return JSON.stringify({ error: `代码验证失败: ${validation.error}${validation.line ? ' (行 ' + validation.line + ')' : ''}`, validation, suggestion: validation.suggestion || '请修复语法错误后重试' });
+                        }
                         await fs.promises.writeFile(filePath, content, 'utf-8');
+                        ChangeTracker.recordChange({
+                            type: fs.existsSync(filePath) ? 'overwrite' : 'create',
+                            toolName: 'write_file',
+                            filePath: filePath,
+                            newContent: content.substring(0, 2000)
+                        });
                         return JSON.stringify({ success: true, path: filePath, size: content.length });
                     } catch (e) {
                         return JSON.stringify({ error: `写入文件失败: ${e.message}` });
@@ -3312,6 +3978,7 @@ function registerAIChatIPC() {
                     try {
                         let content = await fs.promises.readFile(filePath, 'utf-8');
                         if (!content.includes(oldString)) return JSON.stringify({ error: '未找到要替换的文本，old_string 在文件中不存在' });
+                        BackupManager.createBackup(filePath, 'edit_file', { old_string: oldString.substring(0, 200), new_string: newString.substring(0, 200) });
                         let count = 1;
                         if (!replaceAll) {
                             const firstIdx = content.indexOf(oldString);
@@ -3322,7 +3989,17 @@ function registerAIChatIPC() {
                             count = content.split(oldString).length - 1;
                             content = content.split(oldString).join(newString);
                         }
+                        const validation = CodeValidator.validate(content, filePath);
+                        if (!validation.valid) {
+                            return JSON.stringify({ error: `代码验证失败: ${validation.error}${validation.line ? ' (行 ' + validation.line + ')' : ''}`, validation, suggestion: validation.suggestion || '请修复语法错误后重试' });
+                        }
                         await fs.promises.writeFile(filePath, content, 'utf-8');
+                        ChangeTracker.recordChange({
+                            type: 'modify',
+                            toolName: 'edit_file',
+                            filePath: filePath,
+                            diff: { old: oldString.substring(0, 200), new: newString.substring(0, 200) }
+                        });
                         return JSON.stringify({ success: true, path: filePath, replacements: count });
                     } catch (e) {
                         return JSON.stringify({ error: `编辑文件失败: ${e.message}` });
@@ -3603,11 +4280,39 @@ function registerAIChatIPC() {
                     return JSON.stringify({ success: true, todos: validated, count: validated.length });
                 }
                 case 'update_todo_list': {
-                    const todos = args.todos || '';
-                    if (!todos || typeof todos !== 'string') {
-                        return JSON.stringify({ error: 'todos must be a markdown checklist string' });
+                    const todos = args.todos || [];
+                    if (!Array.isArray(todos) || todos.length === 0) {
+                        return JSON.stringify({ error: 'todos must be a non-empty array' });
                     }
-                    return JSON.stringify({ status: 'success', todos });
+                    const validated = todos.map((t, i) => ({
+                        id: t.id || 'task-' + (i + 1),
+                        content: t.content || '',
+                        status: ['pending', 'in_progress', 'completed'].includes(t.status) ? t.status : 'pending'
+                    }));
+                    return JSON.stringify({ status: 'success', todos: validated, count: validated.length });
+                }
+                case 'manage_core_memory': {
+                    if (!global._coreMemory) global._coreMemory = [];
+                    const { action, id, category, content } = args;
+                    if (action === 'add' && content) {
+                        const memId = id || 'mem-' + Date.now();
+                        global._coreMemory.push({ id: memId, category: category || 'knowledge', content, timestamp: Date.now() });
+                        return JSON.stringify({ status: 'success', action: 'added', id: memId, count: global._coreMemory.length });
+                    } else if (action === 'update' && id && content) {
+                        const idx = global._coreMemory.findIndex(m => m.id === id);
+                        if (idx >= 0) {
+                            global._coreMemory[idx] = { ...global._coreMemory[idx], content, category: category || global._coreMemory[idx].category, timestamp: Date.now() };
+                            return JSON.stringify({ status: 'success', action: 'updated', id });
+                        }
+                        return JSON.stringify({ status: 'error', error: `Memory ${id} not found` });
+                    } else if (action === 'delete' && id) {
+                        const idx = global._coreMemory.findIndex(m => m.id === id);
+                        if (idx >= 0) { global._coreMemory.splice(idx, 1); return JSON.stringify({ status: 'success', action: 'deleted', id }); }
+                        return JSON.stringify({ status: 'error', error: `Memory ${id} not found` });
+                    } else if (action === 'list') {
+                        return JSON.stringify({ status: 'success', memories: global._coreMemory });
+                    }
+                    return JSON.stringify({ status: 'error', error: 'Invalid action or missing parameters' });
                 }
                 case 'agent': {
                     const description = args.description || '子任务';
@@ -3896,19 +4601,44 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                     return JSON.stringify({ success: true, completion: args.result || '' });
                 }
                 case 'bash': {
-                    const { exec } = require('child_process');
+                    const { exec, spawn } = require('child_process');
                     const cmd = (args.command || '').trim();
                     const restart = args.restart || false;
                     if (!cmd) return JSON.stringify({ error: '命令不能为空' });
                     if (restart || !global._bashSession) {
-                        global._bashSession = { output: '' };
+                        global._bashSession = { output: '', cwd: process.cwd() };
+                    }
+                    const workDir = args.cwd || global._bashSession.cwd || process.cwd();
+                    const timeoutSec = Math.min(Math.max(args.timeout || 120, 5), 600);
+                    if (args.background) {
+                        try {
+                            const child = spawn(cmd, [], {
+                                shell: true, cwd: workDir, detached: true,
+                                stdio: ['ignore', 'pipe', 'pipe'],
+                                windowsHide: true
+                            });
+                            let stdout = '', stderr = '';
+                            child.stdout.on('data', d => { stdout += d.toString(); });
+                            child.stderr.on('data', d => { stderr += d.toString(); });
+                            child.unref();
+                            if (!global._bgProcesses) global._bgProcesses = {};
+                            const pid = child.pid;
+                            global._bgProcesses[pid] = { child, stdout: '', stderr: '', startTime: Date.now() };
+                            child.stdout.on('data', d => { if (global._bgProcesses[pid]) global._bgProcesses[pid].stdout += d.toString(); });
+                            child.stderr.on('data', d => { if (global._bgProcesses[pid]) global._bgProcesses[pid].stderr += d.toString(); });
+                            child.on('exit', (code) => { if (global._bgProcesses[pid]) global._bgProcesses[pid].exitCode = code; });
+                            global._bashSession.cwd = workDir;
+                            return JSON.stringify({ output: `后台进程已启动 (PID: ${pid})。使用 bash(command="taskkill /PID ${pid} /F") 停止。`, pid, background: true });
+                        } catch (e) {
+                            return JSON.stringify({ error: `启动后台进程失败: ${String(e)}` });
+                        }
                     }
                     try {
                         const out = await new Promise((resolve, reject) => {
                             exec(cmd, {
-                                timeout: 120000, maxBuffer: 1024 * 1024,
+                                timeout: timeoutSec * 1000, maxBuffer: 1024 * 1024,
                                 shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
-                                encoding: 'utf-8', cwd: args.cwd || process.cwd()
+                                encoding: 'utf-8', cwd: workDir
                             }, (error, stdout, stderr) => {
                                 if (error) {
                                     resolve({ stdout: stdout || '', stderr: stderr || error.message || '' });
@@ -3917,6 +4647,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                                 }
                             });
                         });
+                        global._bashSession.cwd = workDir;
                         if (out.stderr) {
                             global._bashSession.output = out.stdout;
                             return JSON.stringify({ output: out.stdout.substring(0, 50000), error: out.stderr.substring(0, 20000) });
@@ -3925,6 +4656,229 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                         return JSON.stringify({ output: out.stdout.substring(0, 50000) });
                     } catch (e) {
                         return JSON.stringify({ error: String(e) });
+                    }
+                }
+                case 'build_index': {
+                    const rootDir = args.root_dir || args.rootDir;
+                    if (!rootDir) return JSON.stringify({ error: 'root_dir 是必需的' });
+                    const resolvedRoot = path.resolve(rootDir);
+                    if (!fs.existsSync(resolvedRoot)) return JSON.stringify({ error: `目录不存在: ${resolvedRoot}` });
+                    const result = await CodeIndexer.buildIndex(resolvedRoot);
+                    return JSON.stringify({ success: true, ...result, rootDir: resolvedRoot });
+                }
+                case 'semantic_search': {
+                    const query = args.query || '';
+                    if (!query) return JSON.stringify({ error: 'query 是必需的' });
+                    const maxResults = args.max_results || args.maxResults || 10;
+                    const rootDir = args.root_dir || args.rootDir || '';
+                    const result = CodeIndexer.search(query, { maxResults, rootDir });
+                    return JSON.stringify(result);
+                }
+                case 'index_stats': {
+                    return JSON.stringify(CodeIndexer.getStats());
+                }
+                case 'validate_code': {
+                    const content = args.content || '';
+                    const filePath = args.file_path || '';
+                    if (!content) return JSON.stringify({ error: 'content 是必需的' });
+                    const result = CodeValidator.validate(content, filePath);
+                    return JSON.stringify(result);
+                }
+                case 'view_history': {
+                    const action = args.action || 'summary';
+                    const limit = args.limit || 20;
+                    if (action === 'changes') {
+                        const filter = {};
+                        if (args.file_path) filter.filePath = args.file_path;
+                        if (args.tool_name) filter.toolName = args.tool_name;
+                        const changes = ChangeTracker.getChanges(filter);
+                        return JSON.stringify({ changes: changes.slice(0, limit), total: changes.length });
+                    }
+                    if (action === 'audit') {
+                        const filter = {};
+                        if (args.tool_name) filter.toolName = args.tool_name;
+                        const logs = ChangeTracker.getAuditLog(filter);
+                        return JSON.stringify({ logs: logs.slice(0, limit), total: logs.length });
+                    }
+                    if (action === 'summary') {
+                        return JSON.stringify(ChangeTracker.getSessionSummary());
+                    }
+                    return JSON.stringify({ error: `未知操作: ${action}` });
+                }
+                case 'undo_edit': {
+                    const action = args.action || 'list';
+                    if (action === 'list') {
+                        const filePath = args.file_path || null;
+                        const backups = BackupManager.listBackups(filePath);
+                        return JSON.stringify({ backups: backups.map(b => ({ id: b.id, file: b.originalPath, tool: b.toolName, time: b.timestamp, lines: b.lines, restored: b.restored })), count: backups.length });
+                    }
+                    if (action === 'restore') {
+                        const backupId = args.backup_id;
+                        if (!backupId) return JSON.stringify({ error: 'backup_id 是必需的' });
+                        const result = BackupManager.restoreBackup(backupId);
+                        if (result.success && mainWindow && !mainWindow.isDestroyed()) {
+                            try {
+                                const restoredContent = fs.readFileSync(result.restoredPath, 'utf-8');
+                                mainWindow.webContents.send('editor:show-diff', result.restoredPath, '', restoredContent);
+                            } catch (e) {}
+                        }
+                        return JSON.stringify(result);
+                    }
+                    if (action === 'diff') {
+                        const backupId = args.backup_id;
+                        if (!backupId) return JSON.stringify({ error: 'backup_id 是必需的' });
+                        const diff = BackupManager.getDiff(backupId);
+                        return JSON.stringify(diff);
+                    }
+                    if (action === 'session') {
+                        return JSON.stringify(BackupManager.getSessionSummary());
+                    }
+                    return JSON.stringify({ error: `未知操作: ${action}` });
+                }
+                case 'manage_processes': {
+                    const action = args.action || 'list';
+                    if (action === 'list') {
+                        const procs = global._bgProcesses || {};
+                        const list = Object.entries(procs).map(([pid, p]) => ({
+                            pid: Number(pid),
+                            running: p.exitCode === undefined,
+                            exitCode: p.exitCode,
+                            uptime: Math.round((Date.now() - p.startTime) / 1000),
+                            stdoutLines: (p.stdout || '').split('\n').length,
+                            stderrLines: (p.stderr || '').split('\n').length
+                        }));
+                        if (global._previewServer) {
+                            list.push({ pid: 'preview-server', running: true, port: global._previewPort, type: 'http-server' });
+                        }
+                        return JSON.stringify({ processes: list, count: list.length });
+                    }
+                    if (action === 'output') {
+                        const pid = args.pid;
+                        if (!pid) return JSON.stringify({ error: 'pid 是必需的' });
+                        const proc = (global._bgProcesses || {})[String(pid)];
+                        if (!proc) return JSON.stringify({ error: `进程 ${pid} 不存在` });
+                        const tail = args.tail || 50;
+                        const stdoutLines = (proc.stdout || '').split('\n');
+                        const stderrLines = (proc.stderr || '').split('\n');
+                        return JSON.stringify({
+                            pid, running: proc.exitCode === undefined, exitCode: proc.exitCode,
+                            stdout: stdoutLines.slice(-tail).join('\n'),
+                            stderr: stderrLines.slice(-tail).join('\n')
+                        });
+                    }
+                    if (action === 'stop') {
+                        const pid = args.pid;
+                        if (!pid) return JSON.stringify({ error: 'pid 是必需的' });
+                        const proc = (global._bgProcesses || {})[String(pid)];
+                        if (!proc) return JSON.stringify({ error: `进程 ${pid} 不存在` });
+                        try {
+                            process.kill(Number(pid));
+                            delete global._bgProcesses[String(pid)];
+                            return JSON.stringify({ success: true, message: `进程 ${pid} 已终止` });
+                        } catch (e) {
+                            delete global._bgProcesses[String(pid)];
+                            return JSON.stringify({ error: `终止进程失败: ${e.message}` });
+                        }
+                    }
+                    if (action === 'stop_all') {
+                        const procs = global._bgProcesses || {};
+                        let killed = 0;
+                        for (const [pid, proc] of Object.entries(procs)) {
+                            try { process.kill(Number(pid)); killed++; } catch (e) {}
+                        }
+                        global._bgProcesses = {};
+                        if (global._previewServer) {
+                            global._previewServer.close();
+                            global._previewServer = null;
+                            global._previewPort = null;
+                            killed++;
+                        }
+                        return JSON.stringify({ success: true, message: `已终止 ${killed} 个进程` });
+                    }
+                    return JSON.stringify({ error: `未知操作: ${action}` });
+                }
+                case 'start_preview': {
+                    const http = require('http');
+                    const fs = require('fs');
+                    const url = require('url');
+                    const cmd = args.command || 'start';
+                    if (cmd === 'stop') {
+                        if (global._previewServer) {
+                            global._previewServer.close();
+                            const oldPort = global._previewPort;
+                            global._previewServer = null;
+                            global._previewPort = null;
+                            if (mainWindow && !mainWindow.isDestroyed()) {
+                                mainWindow.webContents.send('preview:close');
+                            }
+                            return JSON.stringify({ success: true, message: `预览服务器已停止 (端口 ${oldPort})` });
+                        }
+                        return JSON.stringify({ message: '没有运行中的预览服务器' });
+                    }
+                    const rootDir = args.root;
+                    if (!rootDir) return JSON.stringify({ error: 'root 目录路径是必需的' });
+                    const resolvedRoot = path.resolve(rootDir);
+                    if (!fs.existsSync(resolvedRoot) || !fs.statSync(resolvedRoot).isDirectory()) {
+                        return JSON.stringify({ error: `目录不存在: ${resolvedRoot}` });
+                    }
+                    if (global._previewServer) {
+                        global._previewServer.close();
+                    }
+                    const port = args.port || 8080;
+                    const mimeTypes = {
+                        '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript',
+                        '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg',
+                        '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+                        '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf',
+                        '.mp4': 'video/mp4', '.webm': 'video/webm', '.mp3': 'audio/mpeg',
+                        '.wav': 'audio/wav', '.wasm': 'application/wasm', '.txt': 'text/plain',
+                        '.xml': 'application/xml', '.pdf': 'application/pdf'
+                    };
+                    const server = http.createServer((req, res) => {
+                        const parsedUrl = url.parse(req.url);
+                        let pathname = decodeURIComponent(parsedUrl.pathname);
+                        if (pathname === '/') pathname = '/index.html';
+                        const filePath = path.join(resolvedRoot, pathname);
+                        if (!filePath.startsWith(resolvedRoot)) {
+                            res.writeHead(403); res.end('Forbidden'); return;
+                        }
+                        const ext = path.extname(filePath).toLowerCase();
+                        fs.readFile(filePath, (err, data) => {
+                            if (err) {
+                                if (err.code === 'ENOENT') { res.writeHead(404); res.end('Not Found'); }
+                                else { res.writeHead(500); res.end('Internal Error'); }
+                                return;
+                            }
+                            res.writeHead(200, {
+                                'Content-Type': mimeTypes[ext] || 'application/octet-stream',
+                                'Cache-Control': 'no-cache'
+                            });
+                            res.end(data);
+                        });
+                    });
+                    try {
+                        server.listen(port, '127.0.0.1', () => {
+                            global._previewServer = server;
+                            global._previewPort = port;
+                            if (mainWindow && !mainWindow.isDestroyed()) {
+                                mainWindow.webContents.send('preview:open', `http://127.0.0.1:${port}`);
+                            }
+                        });
+                        server.on('error', (e) => {
+                            if (e.code === 'EADDRINUSE') {
+                                const altPort = port + 1;
+                                server.listen(altPort, '127.0.0.1', () => {
+                                    global._previewServer = server;
+                                    global._previewPort = altPort;
+                                    if (mainWindow && !mainWindow.isDestroyed()) {
+                                        mainWindow.webContents.send('preview:open', `http://127.0.0.1:${altPort}`);
+                                    }
+                                });
+                            }
+                        });
+                        return JSON.stringify({ success: true, message: `预览服务器启动中... 端口 ${port}`, root: resolvedRoot, port });
+                    } catch (e) {
+                        return JSON.stringify({ error: `启动预览服务器失败: ${e.message}` });
                     }
                 }
                 case 'str_replace_based_edit_tool': {
@@ -3951,13 +4905,23 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                             end = range[1] === -1 ? lines.length : Math.min(lines.length, range[1]);
                         }
                         const numbered = lines.slice(start, end).map((l, i) => `${String(i + start + 1).padStart(6)}\t${l}`).join('\n');
-                        return JSON.stringify({ output: `Here's the result of running \`cat -n\` on ${resolvedPath}:\n${numbered}\n` });
+                        return JSON.stringify({ output: `文件内容：${resolvedPath}\n${numbered}\n` });
                     }
                     if (cmd === 'create') {
                         if (fs.existsSync(resolvedPath)) return JSON.stringify({ error: `File already exists at: ${resolvedPath}. Cannot overwrite with create.` });
                         const fileText = args.file_text || '';
+                        const validation = CodeValidator.validate(fileText, resolvedPath);
+                        if (!validation.valid) {
+                            return JSON.stringify({ error: `代码验证失败: ${validation.error}${validation.line ? ' (行 ' + validation.line + ')' : ''}`, validation, suggestion: validation.suggestion || '请修复语法错误后重试' });
+                        }
                         fs.mkdirSync(pathMod.dirname(resolvedPath), { recursive: true });
                         fs.writeFileSync(resolvedPath, fileText, 'utf-8');
+                        ChangeTracker.recordChange({
+                            type: 'create',
+                            toolName: 'str_replace_based_edit_tool',
+                            filePath: resolvedPath,
+                            newContent: fileText.substring(0, 2000)
+                        });
                         return JSON.stringify({ output: `File created successfully at: ${resolvedPath}` });
                     }
                     if (!fs.existsSync(resolvedPath)) return JSON.stringify({ error: `File does not exist: ${resolvedPath}` });
@@ -3971,7 +4935,20 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                         if (count > 1) return JSON.stringify({ error: `Multiple occurrences (${count}) of old_str. Please provide more context to make it unique.` });
                         const originalContent = content;
                         content = content.replace(oldStr, newStr);
+                        const validation = CodeValidator.validate(content, resolvedPath);
+                        if (!validation.valid) {
+                            return JSON.stringify({ error: `代码验证失败: ${validation.error}${validation.line ? ' (行 ' + validation.line + ')' : ''}`, validation, suggestion: validation.suggestion || '请修复语法错误后重试' });
+                        }
+                        BackupManager.createBackup(resolvedPath, 'str_replace_based_edit_tool', { command: 'str_replace', old_str: oldStr.substring(0, 200), new_str: newStr.substring(0, 200) });
                         fs.writeFileSync(resolvedPath, content, 'utf-8');
+                        ChangeTracker.recordChange({
+                            type: 'modify',
+                            toolName: 'str_replace_based_edit_tool',
+                            filePath: resolvedPath,
+                            oldContent: originalContent.substring(0, 2000),
+                            newContent: content.substring(0, 2000),
+                            diff: { old: oldStr.substring(0, 200), new: newStr.substring(0, 200) }
+                        });
                         try {
                             if (mainWindow && !mainWindow.isDestroyed()) {
                                 mainWindow.webContents.send('editor:show-diff', resolvedPath, originalContent, content);
@@ -3988,7 +4965,18 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                         const originalContent = content;
                         lines.splice(insertLine, 0, ...newStr.split('\n'));
                         const newContent = lines.join('\n');
+                        const validation = CodeValidator.validate(newContent, resolvedPath);
+                        if (!validation.valid) {
+                            return JSON.stringify({ error: `代码验证失败: ${validation.error}${validation.line ? ' (行 ' + validation.line + ')' : ''}`, validation, suggestion: validation.suggestion || '请修复语法错误后重试' });
+                        }
+                        BackupManager.createBackup(resolvedPath, 'str_replace_based_edit_tool', { command: 'insert', line: insertLine });
                         fs.writeFileSync(resolvedPath, newContent, 'utf-8');
+                        ChangeTracker.recordChange({
+                            type: 'modify',
+                            toolName: 'str_replace_based_edit_tool',
+                            filePath: resolvedPath,
+                            diff: { insertedAfter: insertLine, content: newStr.substring(0, 200) }
+                        });
                         try {
                             if (mainWindow && !mainWindow.isDestroyed()) {
                                 mainWindow.webContents.send('editor:show-diff', resolvedPath, originalContent, newContent);
@@ -4003,10 +4991,10 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                     const os = require('os');
                     const operation = args.operation;
                     const filePath = (args.file_path || '').replace(/^~/, os.homedir());
-                    if (!operation || !filePath) return JSON.stringify({ error: 'operation and file_path are required' });
-                    if (!fs.existsSync(filePath)) return JSON.stringify({ error: `File does not exist: ${filePath}` });
+                    if (!operation || !filePath) return JSON.stringify({ error: '需要 operation 和 file_path 参数' });
+                    if (!fs.existsSync(filePath)) return JSON.stringify({ error: `文件不存在：${filePath}` });
                     let data;
-                    try { data = JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch (e) { return JSON.stringify({ error: `Invalid JSON: ${e.message}` }); }
+                    try { data = JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch (e) { return JSON.stringify({ error: `无效的 JSON：${e.message}` }); }
                     const jp = args.json_path;
                     const pp = args.pretty_print !== false;
                     const resolveJsonPath = (obj, pathStr) => {
@@ -4033,7 +5021,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                         return JSON.stringify({ output: `Updated at ${jp}` });
                     }
                     if (operation === 'remove') {
-                        if (!jp) return JSON.stringify({ error: 'json_path is required for remove' });
+                        if (!jp) return JSON.stringify({ error: 'remove 操作需要 json_path 参数' });
                         const parts = jp.replace(/^\$\.?/, '').split(/\.|\[(\d+)\]/).filter(Boolean);
                         let cur = data;
                         for (let i = 0; i < parts.length - 1; i++) cur = cur[parts[i]];
@@ -4086,7 +5074,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                                                 const startLine = Math.max(0, i);
                                                 const endLine = Math.min(lines.length, i + 20);
                                                 const body = lines.slice(startLine, endLine).join('\n');
-                                                results.push({ file: fullPath, line: i + 1, body: args.print_body !== false ? body : '(body hidden)' });
+                                                results.push({ file: fullPath, line: i + 1, body: args.print_body !== false ? body : '(内容已隐藏)' });
                                             }
                                         }
                                     }
@@ -4126,6 +5114,12 @@ ${JSON.stringify(toTranslate, null, 2)}`;
         pendingApprovals.delete(approvalId);
     });
 
+    ipcMain.handle('ai:ask-user-respond', async (event, { askId, answer }) => {
+        if (activeWorker) {
+            activeWorker.postMessage({ type: 'ask_user_response', askId, answer });
+        }
+    });
+
     ipcMain.handle('ai:set-permission-mode', async (event, { mode }) => {
         if (!PERMISSION_MODES[mode]) return { error: `无效的权限模式: ${mode}` };
         currentPermissionMode = mode;
@@ -4162,7 +5156,8 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                 diagnose_crash: 'allow', install_progress: 'allow', web_search: 'allow',
                 get_current_context: 'allow', search_modpacks: 'allow', grep_search: 'allow',
                 glob_search: 'allow', web_fetch: 'allow', web_search_general: 'allow',
-                todo_write: 'allow', update_todo_list: 'allow'
+                todo_write: 'allow', update_todo_list: 'allow',
+                manage_core_memory: 'allow'
             }
         },
         full: {
@@ -4430,7 +5425,7 @@ ${toolDescriptions}
     let activeWorker = null;
 
     ipcMain.on('ai:chat-stream', async (event, params) => {
-        const { apiKey, model, messages, temperature, enableTools } = params;
+        const { apiKey, model, messages, temperature, enableTools, projectDir } = params;
         diagLog('chat-stream received');
         try {
             if (!apiKey) {
@@ -4517,43 +5512,52 @@ ${toolDescriptions}
                             break;
                         }
                         case 'approval_request':
-                            const { approvalId, toolName, risk, args } = msg;
-                            const pendingRecord = {
-                                resolve: (result) => {
+                            {
+                                const { approvalId, toolName, risk, args } = msg;
+                                const config = TOOL_CONFIG[toolName] || { risk: 'safe' };
+                                if (config.risk === 'safe') {
+                                    if (activeWorker) {
+                                        activeWorker.postMessage({ type: 'approval_response', approvalId, approved: true, toolName });
+                                    }
+                                    break;
+                                }
+                                const pendingRecord = {
+                                    resolve: (result) => {
+                                        if (activeWorker) {
+                                            activeWorker.postMessage({
+                                                type: 'approval_response',
+                                                approvalId,
+                                                approved: result.approved,
+                                                toolName
+                                            });
+                                        }
+                                    },
+                                    toolName,
+                                    win: event.sender
+                                };
+                                pendingApprovals.set(approvalId, pendingRecord);
+
+                                const timeout = setTimeout(() => {
+                                    pendingApprovals.delete(approvalId);
                                     if (activeWorker) {
                                         activeWorker.postMessage({
                                             type: 'approval_response',
                                             approvalId,
-                                            approved: result.approved,
+                                            approved: false,
                                             toolName
                                         });
                                     }
-                                },
-                                toolName,
-                                win: event.sender
-                            };
-                            pendingApprovals.set(approvalId, pendingRecord);
+                                }, 60000);
+                                pendingRecord.timeout = timeout;
 
-                            const timeout = setTimeout(() => {
-                                pendingApprovals.delete(approvalId);
-                                if (activeWorker) {
-                                    activeWorker.postMessage({
-                                        type: 'approval_response',
-                                        approvalId,
-                                        approved: false,
-                                        toolName
-                                    });
-                                }
-                            }, 60000);
-                            pendingRecord.timeout = timeout;
-
-                            event.sender.send('ai:chat-chunk', {
-                                type: 'approval_requested',
-                                approvalId,
-                                toolName,
-                                risk,
-                                args
-                            });
+                                event.sender.send('ai:chat-chunk', {
+                                    type: 'approval_requested',
+                                    approvalId,
+                                    toolName,
+                                    risk,
+                                    args
+                                });
+                            }
                             break;
                         case 'exec_tool':
                             (async () => {
@@ -4622,6 +5626,17 @@ ${toolDescriptions}
                                 activeWorker = null;
                             }
                             break;
+                    }
+                    if (msg.type === 'ask_user_request') {
+                        if (mainWindow && !mainWindow.isDestroyed()) {
+                            mainWindow.webContents.send('ai:chat-chunk', {
+                                type: 'ask_user_requested',
+                                askId: msg.askId,
+                                question: msg.question,
+                                options: msg.options,
+                                context: msg.context
+                            });
+                        }
                     }
                 } catch (e) {
                     diagLog('worker msg error: ' + e.message);
@@ -4906,6 +5921,92 @@ ${toolDescriptions}
 
     ipcMain.handle('ai:mcp-call', async (event, { serverName, toolName, args }) => {
         return await callMcpTool(serverName, toolName, args);
+    });
+
+    ipcMain.handle('editor:code-complete', async (event, params) => {
+        const { prefix, suffix, language, filePath } = params;
+        try {
+            const store = loadStore();
+            let apiKey = store.versepc_ai_api_key;
+            let model = store.versepc_ai_model;
+            if (!apiKey || !model) return { text: '' };
+
+            const customProvider = (() => {
+                try { return store.versepc_ai_custom_provider ? JSON.parse(store.versepc_ai_custom_provider) : null; } catch { return null; }
+            })();
+
+            let apiUrl, headers;
+            if (customProvider && customProvider.baseUrl && model === customProvider.modelId) {
+                const url = customProvider.baseUrl.replace(/\/+$/, '') + '/chat/completions';
+                apiUrl = new URL(url);
+                headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${customProvider.apiKey || apiKey}` };
+            } else {
+                const provider = getProviderForModel(model);
+                apiUrl = new URL(provider.baseUrl + '/chat/completions');
+                headers = buildApiHeaders(provider, apiKey);
+            }
+
+            const systemPrompt = `You are a code completion engine. Given the cursor position in a file, generate ONLY the code that should be inserted at the cursor. Rules:
+- Output ONLY the code to insert, no explanations, no markdown fences
+- Match the existing code style (indentation, brackets, etc.)
+- Complete the current line/expression naturally
+- Keep completions concise (1-15 lines)
+- Do not repeat code that is already in the prefix or suffix`;
+
+            const userPrompt = `Language: ${language}
+File: ${filePath || 'unknown'}
+
+=== CODE BEFORE CURSOR (prefix) ===
+${prefix.slice(-2000)}
+
+=== CODE AFTER CURSOR (suffix) ===
+${suffix.slice(0, 1000)}
+
+Complete the code at the cursor position. Output ONLY the code to insert:`;
+
+            const bodyStr = JSON.stringify({
+                model: model,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userPrompt }
+                ],
+                temperature: 0.2,
+                max_tokens: 256,
+                stream: false
+            });
+
+            const options = {
+                hostname: apiUrl.hostname,
+                path: apiUrl.pathname,
+                method: 'POST',
+                headers: { ...headers, 'Content-Length': Buffer.byteLength(bodyStr), 'Connection': 'close' },
+                agent: false
+            };
+            const proto = apiUrl.protocol === 'https:' ? https : http;
+
+            const text = await new Promise((resolve, reject) => {
+                const req = proto.request(options, (res) => {
+                    let data = '';
+                    res.on('data', chunk => data += chunk);
+                    res.on('end', () => {
+                        try {
+                            const json = JSON.parse(data);
+                            if (json.error) { reject(new Error(json.error.message || JSON.stringify(json.error))); return; }
+                            resolve(json.choices?.[0]?.message?.content || '');
+                        } catch { resolve(data); }
+                    });
+                });
+                const timeout = setTimeout(() => { req.destroy(new Error('timeout')); }, 10000);
+                req.on('error', (e) => { clearTimeout(timeout); reject(e); });
+                req.write(bodyStr);
+                req.end();
+            });
+
+            let cleaned = text.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '').trim();
+            return { text: cleaned };
+        } catch (e) {
+            return { text: '', error: e.message };
+        }
     });
 }
 
