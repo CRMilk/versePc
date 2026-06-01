@@ -3349,7 +3349,16 @@ Call attempt_completion when all operations are done and verified.
             return;
         }
 
-        if (data.type === 'tool_call_result') {
+        if (data.type === 'tool_call_result' || (data.type === 'say' && data.say === 'tool_result')) {
+            if (data.text && !data.name) {
+                try {
+                    const parsed = JSON.parse(data.text);
+                    data.id = data.id || parsed.id;
+                    data.name = data.name || parsed.name;
+                    data.result = data.result || parsed.result;
+                    data.elapsed = data.elapsed || parsed.elapsed;
+                } catch (e) {}
+            }
             if (data.name === 'todo_write') {
                 try {
                     const parsed = JSON.parse(data.result || '{}');
