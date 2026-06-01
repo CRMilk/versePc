@@ -4635,12 +4635,14 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                         }
                     }
                     try {
-                        const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash';
-                        const shellArgs = process.platform === 'win32' ? ['/c', cmd] : ['-c', cmd];
+                        const isWin = process.platform === 'win32';
+                        const shell = isWin ? 'cmd.exe' : '/bin/bash';
+                        const utf8Cmd = isWin ? `chcp 65001 >nul 2>nul && ${cmd}` : cmd;
+                        const shellArgs = isWin ? ['/c', utf8Cmd] : ['-c', utf8Cmd];
                         const child = spawn(shell, shellArgs, {
                             cwd: workDir, windowsHide: true,
                             stdio: ['ignore', 'pipe', 'pipe'],
-                            env: { ...process.env, PYTHONUNBUFFERED: '1' }
+                            env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' }
                         });
                         let stdout = '', stderr = '';
                         let killed = false;
@@ -4648,6 +4650,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                             killed = true;
                             try { child.kill('SIGTERM'); } catch (e) {}
                         }, timeoutSec * 1000);
+                        const _decode = (buf) => buf.toString('utf-8');
                         const _sendStream = (type, data) => {
                             if (!streamId || !mainWindow || mainWindow.isDestroyed()) return;
                             try {
@@ -4659,12 +4662,12 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                             } catch (e) {}
                         };
                         child.stdout.on('data', d => {
-                            const text = d.toString();
+                            const text = _decode(d);
                             stdout += text;
                             _sendStream('chunk', text);
                         });
                         child.stderr.on('data', d => {
-                            const text = d.toString();
+                            const text = _decode(d);
                             stderr += text;
                             _sendStream('chunk', text);
                         });
