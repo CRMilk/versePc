@@ -3261,20 +3261,37 @@ Call attempt_completion when all operations are done and verified.
                 this._thinkingContentEl = this.thinkingBubble.querySelector('.ai-thinking-content');
                 this._thinkingTimerEl = this.thinkingBubble.querySelector('.ai-thinking-timer');
             } else {
-                const CHEVRON_S = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><polyline points="6 9 12 15 18 9"/></svg>';
-                const bubble = document.createElement('div');
-                bubble.className = 'ai-thinking-block';
-                bubble.dataset.state = 'streaming';
-                bubble.dataset.thinkingContent = '';
-                const preview = document.createElement('div');
-                preview.className = 'ai-thinking-preview';
-                bubble.innerHTML = `<div class="ai-thinking-header" onclick="AIChat.toggleReasoningBlock(this.parentElement)"><span class="ai-thinking-label">思考中...</span><span class="ai-thinking-timer"></span><span class="ai-thinking-chevron">${CHEVRON_S}</span></div><div class="ai-thinking-body"><div class="ai-thinking-content"></div></div>`;
-                bubble.appendChild(preview);
-                this.thinkingBubble = bubble;
-                this._thinkingContentEl = bubble.querySelector('.ai-thinking-content');
-                this._thinkingTimerEl = bubble.querySelector('.ai-thinking-timer');
-                this._thinkingPreviewEl = preview;
-                this.appendWorkflowBlock(bubble);
+                const container = this.currentWorkflowContent || this._messagesContainer;
+                const existing = container ? container.querySelector('.ai-thinking-block[data-state="done"]') : null;
+                if (existing) {
+                    existing.dataset.state = 'streaming';
+                    existing.dataset.thinkingContent = '';
+                    const label = existing.querySelector('.ai-thinking-label');
+                    if (label) label.textContent = '思考中...';
+                    const timer = existing.querySelector('.ai-thinking-timer');
+                    if (timer) timer.textContent = '';
+                    this.thinkingBubble = existing;
+                    this._thinkingContentEl = existing.querySelector('.ai-thinking-content');
+                    if (this._thinkingContentEl) this._thinkingContentEl.textContent = '';
+                    this._thinkingTimerEl = timer;
+                    this._thinkingPreviewEl = existing.querySelector('.ai-thinking-preview');
+                    if (this._thinkingPreviewEl) this._thinkingPreviewEl.textContent = '';
+                } else {
+                    const CHEVRON_S = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><polyline points="6 9 12 15 18 9"/></svg>';
+                    const bubble = document.createElement('div');
+                    bubble.className = 'ai-thinking-block';
+                    bubble.dataset.state = 'streaming';
+                    bubble.dataset.thinkingContent = '';
+                    const preview = document.createElement('div');
+                    preview.className = 'ai-thinking-preview';
+                    bubble.innerHTML = `<div class="ai-thinking-header" onclick="AIChat.toggleReasoningBlock(this.parentElement)"><span class="ai-thinking-label">思考中...</span><span class="ai-thinking-timer"></span><span class="ai-thinking-chevron">${CHEVRON_S}</span></div><div class="ai-thinking-body"><div class="ai-thinking-content"></div></div>`;
+                    bubble.appendChild(preview);
+                    this.thinkingBubble = bubble;
+                    this._thinkingContentEl = bubble.querySelector('.ai-thinking-content');
+                    this._thinkingTimerEl = bubble.querySelector('.ai-thinking-timer');
+                    this._thinkingPreviewEl = preview;
+                    this.appendWorkflowBlock(bubble);
+                }
             }
 
             this._reasoningTimer = setInterval(() => {
