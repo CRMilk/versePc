@@ -1,0 +1,487 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VersePC Promo</title>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0A0D14; overflow:hidden; }
+[data-composition-id="versepc-promo"] {
+  width:1920px; height:1080px; position:relative; overflow:hidden; background:#0A0D14;
+}
+.scene {
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  visibility:hidden; opacity:0;
+}
+.scene-inner {
+  width:100%; height:100%;
+  display:flex; padding:100px 120px;
+  gap:40px; position:relative; z-index:1;
+}
+.left { flex:1; display:flex; flex-direction:column; justify-content:center; gap:16px; }
+.right { flex:1; display:flex; align-items:center; justify-content:center; }
+.scene-label {
+  font-family:"JetBrains Mono",monospace; font-size:16px;
+  color:#FFB347; letter-spacing:.1em; margin-bottom:8px;
+}
+.scene-title {
+  font-family:"Schibsted Grotesk",sans-serif; font-weight:900;
+  font-size:80px; color:#E8ECF2; line-height:1.1; letter-spacing:-.02em;
+}
+.scene-title .hl-g { color:#6AAA3A; }
+.scene-title .hl-o { color:#FFB347; }
+.scene-desc {
+  font-size:26px; color:#7790A8; line-height:1.5;
+}
+.badge-row { display:flex; gap:12px; margin-top:8px; }
+.badge {
+  padding:8px 18px; border:1.5px solid rgba(255,255,255,.1);
+  background:rgba(20,25,36,.8); font-family:"JetBrains Mono",monospace;
+  font-size:16px; color:#FFB347; letter-spacing:.04em;
+}
+.stat-row { display:flex; gap:48px; margin-top:8px; }
+.stat-val {
+  font-family:"Schibsted Grotesk",sans-serif; font-weight:900;
+  font-size:56px; color:#FFB347; line-height:1;
+}
+.stat-lbl { font-size:15px; color:#7790A8; font-family:"JetBrains Mono",monospace; margin-top:4px; }
+.bg-grid {
+  position:absolute; inset:0; z-index:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.015) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.015) 1px,transparent 1px);
+  background-size:80px 80px;
+}
+.bg-glow {
+  position:absolute; border-radius:50%; filter:blur(120px); z-index:0;
+}
+.glow-gold { background:#FFB347; width:600px; height:600px; top:50%; right:-100px; transform:translateY(-50%); opacity:.08; }
+.glow-green { background:#6AAA3A; width:500px; height:500px; bottom:-100px; left:20%; opacity:.08; }
+.glow-mid { background:#FFB347; width:700px; height:700px; top:50%; left:50%; transform:translate(-50%,-50%); opacity:.06; }
+
+/* Scene 0 - Title */
+.scene-0 .s0-center { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:32px; padding:100px; }
+.s0-logo { width:130px; height:130px; border:3px solid #FFB347; background:rgba(20,25,36,.9); display:flex; align-items:center; justify-content:center; box-shadow:0 0 60px rgba(255,179,71,.2); }
+.s0-logo img { width:70px; height:70px; image-rendering:pixelated; }
+.s0-name { font-family:"Schibsted Grotesk",sans-serif; font-weight:900; font-size:130px; color:#E8ECF2; letter-spacing:.04em; line-height:1; text-align:center; }
+.s0-name .hl-o { color:#FFB347; }
+.s0-tag { font-size:34px; color:#7790A8; letter-spacing:.08em; text-align:center; }
+.block-dot {
+  position:absolute; z-index:2;
+  width:18px; height:18px; background:rgba(106,170,58,.3);
+  border:1px solid rgba(106,170,58,.4);
+}
+.block-dot:nth-child(1) { right:120px; top:140px; }
+.block-dot:nth-child(2) { left:140px; bottom:180px; width:24px; height:24px; background:rgba(255,179,71,.3); border-color:rgba(255,179,71,.4); }
+
+/* Mod cards */
+.mod-card {
+  background:#141924; border:1px solid rgba(255,255,255,.06);
+  padding:18px; display:flex; gap:14px; width:360px;
+}
+.mod-card:nth-child(odd) { align-self:flex-end; }
+.mod-card:nth-child(even) { align-self:flex-start; }
+.mc-icon { width:48px; height:48px; background:rgba(106,170,58,.15); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:22px; }
+.mc-info { flex:1; display:flex; flex-direction:column; gap:6px; }
+.mc-name { font-size:18px; font-weight:700; color:#E8ECF2; font-family:"Schibsted Grotesk",sans-serif; }
+.mc-meta { font-size:14px; color:#7790A8; font-family:"JetBrains Mono",monospace; }
+.mc-bar { height:3px; background:rgba(106,170,58,.15); border-radius:2px; overflow:hidden; }
+.mc-bar-fill { height:100%; background:#6AAA3A; border-radius:2px; width:100%; }
+
+/* AI chat */
+.chat-box {
+  width:440px; background:#141924; border:1px solid rgba(255,255,255,.06); border-radius:6px; overflow:hidden;
+}
+.chat-hdr { padding:12px 18px; background:rgba(20,25,36,.95); border-bottom:1px solid rgba(255,255,255,.06); display:flex; align-items:center; gap:8px; }
+.chat-dot { width:10px; height:10px; border-radius:50%; background:#6AAA3A; box-shadow:0 0 6px rgba(106,170,58,.4); }
+.chat-title { font-family:"JetBrains Mono",monospace; font-size:14px; color:#7790A8; }
+.chat-body { padding:16px; display:flex; flex-direction:column; gap:12px; }
+.chat-msg { max-width:85%; padding:10px 14px; font-size:17px; line-height:1.5; border-radius:5px; color:#E8ECF2; }
+.chat-msg.usr { align-self:flex-end; background:rgba(106,170,58,.15); border:1px solid rgba(106,170,58,.2); font-size:16px; }
+.chat-msg.bot { align-self:flex-start; background:rgba(255,179,71,.08); border:1px solid rgba(255,179,71,.15); }
+.chat-inp { margin:0 16px 14px; padding:10px 14px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:5px; font-family:"JetBrains Mono",monospace; font-size:14px; color:#7790A8; }
+
+/* Pack cards */
+.pack-card {
+  width:380px; background:#141924; border:1px solid rgba(255,255,255,.06); padding:18px; display:flex; gap:14px;
+}
+.pack-card:nth-child(odd) { align-self:flex-end; }
+.pack-card:nth-child(even) { align-self:flex-start; }
+.pc-thumb { width:56px; height:56px; background:rgba(255,179,71,.1); border:1px solid rgba(255,179,71,.2); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:26px; }
+.pc-info { flex:1; display:flex; flex-direction:column; gap:5px; }
+.pc-name { font-size:19px; font-weight:700; color:#E8ECF2; font-family:"Schibsted Grotesk",sans-serif; }
+.pc-desc { font-size:14px; color:#7790A8; }
+.pc-tag { display:inline-flex; padding:3px 10px; background:rgba(106,170,58,.15); border:1px solid rgba(106,170,58,.25); font-size:12px; color:#6AAA3A; font-family:"JetBrains Mono",monospace; }
+
+/* Tool cards */
+.tool-row { display:flex; flex-direction:column; gap:16px; }
+.tool-row-top { flex:1; display:flex; align-items:flex-start; gap:40px; margin-bottom:20px; }
+.tool-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; flex:1; }
+.tool-card {
+  background:#141924; border:1px solid rgba(255,255,255,.05); padding:18px; display:flex; flex-direction:column; gap:10px;
+}
+.tc-icon { font-size:26px; }
+.tc-title { font-family:"Schibsted Grotesk",sans-serif; font-weight:700; font-size:20px; color:#E8ECF2; }
+.tc-desc { font-size:14px; color:#7790A8; font-family:"JetBrains Mono",monospace; line-height:1.4; }
+.tc-bar { height:2px; background:rgba(255,255,255,.06); border-radius:1px; overflow:hidden; margin-top:auto; }
+.tc-bar-fill { height:100%; background:#6AAA3A; border-radius:1px; }
+.tool-card:nth-child(2) .tc-bar-fill { background:#FFB347; width:80%; }
+.tool-card:nth-child(3) .tc-bar-fill { width:65%; }
+.tool-card:nth-child(4) .tc-bar-fill { background:#FFB347; }
+
+/* Version ring */
+.v-ring-wrap { position:relative; width:340px; height:340px; }
+.v-ring { position:absolute; inset:0; border:3px solid rgba(106,170,58,.18); border-radius:50%; }
+.v-ring-i { position:absolute; inset:50px; border:2px dashed rgba(255,179,71,.12); border-radius:50%; }
+.v-badge {
+  position:absolute; font-family:"JetBrains Mono",monospace; font-size:26px; font-weight:700;
+  color:#E8ECF2; background:rgba(10,13,20,.92); border:2px solid rgba(106,170,58,.4); padding:5px 16px; white-space:nowrap;
+}
+.v-b1 { top:2%; left:50%; transform:translateX(-50%); }
+.v-b2 { right:-5px; top:40%; transform:translateY(-50%); }
+.v-b3 { bottom:2%; left:50%; transform:translateX(-50%); }
+.v-b4 { left:-5px; top:40%; transform:translateY(-50%); }
+.v-play {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:100px; height:100px; border-radius:50%; background:#6AAA3A;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 0 50px rgba(106,170,58,.35);
+}
+.v-play::after { content:""; border:solid; border-width:18px 0 18px 34px; border-color:transparent transparent transparent #0A0D14; margin-left:6px; }
+
+/* Scene 6 CTA */
+.s6-center { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; padding:100px; }
+.s6-logo { width:110px; height:110px; border:3px solid #FFB347; background:rgba(20,25,36,.9); display:flex; align-items:center; justify-content:center; box-shadow:0 0 60px rgba(255,179,71,.2); }
+.s6-logo img { width:60px; height:60px; image-rendering:pixelated; }
+.s6-head { font-family:"Schibsted Grotesk",sans-serif; font-weight:900; font-size:90px; color:#E8ECF2; text-align:center; line-height:1.1; letter-spacing:.02em; }
+.s6-head .hl-o { color:#FFB347; }
+.s6-sub { font-size:28px; color:#7790A8; text-align:center; line-height:1.5; }
+.cta-btns { display:flex; gap:24px; }
+.cta-btn { padding:16px 44px; font-family:"Schibsted Grotesk",sans-serif; font-weight:700; font-size:26px; letter-spacing:.04em; }
+.cta-primary { background:#6AAA3A; color:#0A0D14; box-shadow:0 0 40px rgba(106,170,58,.3); border:none; }
+.cta-secondary { background:transparent; color:#E8ECF2; border:2px solid rgba(255,255,255,.15); }
+.s6-foot { font-family:"JetBrains Mono",monospace; font-size:15px; color:rgba(255,255,255,.15); position:absolute; bottom:36px; }
+
+/* pixel decor */
+.px-row { position:absolute; bottom:70px; left:50%; transform:translateX(-50%); display:flex; gap:3px; z-index:2; }
+.px { width:7px; height:7px; background:rgba(106,170,58,.25); }
+.px:nth-child(3n) { background:rgba(255,179,71,.25); }
+.scene-num { position:absolute; top:60px; left:60px; font-family:"JetBrains Mono",monospace; font-size:22px; color:rgba(255,179,71,.3); z-index:2; }
+</style>
+</head>
+<body>
+
+<div data-composition-id="versepc-promo" data-width="1920" data-height="1080" data-start="0">
+
+  <!-- Common BG layers -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow glow-gold"></div>
+  <div class="bg-glow glow-green"></div>
+
+  <!-- SCENE 0: Title -->
+  <div class="scene scene-0" id="s0">
+    <div class="scene-inner">
+      <div class="s0-center">
+        <div class="s0-logo"><img src="assets/icon.svg" alt="VersePC"></div>
+        <div class="s0-name"><span class="hl-o">Verse</span>PC</div>
+        <div class="s0-tag">新 一 代 Minecraft 启 动 器</div>
+      </div>
+    </div>
+    <div class="block-dot"></div>
+    <div class="block-dot"></div>
+  </div>
+
+  <!-- SCENE 1: Launch -->
+  <div class="scene" id="s1">
+    <div class="scene-inner">
+      <div class="left">
+        <div class="scene-label">// 01 — 启动</div>
+        <div class="scene-title">一键启动<br><span class="hl-g">无限可能</span></div>
+        <div class="scene-desc">多版本管理 · 模组加载器自动配置<br>从经典版本到最新快照，一切就绪</div>
+        <div class="badge-row">
+          <div class="badge">Forge</div><div class="badge">Fabric</div>
+          <div class="badge">NeoForge</div><div class="badge">OptiFine</div>
+        </div>
+      </div>
+      <div class="right">
+        <div class="v-ring-wrap">
+          <div class="v-ring"></div><div class="v-ring-i"></div>
+          <div class="v-badge v-b1">1.21.5</div>
+          <div class="v-badge v-b2">1.20.1</div>
+          <div class="v-badge v-b3">1.18.2</div>
+          <div class="v-badge v-b4">1.16.5</div>
+          <div class="v-play"></div>
+        </div>
+      </div>
+    </div>
+    <div class="scene-num">01</div>
+  </div>
+
+  <!-- SCENE 2: Mods -->
+  <div class="scene" id="s2">
+    <div class="scene-inner">
+      <div class="left">
+        <div class="scene-label">// 02 — 模组</div>
+        <div class="scene-title">模组管理<br><span class="hl-o">尽在掌握</span></div>
+        <div class="scene-desc">支持 Forge · Fabric · NeoForge · OptiFine<br>智能依赖解析，告别模组冲突</div>
+      </div>
+      <div class="right" style="flex-direction:column; gap:14px;">
+        <div class="mod-card">
+          <div class="mc-icon">🔮</div>
+          <div class="mc-info">
+            <div class="mc-name">OptiFine</div>
+            <div class="mc-meta">v1.21.5 · 已启用</div>
+            <div class="mc-bar"><div class="mc-bar-fill"></div></div>
+          </div>
+        </div>
+        <div class="mod-card">
+          <div class="mc-icon">📦</div>
+          <div class="mc-info">
+            <div class="mc-name">Just Enough Items</div>
+            <div class="mc-meta">v19.21.0 · 已启用</div>
+            <div class="mc-bar"><div class="mc-bar-fill"></div></div>
+          </div>
+        </div>
+        <div class="mod-card">
+          <div class="mc-icon">🌍</div>
+          <div class="mc-info">
+            <div class="mc-name">JourneyMap</div>
+            <div class="mc-meta">v6.0.0 · 已启用</div>
+            <div class="mc-bar"><div class="mc-bar-fill"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="scene-num">02</div>
+  </div>
+
+  <!-- SCENE 3: AI -->
+  <div class="scene" id="s3">
+    <div class="scene-inner">
+      <div class="left">
+        <div class="scene-label">// 03 — AI</div>
+        <div class="scene-title">内置 AI<br><span class="hl-o">智能问答</span></div>
+        <div class="scene-desc">崩溃分析 · 模组推荐 · 配置优化<br>你的专属 Minecraft 技术顾问</div>
+      </div>
+      <div class="right">
+        <div class="chat-box">
+          <div class="chat-hdr"><div class="chat-dot"></div><div class="chat-title">verse-ai</div></div>
+          <div class="chat-body">
+            <div class="chat-msg usr">为什么我的 Forge 启动崩溃？</div>
+            <div class="chat-msg bot">检测到你的 OptiFine 版本与<br>Forge 47.3.0 不兼容。<br>推荐升级到 OptiFine HD U I1。</div>
+            <div class="chat-msg usr">帮我安装</div>
+            <div class="chat-msg bot">已自动下载并安装 ✅</div>
+          </div>
+          <div class="chat-inp">输入你的问题...</div>
+        </div>
+      </div>
+    </div>
+    <div class="scene-num">03</div>
+  </div>
+
+  <!-- SCENE 4: Modpacks -->
+  <div class="scene" id="s4">
+    <div class="scene-inner">
+      <div class="left">
+        <div class="scene-label">// 04 — 整合包</div>
+        <div class="scene-title">整合包<br><span class="hl-o">一键安装</span></div>
+        <div class="scene-desc">支持 CurseForge · Modrinth 格式导入<br>自动下载依赖，即装即玩</div>
+        <div class="stat-row">
+          <div><div class="stat-val">50+</div><div class="stat-lbl">内置整合包</div></div>
+          <div><div class="stat-val">1-Click</div><div class="stat-lbl">一键导入</div></div>
+        </div>
+      </div>
+      <div class="right" style="flex-direction:column; gap:12px;">
+        <div class="pack-card">
+          <div class="pc-thumb">⚔️</div>
+          <div class="pc-info">
+            <div class="pc-name">RLCraft</div>
+            <div class="pc-desc">高难度生存整合包</div>
+            <div><span class="pc-tag">CurseForge</span></div>
+          </div>
+        </div>
+        <div class="pack-card">
+          <div class="pc-thumb">🏭</div>
+          <div class="pc-info">
+            <div class="pc-name">All the Mods 10</div>
+            <div class="pc-desc">400+ 模组科技魔法</div>
+            <div><span class="pc-tag">Modrinth</span></div>
+          </div>
+        </div>
+        <div class="pack-card">
+          <div class="pc-thumb">🧩</div>
+          <div class="pc-info">
+            <div class="pc-name">Better MC</div>
+            <div class="pc-desc">原版增强 · 轻量优化</div>
+            <div><span class="pc-tag">CurseForge</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="scene-num">04</div>
+  </div>
+
+  <!-- SCENE 5: Tools -->
+  <div class="scene" id="s5">
+    <div class="scene-inner" style="flex-direction:column; gap:28px;">
+      <div class="tool-row-top">
+        <div>
+          <div class="scene-label">// 05 — 工具</div>
+          <div class="scene-title">开发者<br><span class="hl-g">全能工具箱</span></div>
+        </div>
+        <div class="scene-desc" style="margin-left:auto; align-self:flex-end; text-align:right;">
+          代码编辑器 · 终端 · 文件管理 · 崩溃分析<br>一切尽在 VersePC
+        </div>
+      </div>
+      <div class="tool-grid">
+        <div class="tool-card">
+          <div class="tc-icon">{ }</div>
+          <div class="tc-title">Monaco 编辑器</div>
+          <div class="tc-desc">VS Code 同款内核<br>语法高亮 · 自动补全</div>
+          <div class="tc-bar"><div class="tc-bar-fill" style="width:90%"></div></div>
+        </div>
+        <div class="tool-card">
+          <div class="tc-icon">&gt;_</div>
+          <div class="tc-title">内置终端</div>
+          <div class="tc-desc">xterm.js 驱动<br>GPU 加速渲染</div>
+          <div class="tc-bar"><div class="tc-bar-fill"></div></div>
+        </div>
+        <div class="tool-card">
+          <div class="tc-icon">📁</div>
+          <div class="tc-title">文件浏览器</div>
+          <div class="tc-desc">像 IDE 一样管理<br>实例文件与配置</div>
+          <div class="tc-bar"><div class="tc-bar-fill"></div></div>
+        </div>
+        <div class="tool-card">
+          <div class="tc-icon">🐛</div>
+          <div class="tc-title">崩溃分析器</div>
+          <div class="tc-desc">解析错误日志<br>定位冲突模组</div>
+          <div class="tc-bar"><div class="tc-bar-fill"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="scene-num">05</div>
+  </div>
+
+  <!-- SCENE 6: CTA -->
+  <div class="scene" id="s6">
+    <div class="scene-inner">
+      <div class="s6-center">
+        <div class="s6-logo"><img src="assets/icon.svg" alt="VersePC"></div>
+        <div class="s6-head">开启你的<br><span class="hl-o">Minecraft</span> 之旅</div>
+        <div class="s6-sub">免费 · 开源 · 永久更新<br>让每一次方块冒险更加精彩</div>
+        <div class="cta-btns">
+          <div class="cta-btn cta-primary">立即下载</div>
+          <div class="cta-btn cta-secondary">GitHub</div>
+        </div>
+      </div>
+      <div class="s6-foot">VersePC v1.0.0 · github.com/doujie081231/versePc</div>
+    </div>
+    <div class="px-row">
+      <div class="px"></div><div class="px"></div><div class="px"></div>
+      <div class="px"></div><div class="px"></div><div class="px"></div>
+      <div class="px"></div><div class="px"></div><div class="px"></div>
+      <div class="px"></div><div class="px"></div><div class="px"></div>
+      <div class="px"></div><div class="px"></div><div class="px"></div>
+      <div class="px"></div><div class="px"></div><div class="px"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script>
+window.__timelines = window.__timelines || {};
+gsap.defaults({ overwrite:false });
+
+const tl = gsap.timeline({ paused:true });
+
+// === COMMON BG ===
+tl.from(".bg-grid", { opacity:0, duration:0.5 }, 0);
+tl.from(".glow-gold", { scale:.5, opacity:0, duration:1.2, ease:"power2.out" }, 0);
+tl.from(".glow-green", { scale:.6, opacity:0, duration:1, ease:"power2.out" }, .2);
+
+// === SCENE 0: TITLE (0s-5s) ===
+tl.set("#s0", { autoAlpha:1 }, .3);
+tl.from("#s0 .s0-logo",  { scale:.2, opacity:0, duration:.7, ease:"back.out(1.7)" }, .5);
+tl.from("#s0 .s0-name",  { y:60, opacity:0, duration:.6, ease:"expo.out" }, 1.2);
+tl.from("#s0 .s0-tag",   { y:30, opacity:0, duration:.5, ease:"power3.out" }, 1.7);
+tl.from("#s0 .block-dot",{ scale:0, opacity:0, stagger:.1, duration:.35, ease:"back.out(2)" }, 1.4);
+tl.to("#s0", { autoAlpha:0, duration:.35, ease:"power2.in" }, 4.7);
+
+// === SCENE 1: LAUNCH (5s-10.5s) ===
+tl.set("#s1", { autoAlpha:1 }, 5);
+tl.from("#s1 .scene-num", { opacity:0, duration:.3 }, 5.1);
+tl.from("#s1 .scene-label",{ x:-30, opacity:0, duration:.4, ease:"power3.out" }, 5.2);
+tl.from("#s1 .scene-title",{ y:50, opacity:0, duration:.6, ease:"expo.out" }, 5.4);
+tl.from("#s1 .scene-desc", { y:30, opacity:0, duration:.5, ease:"power3.out" }, 5.8);
+tl.from("#s1 .badge",      { y:20, opacity:0, stagger:.08, duration:.4, ease:"power2.out" }, 6.1);
+tl.from("#s1 .v-ring",     { scale:.5, opacity:0, duration:.65, ease:"power3.out" }, 5.5);
+tl.from("#s1 .v-ring-i",   { scale:0, opacity:0, duration:.45, ease:"power2.out" }, 5.8);
+tl.from("#s1 .v-badge",    { scale:0, opacity:0, stagger:.1, duration:.4, ease:"back.out(1.5)" }, 6);
+tl.from("#s1 .v-play",     { scale:0, opacity:0, duration:.5, ease:"back.out(2)" }, 6.5);
+tl.to("#s1 .v-play", { boxShadow:"0 0 80px rgba(106,170,58,.5)", duration:1, repeat:1, yoyo:true, ease:"sine.inOut" }, 7.5);
+tl.to("#s1", { autoAlpha:0, duration:.35, ease:"power2.in" }, 10.2);
+
+// === SCENE 2: MODS (10.5s-16s) ===
+tl.set("#s2", { autoAlpha:1 }, 10.5);
+tl.from("#s2 .scene-num", { opacity:0, duration:.3 }, 10.6);
+tl.from("#s2 .scene-label",{ x:-30, opacity:0, duration:.4, ease:"power3.out" }, 10.7);
+tl.from("#s2 .scene-title",{ y:50, opacity:0, duration:.6, ease:"expo.out" }, 10.9);
+tl.from("#s2 .scene-desc", { y:30, opacity:0, duration:.5, ease:"power3.out" }, 11.3);
+tl.from("#s2 .mod-card",   { x:60, opacity:0, stagger:.15, duration:.5, ease:"power3.out" }, 10.8);
+tl.to("#s2", { autoAlpha:0, duration:.35, ease:"power2.in" }, 15.7);
+
+// === SCENE 3: AI (16s-21.5s) ===
+tl.set("#s3", { autoAlpha:1 }, 16);
+tl.from("#s3 .scene-num", { opacity:0, duration:.3 }, 16.1);
+tl.from("#s3 .scene-label",{ x:-30, opacity:0, duration:.4, ease:"power3.out" }, 16.2);
+tl.from("#s3 .scene-title",{ y:50, opacity:0, duration:.6, ease:"expo.out" }, 16.4);
+tl.from("#s3 .scene-desc", { y:30, opacity:0, duration:.5, ease:"power3.out" }, 16.8);
+tl.from("#s3 .chat-box",   { scale:.85, opacity:0, duration:.6, ease:"power3.out" }, 16.5);
+tl.from("#s3 .chat-msg.usr",{ x:30, opacity:0, stagger:.25, duration:.4, ease:"power3.out" }, 17.2);
+tl.from("#s3 .chat-msg.bot",{ x:-30, opacity:0, stagger:.25, duration:.4, ease:"power3.out" }, 17.4);
+tl.from("#s3 .chat-inp",   { opacity:0, y:8, duration:.3 }, 18.5);
+tl.to("#s3", { autoAlpha:0, duration:.35, ease:"power2.in" }, 21.2);
+
+// === SCENE 4: MODPACKS (21.5s-27s) ===
+tl.set("#s4", { autoAlpha:1 }, 21.5);
+tl.from("#s4 .scene-num", { opacity:0, duration:.3 }, 21.6);
+tl.from("#s4 .scene-label",{ x:-30, opacity:0, duration:.4, ease:"power3.out" }, 21.7);
+tl.from("#s4 .scene-title",{ y:50, opacity:0, duration:.6, ease:"expo.out" }, 21.9);
+tl.from("#s4 .scene-desc", { y:30, opacity:0, duration:.5, ease:"power3.out" }, 22.3);
+tl.from("#s4 .pack-card",  { x:60, opacity:0, stagger:.15, duration:.5, ease:"power3.out" }, 21.9);
+tl.from("#s4 .stat-val",   { y:30, opacity:0, stagger:.15, duration:.5, ease:"back.out(1.5)" }, 23);
+tl.from("#s4 .stat-lbl",   { opacity:0, stagger:.15, duration:.3 }, 23.2);
+tl.to("#s4", { autoAlpha:0, duration:.35, ease:"power2.in" }, 26.7);
+
+// === SCENE 5: TOOLS (27s-32.5s) ===
+tl.set("#s5", { autoAlpha:1 }, 27);
+tl.from("#s5 .scene-num",   { opacity:0, duration:.3 }, 27.1);
+tl.from("#s5 .scene-label", { x:-30, opacity:0, duration:.4, ease:"power3.out" }, 27.2);
+tl.from("#s5 .scene-title", { y:50, opacity:0, duration:.6, ease:"expo.out" }, 27.4);
+tl.from("#s5 .scene-desc",  { x:40, opacity:0, duration:.5, ease:"power3.out" }, 27.7);
+tl.from("#s5 .tool-card",   { y:50, opacity:0, stagger:.1, duration:.5, ease:"power3.out" }, 28);
+tl.from("#s5 .tc-bar-fill", { scaleX:0, stagger:.1, duration:.5, ease:"power3.out", transformOrigin:"left" }, 28.7);
+tl.to("#s5", { autoAlpha:0, duration:.35, ease:"power2.in" }, 32.2);
+
+// === SCENE 6: CTA (32.5s-38s) ===
+tl.set("#s6", { autoAlpha:1 }, 32.5);
+tl.from("#s6 .s6-logo",   { scale:.2, opacity:0, duration:.8, ease:"back.out(1.7)" }, 32.8);
+tl.from("#s6 .s6-head",   { y:60, opacity:0, duration:.7, ease:"expo.out" }, 33.5);
+tl.from("#s6 .s6-sub",    { y:30, opacity:0, duration:.5, ease:"power3.out" }, 34);
+tl.from("#s6 .cta-primary", { x:-50, opacity:0, duration:.5, ease:"back.out(1.5)" }, 34.5);
+tl.from("#s6 .cta-secondary",{ x:50, opacity:0, duration:.5, ease:"back.out(1.5)" }, 34.65);
+tl.from("#s6 .px",           { scale:0, opacity:0, stagger:.03, duration:.3, ease:"back.out(1.5)" }, 35.2);
+tl.from("#s6 .s6-foot",      { opacity:0, duration:.4 }, 35.8);
+tl.to("#s6 .cta-primary", { boxShadow:"0 0 60px rgba(106,170,58,.5)", duration:1, repeat:1, yoyo:true, ease:"sine.inOut" }, 36);
+
+// Register
+window.__timelines["versepc-promo"] = tl;
+</script>
+
+</body>
+</html>

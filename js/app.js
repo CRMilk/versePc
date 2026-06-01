@@ -1769,6 +1769,8 @@ async function loadVersions(forceRefresh = false) {
         const data = await API.getVersions(forceRefresh);
         allVersions = data.versions || [];
         installedVersions = data.installed || [];
+        if (!Array.isArray(allVersions)) allVersions = [];
+        if (!Array.isArray(installedVersions)) installedVersions = [];
         versionIconsTimestamp = Date.now();
         versionsLoadFailed = false;
 
@@ -2858,6 +2860,7 @@ async function loadMdVersions(projectId, source, detailSeq) {
         const data = await API.getModVersions(projectId, source);
         if (detailSeq !== undefined && detailSeq !== _modDetailSeq) { console.log('[MDVersions] Aborted (stale)'); return; }
         mdAllVersions = data.versions || [];
+        if (!Array.isArray(mdAllVersions)) mdAllVersions = [];
 
         loadModDependencies();
 
@@ -6475,6 +6478,7 @@ async function openResourceDetail(projectId, type) {
 
         const data = await API.getResourceVersions(projectId);
         mdAllVersions = data.versions || [];
+        if (!Array.isArray(mdAllVersions)) mdAllVersions = [];
 
         const currentGameVersion = document.getElementById('mod-filter-version')?.value || '';
         const currentLoader = document.getElementById('mod-filter-loader')?.value || '';

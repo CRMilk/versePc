@@ -1,0 +1,14 @@
+﻿{
+    "name":  "versepc-promo",
+    "version":  "1.0.0",
+    "description":  "VersePC promotional video",
+    "compositions":  {
+                         "versepc-promo":  "index.html",
+                         "versepc-fastcut":  "promo-fastcut.html"
+                     },
+    "defaults":  {
+                     "width":  1920,
+                     "height":  1080,
+                     "fps":  30
+                 }
+}

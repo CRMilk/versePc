@@ -141,16 +141,17 @@ const AIChat = {
                 if (all.versepc_ai_chats) {
                     try {
                         const parsed = JSON.parse(all.versepc_ai_chats);
-                        this.conversations = parsed || [];
+                        this.conversations = Array.isArray(parsed) ? parsed : [];
                         if (this.conversations.length > 0) this.currentId = this.conversations[0].id;
                     } catch (e) {}
                 }
                 if (all.versepc_ai_memory) this.userMemory = all.versepc_ai_memory;
-                try { if (all.versepc_ai_added_models) this.addedModels = JSON.parse(all.versepc_ai_added_models); } catch (e) {}
-                try { if (all.versepc_ai_trusted_folders) this._trustedFolders = JSON.parse(all.versepc_ai_trusted_folders); } catch (e) {}
+                try { if (all.versepc_ai_added_models) { const parsed = JSON.parse(all.versepc_ai_added_models); if (Array.isArray(parsed)) this.addedModels = parsed; } } catch (e) {}
+                try { if (all.versepc_ai_trusted_folders) { const parsed = JSON.parse(all.versepc_ai_trusted_folders); if (Array.isArray(parsed)) this._trustedFolders = parsed; } } catch (e) {}
                 try {
                     if (all.versepc_ai_recent_folders) {
-                        this._recentFolders = JSON.parse(all.versepc_ai_recent_folders);
+                        const parsed = JSON.parse(all.versepc_ai_recent_folders);
+                        this._recentFolders = Array.isArray(parsed) ? parsed : [];
                         if (this._recentFolders.length > 0) {
                             const last = this._recentFolders[0];
                             this._currentFolderPath = last.path;
@@ -3940,7 +3941,7 @@ Call attempt_completion when all operations are done and verified.
         list.innerHTML = '';
 
         const query = (filter || '').toLowerCase().trim();
-        let convs = this.conversations;
+        let convs = Array.isArray(this.conversations) ? this.conversations : [];
         if (query) {
             convs = convs.filter(c =>
                 c.title.toLowerCase().includes(query) ||
@@ -4328,7 +4329,7 @@ Call attempt_completion when all operations are done and verified.
         const providerIcons = { zhipu:'Z', deepseek:'D', qwen:'Q', moonshot:'K', yi:'Y', baichuan:'B', minimax:'M', stepfun:'S', siliconflow:'SF', openrouter:'OR', groq:'G', openai:'O', anthropic:'A', google:'G', custom:'C' };
         const providerUrls = { zhipu:'https://open.bigmodel.cn', deepseek:'https://platform.deepseek.com', qwen:'https://dashscope.aliyuncs.com', moonshot:'https://platform.moonshot.cn', openai:'https://platform.openai.com', anthropic:'https://console.anthropic.com', google:'https://aistudio.google.com', siliconflow:'https://cloud.siliconflow.cn', openrouter:'https://openrouter.ai', groq:'https://console.groq.com' };
         let modelsHtml = '';
-        const allModels = this.addedModels;
+        const allModels = Array.isArray(this.addedModels) ? this.addedModels : [];
         for (const m of allModels) {
             const iconChar = m.providerKey ? (providerIcons[m.providerKey] || m.providerKey[0].toUpperCase()) : '?';
             const isCurrent = m.modelId === this.model;
@@ -4898,7 +4899,7 @@ Call attempt_completion when all operations are done and verified.
     },
 
     async removeAddedModel(modelId) {
-        this.addedModels = this.addedModels.filter(m => m.modelId !== modelId);
+        this.addedModels = (this.addedModels || []).filter(m => m.modelId !== modelId);
         try {
             await window.electronAPI.store.set('versepc_ai_added_models', JSON.stringify(this.addedModels));
         } catch (e) {}
@@ -4918,7 +4919,7 @@ Call attempt_completion when all operations are done and verified.
         const tbody = document.getElementById('rc-model-table-body');
         if (!tbody) return;
         tbody.innerHTML = '';
-        const allModels = this.addedModels;
+        const allModels = Array.isArray(this.addedModels) ? this.addedModels : [];
         const providerNames = { zhipu:'智谱 GLM', deepseek:'DeepSeek', qwen:'通义千问', moonshot:'Kimi', yi:'零一万物', baichuan:'百川', minimax:'MiniMax', stepfun:'阶跃星辰', siliconflow:'SiliconFlow', openrouter:'OpenRouter', groq:'Groq', openai:'OpenAI', anthropic:'Anthropic', google:'Google', custom:'自定义' };
         for (const m of allModels) {
             const tr = document.createElement('tr');
@@ -4969,7 +4970,7 @@ Call attempt_completion when all operations are done and verified.
     },
 
     async removeModelFromTable(modelId) {
-        this.addedModels = this.addedModels.filter(m => m.modelId !== modelId);
+        this.addedModels = (this.addedModels || []).filter(m => m.modelId !== modelId);
         try { await window.electronAPI.store.set('versepc_ai_added_models', JSON.stringify(this.addedModels)); } catch(e){}
         if (this.model === modelId && this.addedModels.length > 0) {
             this.model = this.addedModels[0].modelId;
