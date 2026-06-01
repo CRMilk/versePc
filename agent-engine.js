@@ -1027,6 +1027,7 @@ class AgentEngine {
         const tools = enableTools !== false ? _getAllTools() : undefined;
 
         let conversation = [...messages];
+        this.conversation = conversation;
         const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
 
         const contextSummary = this._buildContextSummary();
@@ -2449,7 +2450,8 @@ Take action now. Do not explain your limitations.`
                 maxRounds: 8
             });
 
-            const lastAssistant = subEngine.conversation.filter(m => m.role === 'assistant').pop();
+            const conv = Array.isArray(subEngine.conversation) ? subEngine.conversation : [];
+            const lastAssistant = conv.filter(m => m.role === 'assistant').pop();
             result = lastAssistant ? lastAssistant.content : '子代理未返回结果';
 
             this._send({ type: 'subagent_end', agentType, name: meta.name, result });
