@@ -998,6 +998,7 @@ class AgentEngine {
         this._activePlan = null;
         this._planStepResults = {};
         this._thinkingSteps = [];
+        this._apiKey = apiKey;
         this._model = model || 'glm-5-flash';
 
         if (!apiKey) {
@@ -2432,7 +2433,8 @@ Take action now. Do not explain your limitations.`
             onChunk: (chunk) => {
                 this._send({ type: 'subagent_chunk', agentType, chunk });
             },
-            onRequestApproval: this.onRequestApproval
+            onRequestApproval: this.onRequestApproval,
+            executeTool: this.executeTool
         });
 
         try {
