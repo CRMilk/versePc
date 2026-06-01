@@ -1179,6 +1179,7 @@ class AgentEngine {
         let totalUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, rounds: 0 };
 
         for (let round = 0; round < this.maxRounds; round++) {
+            let toolResults = [];
             if (this._aborted) break;
             await new Promise(resolve => setImmediate(resolve));
 
@@ -1340,7 +1341,7 @@ class AgentEngine {
                     continue;
                 }
 
-                const toolResults = await this._executeTools(roundData.toolCalls, lastUserMsg);
+                toolResults = await this._executeTools(roundData.toolCalls, lastUserMsg);
                 if (this._aborted) break;
 
                 for (const tr of toolResults) {
