@@ -2677,6 +2677,7 @@ Call attempt_completion when all operations are done and verified.
         this._thinkingContentEl = null;
         this._thinkingTimerEl = null;
         this._thinkingPreviewEl = null;
+        this._lastThinkingBubble = null;
         this._thinkingChainBubble = null;
         this._thinkingChainStepsEl = null;
         this._thinkingChainStartTime = null;
@@ -3290,6 +3291,20 @@ Call attempt_completion when all operations are done and verified.
             if (this.thinkingBubble && this.thinkingBubble.isConnected && this.thinkingBubble.dataset.state === 'streaming') {
                 this._thinkingContentEl = this.thinkingBubble.querySelector('.ai-thinking-content');
                 this._thinkingTimerEl = this.thinkingBubble.querySelector('.ai-thinking-timer');
+            } else if (this._lastThinkingBubble && this._lastThinkingBubble.isConnected && this._lastReasoningEnd && (now - this._lastReasoningEnd) < 5000) {
+                const bubble = this._lastThinkingBubble;
+                bubble.dataset.state = 'streaming';
+                const label = bubble.querySelector('.ai-thinking-label');
+                if (label) label.textContent = '思考中...';
+                const contentEl = bubble.querySelector('.ai-thinking-content');
+                if (contentEl) contentEl.textContent = '';
+                const previewEl = bubble.querySelector('.ai-thinking-preview');
+                if (previewEl) previewEl.textContent = '';
+                this.thinkingBubble = bubble;
+                this._thinkingContentEl = contentEl;
+                this._thinkingTimerEl = bubble.querySelector('.ai-thinking-timer');
+                this._thinkingPreviewEl = previewEl;
+                this._lastThinkingBubble = null;
             } else {
                 const CHEVRON_S = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><polyline points="6 9 12 15 18 9"/></svg>';
                 const bubble = document.createElement('div');
@@ -3360,6 +3375,7 @@ Call attempt_completion when all operations are done and verified.
                 const timer = bubble.querySelector('.ai-thinking-timer');
                 const startTime = this.thinkingStartTime;
                 this._lastReasoningEnd = Date.now();
+                this._lastThinkingBubble = bubble;
                 this.thinkingBubble = null;
                 this._thinkingContentEl = null;
                 this._thinkingTimerEl = null;
@@ -4341,6 +4357,7 @@ Call attempt_completion when all operations are done and verified.
         if (this._reasoningTimer) { clearInterval(this._reasoningTimer); this._reasoningTimer = null; }
         this._scrollTimer = null;
         this.thinkingBubble = null;
+        this._lastThinkingBubble = null;
         this.toolCallBubble = null;
         this.typewriterTextBlock = null;
         this.conversations = [];
