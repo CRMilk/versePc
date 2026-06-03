@@ -2540,20 +2540,22 @@ Analyze intent before acting:
 - "denied" → find alternative, don't repeat
 
 ## Task Management
-Only create task plans for genuinely multi-step requests (3+ distinct actions).
 
-**Create tasks when:** multiple independent steps, user explicitly asks for sequential operations
-**Skip for:** greetings, questions, single actions, quick commands
+You MUST use update_todo_list for ANY task that involves tool calls (file ops, code changes, command execution, etc.).
+
+**Always create tasks when:** user requests any action that requires tools — code changes, file operations, installations, debugging, analysis, etc.
+**Skip only for:** pure greetings ("你好"), simple factual questions with no tool usage needed.
 
 **Format:**
-- [ ] Step description
+- [ ] Task description
 - [-] In progress
 - [x] Completed
 
 **Workflow:**
-1. update_todo_list with ALL steps
-2. Mark first [-], execute, mark [x], repeat
-3. Call attempt_completion when done
+1. First: Call update_todo_list with ALL steps decomposed from the user's request
+2. Mark current task as [-], execute it, mark as [x] when done
+3. Move to next task, repeat
+4. Call attempt_completion when ALL tasks are done
 
 ## Rules
 1. No tools for known info — answer directly.

@@ -543,7 +543,7 @@ const AI_TOOLS = [
     { type: 'function', function: { name: 'sequential_thinking', description: 'Break down complex problems into sequential thinking steps. Each step produces a conclusion. Supports revising previous steps. Use when deep analysis is needed.', parameters: { type: 'object', properties: { thought: { type: 'string', description: 'Thinking content for current step' }, thought_number: { type: 'number', description: 'Current step number' }, total_thoughts: { type: 'number', description: 'Estimated total steps' }, next_thought_needed: { type: 'boolean', description: 'Whether another step is needed' }, is_revision: { type: 'boolean', description: 'Whether revising a previous step' }, revises_thought: { type: 'number', description: 'Step number being revised (when is_revision=true)' }, branch_from_thought: { type: 'number', description: 'Branch from this step (optional)' }, branch_id: { type: 'string', description: 'Branch identifier (optional)' } }, required: ['thought', 'thought_number', 'total_thoughts', 'next_thought_needed'] } } },
     { type: 'function', function: { name: 'attempt_completion', description: 'Report task completion. Only call after verifying the task is done. The result will be presented to the user for confirmation.', parameters: { type: 'object', properties: { result: { type: 'string', description: 'Final result message with summary of completed work' } }, required: ['result'] } } },
     { type: 'function', function: { name: 'ckg', description: 'Code Knowledge Graph: search for functions, classes, and class methods in the codebase.', parameters: { type: 'object', properties: { command: { type: 'string', enum: ['search_function', 'search_class', 'search_class_method'], description: 'Search command' }, path: { type: 'string', description: 'Codebase path' }, identifier: { type: 'string', description: 'Function/class/method name to search' }, print_body: { type: 'boolean', description: 'Print function/class body (default true)' } }, required: ['command', 'path', 'identifier'] } } },
-    { type: 'function', function: { name: 'update_todo_list', description: '创建或更新任务计划列表。仅在处理多步骤复杂任务时使用，将用户请求分解为具体任务并跟踪进度。格式：[ ] 待执行, [-] 进行中, [x] 已完成。', parameters: { type: 'object', properties: { todos: { type: 'string', description: '完整的任务清单（Markdown格式）。示例：\n- [ ] 任务1：分析代码结构\n- [-] 任务2：修改CSS样式（当前执行中）\n- [x] 任务3：已修复bug' } }, required: ['todos'] } } },
+    { type: 'function', function: { name: 'update_todo_list', description: 'Create or update a task plan. MUST be called as the FIRST action for any task requiring tools. Decomposes the user request into concrete, actionable tasks and tracks progress. Format: [ ] pending, [-] in progress, [x] completed.', parameters: { type: 'object', properties: { todos: { type: 'string', description: 'Complete task list in Markdown format. Example:\n- [ ] Task 1: Analyze code structure\n- [-] Task 2: Modify CSS styles (currently executing)\n- [x] Task 3: Bug fix completed' } }, required: ['todos'] } } },
     {
         type: 'function',
         function: {
@@ -1154,19 +1154,16 @@ class AgentEngine {
                     role: 'system',
                     content: `## 执行指南
 
-这是一个简单的任务，请直接执行，不需要创建任务计划。
+这是一个简短的问候或确认，直接回复即可。
 
 ### 执行流程
-1. 直接使用工具完成用户请求
-2. 执行完成后，调用 attempt_completion 提交结果总结
+1. 直接回复用户
+2. 如果需要执行操作，使用工具完成
 
 ### 关键规则
-- 不要调用 update_todo_list，直接开始执行
-- 用中文写总结
-- attempt_completion 的 result 字段必须包含清晰的中文总结
-- 永远不要在回复中使用 emoji
-- 当需要搜索文件、分析代码、搜索资源或分析崩溃日志时，必须调用 sub_agent_dispatch 工具，不要在文本中描述你要做什么，而是实际调用工具
-- 使用 sub_agent_dispatch 时，agent_type 设为 'auto' 可自动选择最合适的子代理类型`
+- 用中文回复
+- 如果执行了操作，调用 attempt_completion 提交结果总结
+- 永远不要在回复中使用 emoji`
                 });
             }
         }
@@ -1458,31 +1455,23 @@ Take action now. Do not explain your limitations.`
 
     _detectIntent(userMessage) {
         const lower = userMessage.toLowerCase();
-        const simplePatterns = /^(你好|hi|hello|hey|谢谢|感谢|ok|好的|知道了|你是谁|你叫什么|帮我解释|你是|说说|聊聊|讲讲|告诉我)/;
-        if (simplePatterns.test(lower)) return { intent: 'simple', reason: 'greeting', steps_needed: 0 };
-        if (userMessage.length < 10) return { intent: 'simple', reason: 'short', steps_needed: 0 };
+        const greetingOnly = /^(你好|hi|hello|hey|谢谢|感谢|ok|好的|知道了|你是谁|你叫什么|你是|说说|聊聊|讲讲)\s*[!！?？。.]*$/i;
+        if (greetingOnly.test(lower.trim())) return { intent: 'simple', reason: 'greeting', steps_needed: 0 };
+        if (userMessage.trim().length <= 6 && !/[安装|创建|修改|删除|修复|配置|写|做|运行|执行|添加|更新]/.test(lower)) return { intent: 'simple', reason: 'short', steps_needed: 0 };
 
-        const questionPatterns = /是什么|什么意思|有什么用|有什么区别|区别是什么|怎么理解|怎么用|怎么弄|怎么搞|能不能|可以吗|吗\?|吗？|请解释|请说明|请介绍|推荐|玩法|技巧|机制|原理|规则|教程|攻略|查看|看看|看一下|帮我查|查一下|查询/;
-        if (questionPatterns.test(lower)) return { intent: 'simple', reason: 'question', steps_needed: 0 };
-
-        const explicitMultiStep = /然后|接着|之后再|先.*再|先.*然后|之后再|第一步.*第二步|首先.*然后.*最后|一方面.*另一方面|不仅.*而且|既要.*也要/;
+        const explicitMultiStep = /然后|接着|之后再|先.*再|先.*然后|第一步.*第二步|首先.*然后.*最后/;
         if (explicitMultiStep.test(lower)) {
             const conjunctionCount = (lower.match(/然后|接着|之后再|再(?!次)/g) || []).length;
             return { intent: 'complex', reason: 'explicit_multi_step', steps_needed: conjunctionCount + 1 };
         }
 
-        const separateActions = /安装.*(?:并且|并|然后|再|接着)|(?:安装|配置|创建|修改|删除|修复|优化).*(?:安装|配置|创建|修改|删除|修复|优化)/;
-        if (separateActions.test(lower)) {
-            const actionCount = (lower.match(/(?:安装|卸载|创建|删除|修改|编辑|配置|部署|构建|编译|调试|修复|优化|迁移|升级)/g) || []).length;
-            if (actionCount >= 2) return { intent: 'complex', reason: 'multi_action', steps_needed: actionCount };
+        const actionVerbs = /安装|卸载|创建|删除|修改|编辑|配置|部署|构建|编译|调试|修复|优化|迁移|升级|写|做|运行|执行|添加|更新|实现|重构|迁移|集成|生成|重写/;
+        const actionMatches = lower.match(new RegExp(actionVerbs.source, 'g'));
+        if (actionMatches && actionMatches.length >= 2) {
+            return { intent: 'complex', reason: 'multi_action', steps_needed: actionMatches.length };
         }
 
-        if (userMessage.length > 120) {
-            const actionCount = (lower.match(/(?:安装|卸载|创建|删除|修改|编辑|配置|部署|构建|编译|调试|修复|优化|迁移|升级|写|做|运行|执行)/g) || []).length;
-            if (actionCount >= 3) return { intent: 'complex', reason: 'long_multi_action', steps_needed: actionCount };
-        }
-
-        return { intent: 'simple', reason: 'general', steps_needed: 0 };
+        return { intent: 'complex', reason: 'general_task', steps_needed: 2 };
     }
 
     // =========================================================================
