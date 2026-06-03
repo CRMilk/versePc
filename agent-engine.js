@@ -1402,6 +1402,16 @@ Take action now. Do not explain your limitations.`
                 this._lastTextContent = roundData.fullContent;
             }
 
+            if (roundData.fullContent || roundData.fullReasoning) {
+                const finalAssistantMsg = { role: 'assistant', content: roundData.fullContent || '' };
+                if (roundData.fullReasoning) finalAssistantMsg.reasoning_content = roundData.fullReasoning;
+                conversation.push(finalAssistantMsg);
+            }
+
+            if (roundData.fullContent) {
+                conversation.push({ role: 'assistant', content: roundData.fullContent });
+            }
+
             const completionFromTool = toolResults.find(r => r.isCompletion);
             const completionText = completionFromTool ? completionFromTool.completionText : '';
             this._send({ type: 'say', say: SayType.COMPLETION, text: roundData.fullContent || completionText || '' });
@@ -2466,8 +2476,22 @@ Take action now. Do not explain your limitations.`
             });
 
             const conv = Array.isArray(subEngine.conversation) ? subEngine.conversation : [];
-            const lastAssistant = conv.filter(m => m.role === 'assistant').pop();
-            result = lastAssistant ? lastAssistant.content : '子代理未返回结果';
+            const lastAssistant = [...conv].reverse().find(m => m.role === 'assistant');
+            if (lastAssistant && lastAssistant.content) {
+                result = lastAssistant.content;
+            } else {
+                for (let i = conv.length - 1; i >= 0; i--) {
+                    if (conv[i].role === 'tool') {
+                        try {
+                            const parsed = JSON.parse(conv[i].content);
+                            if (parsed.result) { result = parsed.result; break; }
+                        } catch (e) {
+                            if (conv[i].content && conv[i].content.length > 5) { result = conv[i].content; break; }
+                        }
+                    }
+                }
+            }
+            if (!result) result = '子代理未返回结果';
 
             this._send({ type: 'subagent_end', agentType, name: meta.name, result });
 
