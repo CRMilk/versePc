@@ -3279,10 +3279,9 @@ Call attempt_completion when all operations are done and verified.
                 } catch (e) {}
             }
             if (this._todos.length === 0 && calls.length >= 4) {
-                const displayNames = { bash: '执行命令', str_replace_based_edit_tool: '编辑文件', json_edit_tool: '编辑JSON', ckg: '搜索代码', sequential_thinking: '分步思考', attempt_completion: '完成任务', update_todo_list: '更新计划', sub_agent_dispatch: '派遣子代理' };
                 this._todos = calls.map((c, i) => ({
                     id: 'auto-' + (i + 1),
-                    content: (displayNames[c.name] || c.name) + ': ' + (c.description || c.argsStr || '').substring(0, 60),
+                    content: (TOOL_DISPLAY_NAMES[c.name] || c.name) + ': ' + (c.description || c.argsStr || '').substring(0, 60),
                     status: 'pending',
                     priority: 'medium'
                 }));
@@ -5828,8 +5827,7 @@ Call attempt_completion when all operations are done and verified.
         const idx = this._getActiveTaskIndex();
         if (idx < 0) return;
         if (!this._taskToolCalls[idx]) this._taskToolCalls[idx] = [];
-        const displayNames = { bash: '执行命令', str_replace_based_edit_tool: '编辑文件', json_edit_tool: '编辑配置', ckg: '搜索代码', glob_search: '搜索文件', grep_search: '搜索内容', search: '搜索' };
-        const displayName = displayNames[toolName] || toolName;
+        const displayName = TOOL_DISPLAY_NAMES[toolName] || toolName;
         let shortResult = '';
         let resultStatus = 'success';
         try {
@@ -6315,9 +6313,8 @@ Call attempt_completion when all operations are done and verified.
                     const toolName = tc.function?.name || tc.name || '';
                     if (toolName && !resources.has('tool:' + toolName)) {
                         const toolIcons = { bash: '⚡', str_replace_based_edit_tool: '✏️', json_edit_tool: '✏️', ckg: '🔍', glob_search: '🔍', grep_search: '🔍', search: '🔍', sub_agent_dispatch: '🤖' };
-                        const displayNames = { bash: '终端命令', str_replace_based_edit_tool: '文件编辑', json_edit_tool: '配置编辑', ckg: '代码搜索', glob_search: '文件搜索', grep_search: '内容搜索', search: '搜索', sub_agent_dispatch: '子代理' };
                         resources.set('tool:' + toolName, {
-                            name: displayNames[toolName] || toolName,
+                            name: TOOL_DISPLAY_NAMES[toolName] || toolName,
                             type: '工具',
                             icon: toolIcons[toolName] || '🔧'
                         });
