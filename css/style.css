@@ -10463,6 +10463,13 @@ body {
 .ai-file-ops-item:hover { background: rgba(255,255,255,0.04); }
 .ai-file-ops-item .ai-tool-call-icon { width: 14px; height: 14px; }
 .ai-file-ops-item .ai-tool-call-icon svg { width: 14px; height: 14px; }
+.ai-file-ops-item.ai-file-ops-readonly { padding: 3px 10px; margin: 1px 4px; cursor: default; opacity: 0.85; }
+.ai-file-ops-item.ai-file-ops-readonly:hover { background: transparent; }
+.ai-file-ops-item.ai-file-ops-readonly .ai-file-ops-status { font-size: 12px; color: var(--ai-text-secondary); }
+.ai-file-ops-item.ai-file-ops-readonly .ai-file-ops-status code { color: var(--ai-accent, #4fc1ff); font-family: var(--ai-font-mono, monospace); font-size: 11.5px; background: rgba(79,193,255,0.08); padding: 1px 5px; border-radius: 3px; }
+.ai-tool-call-row.ai-file-ops-readonly { padding: 3px 10px; margin: 1px 4px; cursor: default; opacity: 0.85; display: flex; align-items: center; gap: 8px; }
+.ai-tool-call-row.ai-file-ops-readonly .ai-file-ops-status { font-size: 12px; color: var(--ai-text-secondary); }
+.ai-tool-call-row.ai-file-ops-readonly .ai-file-ops-status code { color: var(--ai-accent, #4fc1ff); font-family: var(--ai-font-mono, monospace); font-size: 11.5px; background: rgba(79,193,255,0.08); padding: 1px 5px; border-radius: 3px; }
 .ai-file-ops-status { flex: 1; font-size: 12px; color: var(--ai-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ai-file-ops-status.done { color: var(--ai-success, #22c55e); }
 .ai-file-ops-status.error { color: var(--ai-error, #ef4444); }

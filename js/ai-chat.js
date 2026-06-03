@@ -673,6 +673,16 @@ const AIChat = {
         return this._FILE_OP_TOOLS.has(name);
     },
 
+    _isReadOnlyTool(name, argsStr) {
+        if (name === 'str_replace_based_edit_tool') {
+            try { return (JSON.parse(argsStr || '{}').command || 'view') === 'view'; } catch (e) { return true; }
+        }
+        if (name === 'json_edit_tool') {
+            try { return (JSON.parse(argsStr || '{}').operation || 'view') === 'view'; } catch (e) { return true; }
+        }
+        return ['ckg', 'grep_search', 'glob_search', 'search_files', 'search', 'read_file'].includes(name);
+    },
+
     _getOrCreateToolCallsGroup() {
         if (this._toolCallsGroup && this._toolCallsGroup.isConnected) {
             return this._toolCallsGroup;
@@ -834,12 +844,26 @@ const AIChat = {
         }
 
         const desc = this.getToolActionDescription(tc.name, tc.arguments) || TOOL_DISPLAY_NAMES[tc.name] || tc.name;
+        const isReadOnly = this._isReadOnlyTool(tc.name, tc.arguments);
         const row = document.createElement('div');
-        row.className = 'ai-file-ops-item running';
+        row.className = isReadOnly ? 'ai-file-ops-item ai-file-ops-readonly done' : 'ai-file-ops-item running';
         row.id = `tool-${tc.id}`;
         row.dataset.toolId = tc.id;
         row.dataset.toolName = tc.name;
         row.dataset.toolArgs = tc.arguments || '{}';
+
+        if (isReadOnly) {
+            const statusEl = document.createElement('span');
+            statusEl.className = 'ai-file-ops-status';
+            statusEl.innerHTML = desc;
+            row.appendChild(statusEl);
+            row.style.cursor = 'default';
+            this._fileOpsGroupBody.appendChild(row);
+            this._fileOpsGroupTools.push({ id: tc.id, name: tc.name, status: 'done' });
+            this._updateFileOpsGroupHeader();
+            this.currentToolCalls.push({ id: tc.id, name: tc.name, bubble: row });
+            return;
+        }
 
         const iconEl = document.createElement('span');
         iconEl.className = `ai-tool-call-icon ${typeClass}`;
@@ -929,12 +953,26 @@ const AIChat = {
         }
 
         const desc = this.getToolActionDescription(tc.name, tc.arguments) || TOOL_DISPLAY_NAMES[tc.name] || tc.name;
+        const isReadOnly = this._isReadOnlyTool(tc.name, tc.arguments);
         const row = document.createElement('div');
-        row.className = 'ai-file-ops-item running';
+        row.className = isReadOnly ? 'ai-file-ops-item ai-file-ops-readonly done' : 'ai-file-ops-item running';
         row.id = `tool-${tc.id}`;
         row.dataset.toolId = tc.id;
         row.dataset.toolName = tc.name;
         row.dataset.toolArgs = tc.arguments || '{}';
+
+        if (isReadOnly) {
+            const statusEl = document.createElement('span');
+            statusEl.className = 'ai-file-ops-status';
+            statusEl.innerHTML = desc;
+            row.appendChild(statusEl);
+            row.style.cursor = 'default';
+            this._toolCallsGroupBody.appendChild(row);
+            this._toolCallsGroupTools.push({ id: tc.id, name: tc.name, status: 'done' });
+            this._updateToolCallsGroupHeader();
+            this.currentToolCalls.push({ id: tc.id, name: tc.name, bubble: row });
+            return;
+        }
 
         const iconEl = document.createElement('span');
         iconEl.className = `ai-tool-call-icon ${typeClass}`;
@@ -967,14 +1005,32 @@ const AIChat = {
     },
 
     _appendStandaloneToolCallDirect(tc, iconSvg, typeClass) {
+        const isReadOnly = this._isReadOnlyTool(tc.name, tc.arguments);
         const bubble = document.createElement('div');
-        bubble.className = 'ai-tool-call-row running';
+        bubble.className = isReadOnly ? 'ai-tool-call-row ai-file-ops-readonly done' : 'ai-tool-call-row running';
         bubble.id = `tool-${tc.id}`;
         bubble.dataset.toolId = tc.id;
         bubble.dataset.toolName = tc.name;
         bubble.dataset.toolArgs = tc.arguments || '{}';
 
         const desc = this.getToolActionDescription(tc.name, tc.arguments) || TOOL_DISPLAY_NAMES[tc.name] || tc.name;
+
+        if (isReadOnly) {
+            const statusEl = document.createElement('span');
+            statusEl.className = 'ai-file-ops-status';
+            statusEl.innerHTML = desc;
+            bubble.appendChild(statusEl);
+            bubble.style.cursor = 'default';
+            this._closeFileOpsGroup();
+            if (!this._toolBubbleFragment) {
+                this._toolBubbleFragment = document.createDocumentFragment();
+            }
+            this._toolBubbleFragment.appendChild(bubble);
+            this._pendingToolBubbles = (this._pendingToolBubbles || 0) + 1;
+            this.currentToolCalls.push({ id: tc.id, name: tc.name, bubble });
+            return;
+        }
+
         const chevronSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
 
         const iconEl = document.createElement('span');
