@@ -183,7 +183,7 @@ function translateChunk(processed) {
                 return { type: 'heartbeat', text };
             }
             case 'error': {
-                return { error: text };
+                return { type: 'say', say: 'error', text };
             }
             case 'completion': {
                 return { done: true };

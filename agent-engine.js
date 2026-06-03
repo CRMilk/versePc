@@ -913,10 +913,10 @@ class AgentEngine {
         this._passiveDetectionCount = 0;
         this._activePlan = null;
         this._planStepResults = {};
-        this._provider = null;
-        this._apiUrl = null;
-        this._apiHeaders = null;
-        this._model = null;
+        this._provider = options.provider || null;
+        this._apiUrl = options.apiUrl || null;
+        this._apiHeaders = options.apiHeaders || null;
+        this._model = options.model || null;
     }
 
     abort() {
@@ -986,7 +986,7 @@ class AgentEngine {
     /**
      * 主入口：处理聊天
      */
-    async processChat({ apiKey, model, messages, temperature, enableTools, apiFormat: customApiFormat, baseUrl: customBaseUrl, language }) {
+    async processChat({ apiKey, model, messages, temperature, enableTools, apiFormat: customApiFormat, baseUrl: customBaseUrl, language, maxRounds }) {
         this._aborted = false;
         this.output.clear();
         this._actionHistory = [];
@@ -1005,10 +1005,13 @@ class AgentEngine {
             this._send({ type: 'say', say: SayType.ERROR, text: '未配置 API Key，请在设置中填写' });
             return;
         }
+        if (maxRounds) this.maxRounds = maxRounds;
 
         let apiFormat;
         let requestModel = this._model;
-        if (customBaseUrl && customApiFormat) {
+        if (this._apiUrl && this._apiHeaders && !customBaseUrl) {
+            apiFormat = this._provider?.apiFormat || 'openai';
+        } else if (customBaseUrl && customApiFormat) {
             const authType = customApiFormat === 'anthropic' ? 'x-api-key' : 'bearer';
             this._provider = { name: 'Custom', baseUrl: customBaseUrl, authType, apiFormat: customApiFormat, thinkingParams: {} };
             const endpoint = buildChatEndpoint(this._provider, this._model, apiKey);
@@ -2434,6 +2437,7 @@ Take action now. Do not explain your limitations.`
             apiKey: this._apiKey,
             model: this._model,
             platform: this._platform,
+            provider: this._provider,
             apiUrl: this._apiUrl,
             apiHeaders: this._apiHeaders,
             enableTools: true,

@@ -3685,6 +3685,36 @@ Call attempt_completion when all operations are done and verified.
             return;
         }
 
+        if (data.type === 'say' && data.say === 'error') {
+            const errMsg = data.text || data.error || '未知错误';
+            this._streamFullResponse = errMsg;
+            this.flushTypewriter();
+            if (this._apiStatusBubble) {
+                const bubble = this._apiStatusBubble;
+                this._apiStatusBubble = null;
+                this._scheduleDOMBatch(() => {
+                    if (bubble && bubble.isConnected) {
+                        const text = bubble.querySelector('.ai-api-status-text');
+                        if (text) { text.textContent = '请求失败'; text.style.color = 'var(--ai-error)'; }
+                        const spinner = bubble.querySelector('.ai-api-status-spinner');
+                        if (spinner) { spinner.style.borderColor = 'var(--ai-error)'; spinner.style.borderTopColor = 'transparent'; spinner.style.animation = 'none'; }
+                    }
+                });
+                setTimeout(() => { if (bubble && bubble.isConnected) { bubble.style.transition = 'opacity 0.3s'; bubble.style.opacity = '0'; setTimeout(() => { if (bubble.isConnected) bubble.remove(); }, 300); } }, 3000);
+            }
+            this._scheduleDOMBatch(() => {
+                this._finalizePendingToolCalls();
+                const block = this._getOrCreateTextBlock();
+                if (block) {
+                    this._renderErrorCard(block, errMsg);
+                }
+                const wf = document.getElementById('ai-active-workflow');
+                if (wf) wf.classList.remove('ai-streaming-msg');
+                this.stopGeneration(this._streamFullResponse, true);
+            });
+            return;
+        }
+
         if (data.type === 'say') {
             const content = data.text || data.content || '';
             if (content) {
