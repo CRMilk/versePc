@@ -15293,6 +15293,70 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 break;
             }
 
+            case '/api/upload-skin': {
+                if (req.method !== 'POST') { sendError('Method not allowed', 405); break; }
+                const contentType = req.headers['content-type'] || '';
+                let uploadBody = Buffer.alloc(0);
+                req.on('data', chunk => { uploadBody = Buffer.concat([uploadBody, chunk]); });
+                req.on('end', async () => {
+                    try {
+                        let skinBuf, accountId, model = 'default';
+                        if (contentType.includes('multipart/form-data')) {
+                            const boundary = contentType.split('boundary=')[1];
+                            if (!boundary) { sendError('Invalid multipart', 400); return; }
+                            const parts = uploadBody.toString('binary').split('--' + boundary);
+                            for (const part of parts) {
+                                const headerEnd = part.indexOf('\r\n\r\n');
+                                if (headerEnd === -1) continue;
+                                const headers = part.substring(0, headerEnd);
+                                const body = part.substring(headerEnd + 4, part.length - 2);
+                                if (headers.includes('name="file"')) {
+                                    skinBuf = Buffer.from(body, 'binary');
+                                } else if (headers.includes('name="accountId"')) {
+                                    accountId = body.trim();
+                                } else if (headers.includes('name="model"')) {
+                                    model = body.trim();
+                                }
+                            }
+                        } else {
+                            const jsonData = JSON.parse(uploadBody.toString());
+                            accountId = jsonData.accountId;
+                            model = jsonData.model || 'default';
+                            if (jsonData.fileBase64) {
+                                skinBuf = Buffer.from(jsonData.fileBase64, 'base64');
+                            }
+                        }
+                        if (!skinBuf || !accountId) { sendError('Missing file or accountId', 400); return; }
+                        const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4E, 0x47]);
+                        if (!skinBuf.slice(0, 4).equals(PNG_MAGIC)) { sendError('File must be PNG', 400); return; }
+                        const accounts = loadAccounts();
+                        const acc = accounts.find(a => a.id === accountId);
+                        if (!acc) { sendError('Account not found', 404); return; }
+                        let metadata;
+                        try {
+                            metadata = await sharp(skinBuf).metadata();
+                        } catch (e) { sendError('Invalid PNG', 400); return; }
+                        if (!((metadata.width === 64 && metadata.height === 64) || (metadata.width === 64 && metadata.height === 32))) {
+                            sendError('Skin must be 64x64 or 64x32 PNG', 400); return;
+                        }
+                        const fileName = `custom_${accountId}_${Date.now()}.png`;
+                        const filePath = path.join(__dirname, 'img', fileName);
+                        fs.writeFileSync(filePath, skinBuf);
+                        acc.skinFile = fileName;
+                        acc.skinModel = model === 'slim' ? 'slim' : 'default';
+                        saveAccounts(accounts);
+                        const cleanUuid = (acc.uuid || '').replace(/-/g, '');
+                        for (const key of AVATAR_CACHE.keys()) {
+                            if (key.includes(cleanUuid)) AVATAR_CACHE.delete(key);
+                        }
+                        sendJSON({ success: true, fileName });
+                    } catch (e) {
+                        sendError('Upload failed: ' + e.message, 500);
+                    }
+                });
+                break;
+            }
+
             case '/api/skin-texture': {
                 const stUuid = parsedUrl.query.uuid || '';
                 const stServerUrl = parsedUrl.query.serverUrl || '';

@@ -4716,7 +4716,11 @@ async function loadSkinSelector(acc) {
         const data = await resp.json();
         if (!data.success || !data.skins) return;
         const currentSkinFile = acc.skinFile || 'steve_skin.png';
-        data.skins.forEach(skin => {
+        const allSkins = data.skins.slice();
+        if (currentSkinFile && currentSkinFile.startsWith('custom_') && !allSkins.some(s => s.file === currentSkinFile)) {
+            allSkins.push({ id: 'custom', name: '自定义', file: currentSkinFile, model: acc.skinModel || 'default' });
+        }
+        allSkins.forEach(skin => {
             const div = document.createElement('div');
             div.className = 'acct-skin-item' + (skin.file === currentSkinFile ? ' active' : '');
             div.title = skin.name;
@@ -4735,7 +4739,11 @@ async function loadSkinSelector(acc) {
                 ctx.imageSmoothingEnabled = false;
                 ctx.drawImage(img, 8, 8, 8, 8, 0, 0, 8, 8);
             };
-            img.src = `/api/skin-head?id=${skin.id}`;
+            if (skin.id === 'custom') {
+                img.src = `/img/${skin.file}`;
+            } else {
+                img.src = `/api/skin-head?id=${skin.id}`;
+            }
             container.appendChild(div);
         });
     } catch (e) {}
@@ -4744,6 +4752,14 @@ async function loadSkinSelector(acc) {
 async function selectSkin(skinId, skinFile) {
     if (!_currentDetailAccount) return;
     try {
+        if (skinId === 'custom') {
+            _currentDetailAccount.skinFile = skinFile;
+            const accUuid = (_currentDetailAccount.uuid || '').replace(/-/g, '');
+            const skinUrl = `/api/skin-texture?uuid=${accUuid}&_=${Date.now()}`;
+            if (_skinViewer) await _skinViewer.loadSkin(skinUrl);
+            loadSkinSelector(_currentDetailAccount);
+            return;
+        }
         const resp = await fetch('/api/set-account-skin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -4762,6 +4778,38 @@ async function selectSkin(skinId, skinFile) {
     } catch (e) {
         showToast('更换失败', 'error');
     }
+}
+
+async function handleSkinUpload(input) {
+    if (!input.files || !input.files[0] || !_currentDetailAccount) return;
+    const file = input.files[0];
+    if (!file.name.toLowerCase().endsWith('.png')) {
+        showToast('请选择 PNG 格式的皮肤文件', 'error');
+        input.value = '';
+        return;
+    }
+    showToast('正在上传…', 'info');
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('accountId', _currentDetailAccount.id);
+        formData.append('model', 'default');
+        const resp = await fetch('/api/upload-skin', { method: 'POST', body: formData });
+        const result = await resp.json();
+        if (result.success) {
+            _currentDetailAccount.skinFile = result.fileName;
+            const accUuid = (_currentDetailAccount.uuid || '').replace(/-/g, '');
+            const skinUrl = `/api/skin-texture?uuid=${accUuid}&_=${Date.now()}`;
+            if (_skinViewer) await _skinViewer.loadSkin(skinUrl);
+            loadSkinSelector(_currentDetailAccount);
+            showToast('皮肤已导入', 'success');
+        } else {
+            showToast(result.error || '上传失败', 'error');
+        }
+    } catch (e) {
+        showToast('上传失败', 'error');
+    }
+    input.value = '';
 }
 
 async function startMsAuth() {

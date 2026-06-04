@@ -2139,6 +2139,11 @@
                             <div class="acct-detail-skins" id="acct-detail-skins" style="display:none">
                                 <span class="acct-detail-label">皮肤</span>
                                 <div class="acct-skin-grid" id="acct-skin-grid"></div>
+                                <input type="file" id="skin-file-input" accept=".png" style="display:none" onchange="handleSkinUpload(this)">
+                                <button class="acct-skin-import-btn" onclick="document.getElementById('skin-file-input').click()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                    <span>导入自定义皮肤</span>
+                                </button>
                             </div>
                             <div class="acct-detail-actions">
                                 <button class="acct-btn acct-btn-primary" onclick="detailSelectAccount()">
