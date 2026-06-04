@@ -4663,6 +4663,27 @@ function copyDetailUuid() {
     }
 }
 
+function setAnim(type) {
+    if (!_skinViewer) return;
+    const animMap = {
+        idle: () => new skinview3d.IdleAnimation(),
+        walk: () => new skinview3d.WalkingAnimation(),
+        run: () => new skinview3d.RunningAnimation(),
+        fly: () => new skinview3d.FlyingAnimation(),
+        wave: () => new skinview3d.WaveAnimation(),
+        crouch: () => new skinview3d.CrouchAnimation(),
+        hit: () => new skinview3d.HitAnimation(),
+        swim: () => new skinview3d.SwimAnimation()
+    };
+    const factory = animMap[type];
+    if (!factory) return;
+    _skinViewer.animation = factory();
+    _skinViewer.animation.speed = type === 'idle' ? 0.8 : 1.2;
+    document.querySelectorAll('.acct-anim-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.anim === type);
+    });
+}
+
 function generatePixelBackground() {
     const container = document.getElementById('acct-pixels-bg');
     if (!container || container.children.length > 0) return;

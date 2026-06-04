@@ -33,6 +33,7 @@ build/
 *.backup
 *.broken_backup
 *.md.bak
+.source-backup/
 
 # ─── IDE / 编辑器 ───
 .vscode/
