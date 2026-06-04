@@ -15251,13 +15251,9 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 if (!headFile) { sendError('Invalid skin id', 400); break; }
                 const headPath = path.join(__dirname, 'img', headFile);
                 if (!fs.existsSync(headPath)) { sendError('Skin not found', 404); break; }
-                try {
-                    const headBuf = await sharp(headPath).extract({ left: 8, top: 8, width: 8, height: 8 }).resize(64, 64, { kernel: 'nearest' }).png().toBuffer();
-                    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
-                    res.end(headBuf);
-                } catch (e) {
-                    sendError('Failed to generate head', 500);
-                }
+                const headBuf = fs.readFileSync(headPath);
+                res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+                res.end(headBuf);
                 break;
             }
 
@@ -15285,6 +15281,10 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         acc.skinFile = skinInfo.file;
                         acc.skinModel = skinInfo.model;
                         saveAccounts(accounts);
+                        const cleanUuid = (acc.uuid || '').replace(/-/g, '');
+                        for (const key of AVATAR_CACHE.keys()) {
+                            if (key.includes(cleanUuid)) AVATAR_CACHE.delete(key);
+                        }
                         sendJSON({ success: true });
                     } catch (e) {
                         sendError('Invalid JSON', 400);

@@ -4721,11 +4721,21 @@ async function loadSkinSelector(acc) {
             div.className = 'acct-skin-item' + (skin.file === currentSkinFile ? ' active' : '');
             div.title = skin.name;
             div.onclick = () => selectSkin(skin.id, skin.file);
-            const img = document.createElement('img');
+            const canvas = document.createElement('canvas');
+            canvas.width = 8;
+            canvas.height = 8;
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            canvas.style.imageRendering = 'pixelated';
+            div.appendChild(canvas);
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = function() {
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, 8, 8, 8, 8, 0, 0, 8, 8);
+            };
             img.src = `/api/skin-head?id=${skin.id}`;
-            img.alt = skin.name;
-            img.onerror = function() { this.src = `/img/${skin.file}`; };
-            div.appendChild(img);
             container.appendChild(div);
         });
     } catch (e) {}
@@ -4734,21 +4744,20 @@ async function loadSkinSelector(acc) {
 async function selectSkin(skinId, skinFile) {
     if (!_currentDetailAccount) return;
     try {
-        await fetch('/api/set-account-skin', {
+        const resp = await fetch('/api/set-account-skin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ accountId: _currentDetailAccount.id, skinId })
         });
+        const result = await resp.json();
+        if (!result.success) { showToast('更换失败', 'error'); return; }
         _currentDetailAccount.skinFile = skinFile;
-        document.querySelectorAll('.acct-skin-item').forEach(item => {
-            const img = item.querySelector('img');
-            item.classList.toggle('active', img && img.src.includes(skinFile));
-        });
         const accUuid = (_currentDetailAccount.uuid || '').replace(/-/g, '');
         const skinUrl = `/api/skin-texture?uuid=${accUuid}&_=${Date.now()}`;
         if (_skinViewer) {
             await _skinViewer.loadSkin(skinUrl);
         }
+        loadSkinSelector(_currentDetailAccount);
         showToast('皮肤已更换', 'success');
     } catch (e) {
         showToast('更换失败', 'error');
