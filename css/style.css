@@ -1846,6 +1846,130 @@ body {
     color: var(--text-secondary);
 }
 
+.account-detail-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+}
+.account-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+}
+.account-detail-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    flex: 1;
+}
+.account-detail-back {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    transition: all var(--transition);
+}
+.account-detail-back:hover {
+    background: var(--bg-hover);
+    color: var(--accent);
+}
+.account-detail-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+.account-detail-skin {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    background: linear-gradient(180deg, #f0f0f0 0%, #e8e8e8 40%, #d0d0d0 100%);
+    border-radius: 0;
+    position: relative;
+    overflow: hidden;
+}
+.account-detail-skin canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    max-width: 100%;
+    max-height: 100%;
+}
+.account-detail-info {
+    width: 420px;
+    min-width: 320px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow-y: auto;
+    background: var(--bg-primary);
+    border-left: 1px solid var(--border);
+}
+.account-detail-info-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.account-detail-info-section label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: none;
+    letter-spacing: 0;
+}
+.account-detail-value {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary);
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+}
+.account-detail-uuid {
+    font-family: 'Consolas', 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    word-break: break-all;
+    line-height: 1.5;
+}
+.account-detail-actions {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.account-detail-actions .btn-block {
+    width: 100%;
+    padding: 12px 20px;
+}
+.account-detail-actions-row {
+    display: flex;
+    gap: 10px;
+}
+.account-detail-actions-row .btn {
+    flex: 1;
+    padding: 10px 16px;
+}
+@media (max-width: 800px) {
+    .account-detail-body { flex-direction: column; }
+    .account-detail-info { width: 100%; min-width: 0; border-left: none; border-top: 1px solid var(--border); }
+    .account-detail-skin { min-height: 280px; }
+}
+
+.dark-theme .account-detail-skin,
+body.dark-theme .account-detail-skin {
+    background: linear-gradient(180deg, #2a2a3a 0%, #222233 40%, #1a1a2a 100%);
+}
+
 .settings-container {
     display: flex;
     flex-direction: column;

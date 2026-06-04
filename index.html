@@ -2094,6 +2094,42 @@
                             </div>
                         </div>
                     </div>
+
+                    <div id="page-account-detail" class="account-detail-page" style="display:none">
+                        <div class="account-detail-header">
+                            <button class="account-detail-back" onclick="showAccountList()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><polyline points="15 18 9 12 15 6"/></svg>
+                                <span>返回</span>
+                            </button>
+                            <h3>账户中心</h3>
+                        </div>
+                        <div class="account-detail-body">
+                            <div class="account-detail-skin">
+                                <canvas id="account-skin-canvas" width="300" height="400"></canvas>
+                            </div>
+                            <div class="account-detail-info">
+                                <div class="account-detail-info-section">
+                                    <label>用户名</label>
+                                    <div id="detail-username" class="account-detail-value">-</div>
+                                </div>
+                                <div class="account-detail-info-section">
+                                    <label>唯一标识</label>
+                                    <div id="detail-uuid" class="account-detail-value account-detail-uuid">-</div>
+                                </div>
+                                <div class="account-detail-info-section">
+                                    <label>皮肤类型</label>
+                                    <div id="detail-skin-type" class="account-detail-value">经典</div>
+                                </div>
+                                <div class="account-detail-actions">
+                                    <button id="detail-switch-btn" class="btn btn-primary btn-block" onclick="detailSelectAccount()">切换账户</button>
+                                    <div class="account-detail-actions-row">
+                                        <button class="btn btn-secondary" onclick="detailDeleteAccount()">登出</button>
+                                        <button class="btn btn-secondary" onclick="detailRefreshSkin()">刷新皮肤</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="game-launch-overlay" class="launch-overlay" style="display:none">

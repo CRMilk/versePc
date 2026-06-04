@@ -4442,7 +4442,7 @@ async function loadAccounts() {
                 const avatarHtml = skinUrl
                     ? `<img src="${skinUrl}" alt="" class="account-avatar-img">`
                     : `<span class="account-avatar-text">${acc.username.charAt(0).toUpperCase()}</span>`;
-                return `<div class="account-item ${isSelected ? 'selected' : ''}" onclick="selectAccount('${acc.id}')">
+                return `<div class="account-item ${isSelected ? 'selected' : ''}" onclick="showAccountDetail('${acc.id}')">
                     <div class="account-avatar">${avatarHtml}</div>
                     <div class="account-item-info">
                         <div class="account-item-name">${escapeHtml(acc.username)}</div>
@@ -4545,6 +4545,159 @@ async function deleteAccount(accountId) {
         await loadAccounts();
         showToast('账户已删除', 'success');
     } catch (e) { showToast('删除失败', 'error'); }
+}
+
+let _currentDetailAccount = null;
+
+function showAccountDetail(accountId) {
+    API.getAccounts().then(accounts => {
+        const acc = accounts.find(a => a.id === accountId);
+        if (!acc) return;
+        _currentDetailAccount = acc;
+        const accUuid = (acc.uuid || '').replace(/-/g, '');
+        const skinUrl = accUuid ? `/api/avatar?uuid=${accUuid}${acc.serverUrl ? '&serverUrl=' + encodeURIComponent(acc.serverUrl) : ''}${acc.username ? '&username=' + encodeURIComponent(acc.username) : ''}` : '';
+        document.getElementById('detail-username').textContent = acc.username;
+        document.getElementById('detail-uuid').textContent = acc.uuid || '-';
+        const typeLabel = acc.type === 'microsoft' ? '正版 (Steve)' : acc.type === 'thirdparty' ? '外置登录' : '经典';
+        document.getElementById('detail-skin-type').textContent = typeLabel;
+        document.getElementById('accounts-list').style.display = 'none';
+        const header = document.querySelector('#page-accounts .page-header');
+        if (header) header.style.display = 'none';
+        document.getElementById('page-account-detail').style.display = '';
+        if (skinUrl) {
+            renderMinecraftSkin(skinUrl);
+        }
+    });
+}
+
+function showAccountList() {
+    document.getElementById('page-account-detail').style.display = 'none';
+    document.getElementById('accounts-list').style.display = '';
+    const header = document.querySelector('#page-accounts .page-header');
+    if (header) header.style.display = '';
+    _currentDetailAccount = null;
+}
+
+async function detailSelectAccount() {
+    if (!_currentDetailAccount) return;
+    await selectAccount(_currentDetailAccount.id);
+    showAccountList();
+}
+
+async function detailDeleteAccount() {
+    if (!_currentDetailAccount) return;
+    await deleteAccount(_currentDetailAccount.id);
+    showAccountList();
+}
+
+async function detailRefreshSkin() {
+    if (!_currentDetailAccount) return;
+    const acc = _currentDetailAccount;
+    const accUuid = (acc.uuid || '').replace(/-/g, '');
+    if (!accUuid) { showToast('无UUID', 'error'); return; }
+    const skinUrl = `/api/avatar?uuid=${accUuid}${acc.serverUrl ? '&serverUrl=' + encodeURIComponent(acc.serverUrl) : ''}${acc.username ? '&username=' + encodeURIComponent(acc.username) : ''}&_=${Date.now()}`;
+    renderMinecraftSkin(skinUrl);
+    showToast('皮肤已刷新', 'success');
+}
+
+function renderMinecraftSkin(skinUrl) {
+    const canvas = document.getElementById('account-skin-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+        ctx.imageSmoothingEnabled = false;
+        drawIsometricSteve(ctx, img, canvas.width, canvas.height);
+    };
+    img.onerror = function() {
+        ctx.fillStyle = '#a0a0a0';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('皮肤加载失败', canvas.width / 2, canvas.height / 2);
+    };
+    img.src = skinUrl;
+}
+
+function drawIsometricSteSteve(ctx, skinImg, cw, ch) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    const S = 4;
+    const centerX = cw / 2;
+    const topY = 30;
+    function drawBox(sx, sy, sw, sh, dx, dy, w, h) {
+        ctx.drawImage(skinImg, sx, sy, sw, sh, dx, dy, w, h);
+    }
+    const headX = centerX - S * 4;
+    const headY = topY;
+    drawBox(8, 8, 8, 8, headX, headY, S * 8, S * 8);
+    const bodyX = centerX - S * 4;
+    const bodyY = headY + S * 8 + 2;
+    drawBox(20, 20, 8, 12, bodyX, bodyY, S * 8, S * 12);
+    const armW = S * 4;
+    const armH = S * 12;
+    const rArmX = centerX + S * 4 + 2;
+    drawBox(44, 20, 4, 12, rArmX, bodyY, armW, armH);
+    const lArmX = centerX - S * 4 - armW - 2;
+    drawBox(36, 20, 4, 12, lArmX, bodyY, armW, armH);
+    const legW = S * 4;
+    const legH = S * 12;
+    const legY = bodyY + S * 12;
+    const rLegX = centerX;
+    drawBox(4, 20, 4, 12, rLegX, legY, legW, legH);
+    const lLegX = centerX - S * 4;
+    drawBox(20, 52, 4, 12, lLegX, legY, legW, legH);
+    drawStoneBlock(ctx, centerX - S * 6, legY + legH + 4, S * 12, S * 5);
+    ctx.restore();
+}
+
+function drawIsometricSteve(ctx, skinImg, cw, ch) {
+    drawIsometricSteSteve(ctx, skinImg, cw, ch);
+}
+
+function drawStoneBlock(ctx, x, y, w, h) {
+    ctx.save();
+    const topH = h * 0.45;
+    const frontH = h - topH;
+    const topColor = '#c8c8c8';
+    const frontColor = '#a0a0a0';
+    const rightColor = '#909090';
+    const skew = w * 0.2;
+    ctx.fillStyle = topColor;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + skew, y - topH);
+    ctx.lineTo(x + w + skew, y - topH);
+    ctx.lineTo(x + w, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = frontColor;
+    ctx.fillRect(x, y, w, frontH);
+    ctx.fillStyle = rightColor;
+    ctx.beginPath();
+    ctx.moveTo(x + w, y);
+    ctx.lineTo(x + w + skew, y - topH);
+    ctx.lineTo(x + w + skew, y - topH + frontH);
+    ctx.lineTo(x + w, y + frontH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+    ctx.lineWidth = 1;
+    const gridSize = 8;
+    for (let gx = x + gridSize; gx < x + w; gx += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(gx, y);
+        ctx.lineTo(gx, y + frontH);
+        ctx.stroke();
+    }
+    for (let gy = y + gridSize; gy < y + frontH; gy += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, gy);
+        ctx.lineTo(x + w, gy);
+        ctx.stroke();
+    }
+    ctx.restore();
 }
 
 async function startMsAuth() {
@@ -7426,6 +7579,10 @@ function switchPage(pageName) {
     const currentPage = document.querySelector('.page.active');
     const target = document.getElementById(`page-${pageName}`);
     if (!target || target === currentPage) return;
+
+    if (currentPage && currentPage.id === 'page-accounts' && _currentDetailAccount) {
+        showAccountList();
+    }
 
     if (currentPage) {
         currentPage.style.animation = 'pageOut 0.18s var(--ease-out-expo) forwards';
