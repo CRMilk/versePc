@@ -15194,7 +15194,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     let storedSkinUrl = '';
                     try {
                         const accounts = loadAccounts();
-                        const acc = accounts.find(a => a.uuid === cleanUuid || a.uuid === avatarUuid);
+                        const acc = accounts.find(a => (a.uuid || '').replace(/-/g, '') === cleanUuid);
                         if (acc && acc.skinUrl) storedSkinUrl = acc.skinUrl;
                     } catch (e) {}
                     const result = await fetchAvatarData(cleanUuid, avatarServerUrl, avatarUsername, storedSkinUrl);
@@ -15234,6 +15234,30 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 ];
                 const available = skinFiles.filter(s => fs.existsSync(path.join(skinDir, s.file)));
                 sendJSON({ success: true, skins: available });
+                break;
+            }
+
+            case '/api/skin-head': {
+                const headId = parsedUrl.query.id || '';
+                if (!headId) { sendError('Missing id', 400); break; }
+                const headSkinMap = {
+                    steve: 'steve_skin.png',
+                    alex: 'skin_alex.png',
+                    zombie: 'skin_zombie.png',
+                    enderman: 'skin_enderman.png',
+                    creeper: 'skin_creeper.png'
+                };
+                const headFile = headSkinMap[headId];
+                if (!headFile) { sendError('Invalid skin id', 400); break; }
+                const headPath = path.join(__dirname, 'img', headFile);
+                if (!fs.existsSync(headPath)) { sendError('Skin not found', 404); break; }
+                try {
+                    const headBuf = await sharp(headPath).extract({ left: 8, top: 8, width: 8, height: 8 }).resize(64, 64, { kernel: 'nearest' }).png().toBuffer();
+                    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+                    res.end(headBuf);
+                } catch (e) {
+                    sendError('Failed to generate head', 500);
+                }
                 break;
             }
 
@@ -15287,7 +15311,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     let stSkinFile = '';
                     try {
                         const accounts = loadAccounts();
-                        const acc = accounts.find(a => a.uuid === stClean || a.uuid === stUuid);
+                        const acc = accounts.find(a => (a.uuid || '').replace(/-/g, '') === stClean);
                         if (acc && acc.skinUrl) stStoredSkinUrl = acc.skinUrl;
                         if (acc && acc.skinFile) stSkinFile = acc.skinFile;
                     } catch (e) {}

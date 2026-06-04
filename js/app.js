@@ -4722,8 +4722,9 @@ async function loadSkinSelector(acc) {
             div.title = skin.name;
             div.onclick = () => selectSkin(skin.id, skin.file);
             const img = document.createElement('img');
-            img.src = `/img/${skin.file}`;
+            img.src = `/api/skin-head?id=${skin.id}`;
             img.alt = skin.name;
+            img.onerror = function() { this.src = `/img/${skin.file}`; };
             div.appendChild(img);
             container.appendChild(div);
         });
