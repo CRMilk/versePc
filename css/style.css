@@ -1856,6 +1856,11 @@ body {
     display: flex;
     height: 100%;
     overflow: hidden;
+    animation: detailSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes detailSlideIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 .acct-detail-left {
     flex: 1;
@@ -1864,7 +1869,16 @@ body {
     justify-content: center;
     position: relative;
     overflow: hidden;
-    background: linear-gradient(180deg, #f5f5f5 0%, #eaeaea 50%, #ddd 100%);
+    background: #1a1c2e;
+}
+.acct-detail-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
 }
 .acct-detail-pixels {
     position: absolute;
@@ -1874,18 +1888,13 @@ body {
 }
 .acct-detail-pixels .px {
     position: absolute;
-    background: rgba(255,255,255,0.6);
     border-radius: 2px;
-}
-.acct-detail-left canvas {
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
-    position: relative;
-    z-index: 1;
 }
 #skin-3d-container {
     position: relative;
     z-index: 1;
+    width: 100%;
+    height: 100%;
 }
 #skin-3d-container canvas {
     display: block;
@@ -1893,23 +1902,29 @@ body {
     height: 100% !important;
 }
 .acct-detail-right {
-    width: 440px;
-    min-width: 360px;
+    width: 420px;
+    min-width: 340px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 48px 44px;
+    padding: 44px 40px;
     background: #fff;
     gap: 0;
+    overflow-y: auto;
 }
 .acct-detail-header-area {
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 32px;
+    margin-bottom: 28px;
+    animation: detailFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+}
+@keyframes detailFadeIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
 }
 .acct-detail-title {
-    font-size: 28px;
+    font-size: 26px;
     font-weight: 700;
     color: #111;
     margin: 0;
@@ -1920,19 +1935,21 @@ body {
 .acct-detail-badge {
     display: inline-flex;
     align-items: center;
-    padding: 4px 10px;
-    font-size: 12px;
-    font-weight: 500;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
     border-radius: 6px;
-    background: #f0f0f0;
-    color: #555;
+    background: #e8f5e9;
+    color: #2e7d32;
     white-space: nowrap;
-    line-height: 1;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
 }
 .acct-detail-fields {
     display: flex;
     flex-direction: column;
     gap: 0;
+    animation: detailFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
 }
 .acct-detail-field {
     display: flex;
@@ -1945,17 +1962,22 @@ body {
     border-bottom: none;
 }
 .acct-detail-label {
-    font-size: 12px;
+    font-size: 11px;
     color: #999;
-    font-weight: 500;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.06em;
 }
 .acct-detail-val {
     font-size: 15px;
     font-weight: 500;
     color: #222;
     line-height: 1.4;
+}
+.acct-detail-copy-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 .acct-detail-uuid {
     font-family: 'Consolas', 'SF Mono', 'Fira Code', monospace;
@@ -1964,46 +1986,43 @@ body {
     color: #555;
     word-break: break-all;
     line-height: 1.6;
-}
-.acct-detail-copy-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    background: #f8f8f8;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #eee;
+    flex: 1;
+    min-width: 0;
 }
 .acct-copy-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
     border: 1px solid #e0e0e0;
     background: #fafafa;
     color: #666;
     cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
     flex-shrink: 0;
 }
 .acct-copy-btn:hover {
     background: #f0f0f0;
     border-color: #ccc;
     color: #333;
+    transform: scale(1.05);
 }
 .acct-copy-btn:focus-visible {
     outline: 2px solid #4a9eff;
     outline-offset: 2px;
 }
-.acct-detail-actions {
-    margin-top: 32px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
 .acct-detail-animations {
-    margin-top: 24px;
+    margin-top: 20px;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    animation: detailFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
 }
 .acct-anim-btns {
     display: flex;
@@ -2014,30 +2033,38 @@ body {
     width: 40px;
     height: 40px;
     border-radius: 10px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid #e8e8e8;
     background: #fafafa;
-    font-size: 18px;
+    color: #666;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease, color 0.15s ease;
     padding: 0;
-    line-height: 1;
 }
 .acct-anim-btn:hover {
     background: #f0f0f0;
     border-color: #ccc;
+    color: #333;
     transform: scale(1.08);
 }
 .acct-anim-btn.active {
     background: #111;
     border-color: #111;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 .acct-anim-btn:focus-visible {
     outline: 2px solid #4a9eff;
     outline-offset: 2px;
+}
+.acct-detail-actions {
+    margin-top: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: detailFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both;
 }
 .acct-detail-actions-row {
     display: flex;
@@ -2064,7 +2091,7 @@ body {
     outline-offset: 2px;
 }
 .acct-btn:active {
-    transform: scale(0.98);
+    transform: scale(0.97);
 }
 .acct-btn-primary {
     background: #111;
@@ -2103,7 +2130,13 @@ body {
 }
 .dark-theme .acct-detail-left,
 body.dark-theme .acct-detail-left {
-    background: linear-gradient(180deg, #2a2a3a 0%, #222233 50%, #1a1a2a 100%);
+    background: #0d0f1a;
+}
+.dark-theme .acct-detail-grid,
+body.dark-theme .acct-detail-grid {
+    background-image:
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
 }
 .dark-theme .acct-detail-right,
 body.dark-theme .acct-detail-right {
@@ -2115,8 +2148,8 @@ body.dark-theme .acct-detail-title {
 }
 .dark-theme .acct-detail-badge,
 body.dark-theme .acct-detail-badge {
-    background: var(--bg-active);
-    color: var(--text-secondary);
+    background: rgba(76, 175, 80, 0.15);
+    color: #81c784;
 }
 .dark-theme .acct-detail-field,
 body.dark-theme .acct-detail-field {
@@ -2133,6 +2166,8 @@ body.dark-theme .acct-detail-val {
 .dark-theme .acct-detail-uuid,
 body.dark-theme .acct-detail-uuid {
     color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border-color: var(--border);
 }
 .dark-theme .acct-copy-btn,
 body.dark-theme .acct-copy-btn {
@@ -2144,6 +2179,23 @@ body.dark-theme .acct-copy-btn {
 body.dark-theme .acct-copy-btn:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
+}
+.dark-theme .acct-anim-btn,
+body.dark-theme .acct-anim-btn {
+    background: var(--bg-tertiary);
+    border-color: var(--border);
+    color: var(--text-secondary);
+}
+.dark-theme .acct-anim-btn:hover,
+body.dark-theme .acct-anim-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+.dark-theme .acct-anim-btn.active,
+body.dark-theme .acct-anim-btn.active {
+    background: #fff;
+    border-color: #fff;
+    color: #111;
 }
 .dark-theme .acct-btn-primary,
 body.dark-theme .acct-btn-primary {
@@ -2177,23 +2229,9 @@ body.dark-theme .acct-btn-danger:hover {
     border-color: rgba(255,100,100,0.3);
     color: #f88;
 }
-.dark-theme .acct-anim-btn,
-body.dark-theme .acct-anim-btn {
-    background: var(--bg-tertiary);
-    border-color: var(--border);
-}
-.dark-theme .acct-anim-btn:hover,
-body.dark-theme .acct-anim-btn:hover {
-    background: var(--bg-hover);
-}
-.dark-theme .acct-anim-btn.active,
-body.dark-theme .acct-anim-btn.active {
-    background: #fff;
-    border-color: #fff;
-}
 .dark-theme .acct-detail-pixels .px,
 body.dark-theme .acct-detail-pixels .px {
-    background: rgba(255,255,255,0.05);
+    background: rgba(255,255,255,0.04);
 }
 
 .settings-container {

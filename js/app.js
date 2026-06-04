@@ -4686,17 +4686,20 @@ function setAnim(type) {
 
 function generatePixelBackground() {
     const container = document.getElementById('acct-pixels-bg');
-    if (!container || container.children.length > 0) return;
-    const count = 18;
+    if (!container) return;
+    container.innerHTML = '';
+    const colors = ['rgba(76,175,80,0.15)', 'rgba(100,181,246,0.12)', 'rgba(255,183,77,0.1)', 'rgba(186,104,200,0.1)', 'rgba(255,255,255,0.04)'];
+    const count = 22;
     for (let i = 0; i < count; i++) {
         const div = document.createElement('div');
         div.className = 'px';
-        const size = 8 + Math.floor(Math.random() * 24);
+        const size = 6 + Math.floor(Math.random() * 28);
         div.style.width = size + 'px';
         div.style.height = size + 'px';
         div.style.left = (Math.random() * 100) + '%';
         div.style.top = (Math.random() * 100) + '%';
-        div.style.opacity = 0.15 + Math.random() * 0.35;
+        div.style.background = colors[Math.floor(Math.random() * colors.length)];
+        div.style.opacity = 0.4 + Math.random() * 0.6;
         container.appendChild(div);
     }
 }
