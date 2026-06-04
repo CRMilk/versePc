@@ -15304,19 +15304,30 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         if (contentType.includes('multipart/form-data')) {
                             const boundary = contentType.split('boundary=')[1];
                             if (!boundary) { sendError('Invalid multipart', 400); return; }
-                            const parts = uploadBody.toString('binary').split('--' + boundary);
-                            for (const part of parts) {
-                                const headerEnd = part.indexOf('\r\n\r\n');
-                                if (headerEnd === -1) continue;
-                                const headers = part.substring(0, headerEnd);
-                                const body = part.substring(headerEnd + 4, part.length - 2);
+                            const boundaryBuf = Buffer.from('--' + boundary);
+                            const headerSep = Buffer.from('\r\n\r\n');
+                            let pos = 0;
+                            while (pos < uploadBody.length) {
+                                const start = uploadBody.indexOf(boundaryBuf, pos);
+                                if (start === -1) break;
+                                const afterBoundary = start + boundaryBuf.length;
+                                if (uploadBody[afterBoundary] === 0x2D && uploadBody[afterBoundary + 1] === 0x2D) break;
+                                const headerStart = afterBoundary + 2;
+                                const headerEnd = uploadBody.indexOf(headerSep, headerStart);
+                                if (headerEnd === -1) break;
+                                const headers = uploadBody.slice(headerStart, headerEnd).toString('utf8');
+                                const bodyStart = headerEnd + 4;
+                                const nextBoundary = uploadBody.indexOf(boundaryBuf, bodyStart);
+                                const bodyEnd = nextBoundary !== -1 ? nextBoundary - 2 : uploadBody.length;
+                                const partBody = uploadBody.slice(bodyStart, bodyEnd);
                                 if (headers.includes('name="file"')) {
-                                    skinBuf = Buffer.from(body, 'binary');
+                                    skinBuf = partBody;
                                 } else if (headers.includes('name="accountId"')) {
-                                    accountId = body.trim();
+                                    accountId = partBody.toString('utf8').trim();
                                 } else if (headers.includes('name="model"')) {
-                                    model = body.trim();
+                                    model = partBody.toString('utf8').trim();
                                 }
+                                pos = nextBoundary !== -1 ? nextBoundary : uploadBody.length;
                             }
                         } else {
                             const jsonData = JSON.parse(uploadBody.toString());
