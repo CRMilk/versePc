@@ -4549,6 +4549,7 @@ async function deleteAccount(accountId) {
 
 let _currentDetailAccount = null;
 let _skinViewer = null;
+let _currentSkinBg = 'white';
 
 function showAccountDetail(accountId) {
     API.getAccounts().then(accounts => {
@@ -4568,8 +4569,9 @@ function showAccountDetail(accountId) {
         const header = document.querySelector('#page-accounts .page-header');
         if (header) header.style.display = 'none';
         document.getElementById('page-account-detail').style.display = '';
-        generatePixelBackground();
+        setSkinBg(_currentSkinBg);
         initSkinViewer(skinUrl);
+        loadSkinSelector(acc);
     });
 }
 
@@ -4611,7 +4613,7 @@ function initSkinViewer(skinUrl) {
         _skinViewer.animation.speed = 0.8;
         _skinViewer.cameraLight.intensity = 1.2;
         _skinViewer.globalLight.intensity = 2.5;
-        _skinViewer.background = 0x2b2d42;
+        _skinViewer.background = _currentSkinBg === 'black' ? 0x000000 : 0xffffff;
         _skinViewer.nameTag = _currentDetailAccount ? _currentDetailAccount.username : null;
     } catch (e) {
         console.error('[SkinViewer] init error:', e);
@@ -4685,23 +4687,70 @@ function setAnim(type) {
     });
 }
 
-function generatePixelBackground() {
-    const container = document.getElementById('acct-pixels-bg');
-    if (!container) return;
+function setSkinBg(color) {
+    _currentSkinBg = color;
+    const left = document.getElementById('acct-detail-left');
+    if (left) {
+        left.classList.toggle('bg-black', color === 'black');
+    }
+    if (_skinViewer) {
+        _skinViewer.background = color === 'black' ? 0x000000 : 0xffffff;
+    }
+    document.querySelectorAll('.acct-bg-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.bg === color);
+    });
+}
+
+async function loadSkinSelector(acc) {
+    const container = document.getElementById('acct-skin-grid');
+    const section = document.getElementById('acct-detail-skins');
+    if (!container || !section) return;
+    if (acc.type !== 'offline') {
+        section.style.display = 'none';
+        return;
+    }
+    section.style.display = '';
     container.innerHTML = '';
-    const colors = ['rgba(76,175,80,0.15)', 'rgba(100,181,246,0.12)', 'rgba(255,183,77,0.1)', 'rgba(186,104,200,0.1)', 'rgba(255,255,255,0.04)'];
-    const count = 22;
-    for (let i = 0; i < count; i++) {
-        const div = document.createElement('div');
-        div.className = 'px';
-        const size = 6 + Math.floor(Math.random() * 28);
-        div.style.width = size + 'px';
-        div.style.height = size + 'px';
-        div.style.left = (Math.random() * 100) + '%';
-        div.style.top = (Math.random() * 100) + '%';
-        div.style.background = colors[Math.floor(Math.random() * colors.length)];
-        div.style.opacity = 0.4 + Math.random() * 0.6;
-        container.appendChild(div);
+    try {
+        const resp = await fetch('/api/default-skins');
+        const data = await resp.json();
+        if (!data.success || !data.skins) return;
+        const currentSkinFile = acc.skinFile || 'steve_skin.png';
+        data.skins.forEach(skin => {
+            const div = document.createElement('div');
+            div.className = 'acct-skin-item' + (skin.file === currentSkinFile ? ' active' : '');
+            div.title = skin.name;
+            div.onclick = () => selectSkin(skin.id, skin.file);
+            const img = document.createElement('img');
+            img.src = `/img/${skin.file}`;
+            img.alt = skin.name;
+            div.appendChild(img);
+            container.appendChild(div);
+        });
+    } catch (e) {}
+}
+
+async function selectSkin(skinId, skinFile) {
+    if (!_currentDetailAccount) return;
+    try {
+        await fetch('/api/set-account-skin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId: _currentDetailAccount.id, skinId })
+        });
+        _currentDetailAccount.skinFile = skinFile;
+        document.querySelectorAll('.acct-skin-item').forEach(item => {
+            const img = item.querySelector('img');
+            item.classList.toggle('active', img && img.src.includes(skinFile));
+        });
+        const accUuid = (_currentDetailAccount.uuid || '').replace(/-/g, '');
+        const skinUrl = `/api/skin-texture?uuid=${accUuid}&_=${Date.now()}`;
+        if (_skinViewer) {
+            await _skinViewer.loadSkin(skinUrl);
+        }
+        showToast('皮肤已更换', 'success');
+    } catch (e) {
+        showToast('更换失败', 'error');
     }
 }
 

@@ -15223,6 +15223,52 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 break;
             }
 
+            case '/api/default-skins': {
+                const skinDir = path.join(__dirname, 'img');
+                const skinFiles = [
+                    { id: 'steve', name: 'Steve', file: 'steve_skin.png', model: 'default' },
+                    { id: 'alex', name: 'Alex', file: 'skin_alex.png', model: 'slim' },
+                    { id: 'zombie', name: 'Zombie', file: 'skin_zombie.png', model: 'default' },
+                    { id: 'enderman', name: 'Enderman', file: 'skin_enderman.png', model: 'default' },
+                    { id: 'creeper', name: 'Creeper', file: 'skin_creeper.png', model: 'default' }
+                ];
+                const available = skinFiles.filter(s => fs.existsSync(path.join(skinDir, s.file)));
+                sendJSON({ success: true, skins: available });
+                break;
+            }
+
+            case '/api/set-account-skin': {
+                if (req.method !== 'POST') { sendError('Method not allowed', 405); break; }
+                let skBody = '';
+                req.on('data', c => skBody += c);
+                req.on('end', async () => {
+                    try {
+                        const skData = JSON.parse(skBody);
+                        const { accountId, skinId } = skData;
+                        if (!accountId || !skinId) { sendError('Missing params', 400); return; }
+                        const accounts = loadAccounts();
+                        const acc = accounts.find(a => a.id === accountId);
+                        if (!acc) { sendError('Account not found', 404); return; }
+                        const skinMap = {
+                            steve: { file: 'steve_skin.png', model: 'default' },
+                            alex: { file: 'skin_alex.png', model: 'slim' },
+                            zombie: { file: 'skin_zombie.png', model: 'default' },
+                            enderman: { file: 'skin_enderman.png', model: 'default' },
+                            creeper: { file: 'skin_creeper.png', model: 'default' }
+                        };
+                        const skinInfo = skinMap[skinId];
+                        if (!skinInfo) { sendError('Invalid skin', 400); return; }
+                        acc.skinFile = skinInfo.file;
+                        acc.skinModel = skinInfo.model;
+                        saveAccounts(accounts);
+                        sendJSON({ success: true });
+                    } catch (e) {
+                        sendError('Invalid JSON', 400);
+                    }
+                });
+                break;
+            }
+
             case '/api/skin-texture': {
                 const stUuid = parsedUrl.query.uuid || '';
                 const stServerUrl = parsedUrl.query.serverUrl || '';
@@ -15238,11 +15284,22 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 if (stCached) { serveStImage(stCached.data, stCached.contentType); break; }
                 try {
                     let stStoredSkinUrl = '';
+                    let stSkinFile = '';
                     try {
                         const accounts = loadAccounts();
                         const acc = accounts.find(a => a.uuid === stClean || a.uuid === stUuid);
                         if (acc && acc.skinUrl) stStoredSkinUrl = acc.skinUrl;
+                        if (acc && acc.skinFile) stSkinFile = acc.skinFile;
                     } catch (e) {}
+                    if (stSkinFile) {
+                        const skinPath = path.join(__dirname, 'img', stSkinFile);
+                        if (fs.existsSync(skinPath)) {
+                            const data = fs.readFileSync(skinPath);
+                            AVATAR_CACHE.set(stCacheKey, { data, contentType: 'image/png', time: Date.now() });
+                            serveStImage(data, 'image/png');
+                            break;
+                        }
+                    }
                     const stResult = await fetchAvatarDataFull(stClean, stServerUrl, stUsername, stStoredSkinUrl);
                     if (stResult) {
                         AVATAR_CACHE.set(stCacheKey, { data: stResult.data, contentType: stResult.contentType, time: Date.now() });
