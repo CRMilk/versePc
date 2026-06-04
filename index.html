@@ -2101,25 +2101,39 @@
                             <div id="skin-3d-container" style="width:100%;height:100%;"></div>
                         </div>
                         <div class="acct-detail-right">
+                            <div class="acct-detail-header-area">
+                                <h2 class="acct-detail-title" id="detail-username">-</h2>
+                                <span class="acct-detail-badge" id="detail-skin-type">经典</span>
+                            </div>
                             <div class="acct-detail-fields">
                                 <div class="acct-detail-field">
-                                    <span class="acct-detail-label">用户名</span>
-                                    <span class="acct-detail-val" id="detail-username">-</span>
+                                    <span class="acct-detail-label">UUID</span>
+                                    <div class="acct-detail-copy-row">
+                                        <span class="acct-detail-val acct-detail-uuid" id="detail-uuid">-</span>
+                                        <button class="acct-copy-btn" onclick="copyDetailUuid()" aria-label="复制UUID" title="复制UUID">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="acct-detail-field">
-                                    <span class="acct-detail-label">唯一标识</span>
-                                    <span class="acct-detail-val acct-detail-uuid" id="detail-uuid">-</span>
-                                </div>
-                                <div class="acct-detail-field">
-                                    <span class="acct-detail-label">皮肤类型</span>
-                                    <span class="acct-detail-val" id="detail-skin-type">经典</span>
+                                    <span class="acct-detail-label">账户类型</span>
+                                    <span class="acct-detail-val" id="detail-account-type">离线</span>
                                 </div>
                             </div>
                             <div class="acct-detail-actions">
-                                <button class="acct-btn acct-btn-primary" onclick="detailSelectAccount()">切换账户</button>
+                                <button class="acct-btn acct-btn-primary" onclick="detailSelectAccount()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg>
+                                    <span>切换到此账户</span>
+                                </button>
                                 <div class="acct-detail-actions-row">
-                                    <button class="acct-btn acct-btn-outline" onclick="detailDeleteAccount()">登出</button>
-                                    <button class="acct-btn acct-btn-outline" onclick="detailRefreshSkin()">刷新皮肤</button>
+                                    <button class="acct-btn acct-btn-ghost" onclick="detailRefreshSkin()">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                                        <span>刷新皮肤</span>
+                                    </button>
+                                    <button class="acct-btn acct-btn-danger" onclick="detailDeleteAccount()">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                                        <span>登出</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>

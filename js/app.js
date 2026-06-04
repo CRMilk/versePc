@@ -4559,8 +4559,11 @@ function showAccountDetail(accountId) {
         const skinUrl = accUuid ? `/api/skin-texture?uuid=${accUuid}${acc.serverUrl ? '&serverUrl=' + encodeURIComponent(acc.serverUrl) : ''}${acc.username ? '&username=' + encodeURIComponent(acc.username) : ''}` : '';
         document.getElementById('detail-username').textContent = acc.username;
         document.getElementById('detail-uuid').textContent = acc.uuid || '-';
-        const typeLabel = acc.type === 'microsoft' ? '正版 (Steve)' : acc.type === 'thirdparty' ? '外置登录' : '经典';
-        document.getElementById('detail-skin-type').textContent = typeLabel;
+        const typeMap = { microsoft: '正版', thirdparty: '外置登录', offline: '离线' };
+        const badgeLabel = typeMap[acc.type] || '离线';
+        document.getElementById('detail-skin-type').textContent = badgeLabel;
+        const typeEl = document.getElementById('detail-account-type');
+        if (typeEl) typeEl.textContent = badgeLabel;
         document.getElementById('accounts-list').style.display = 'none';
         const header = document.querySelector('#page-accounts .page-header');
         if (header) header.style.display = 'none';
@@ -4639,6 +4642,24 @@ async function detailRefreshSkin() {
         showToast('皮肤已刷新', 'success');
     } catch (e) {
         showToast('皮肤刷新失败', 'error');
+    }
+}
+
+function copyDetailUuid() {
+    const uuidEl = document.getElementById('detail-uuid');
+    if (!uuidEl) return;
+    const text = uuidEl.textContent;
+    if (!text || text === '-') return;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => showToast('UUID已复制', 'success'));
+    } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('UUID已复制', 'success');
     }
 }
 

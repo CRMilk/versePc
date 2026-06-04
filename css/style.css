@@ -1898,9 +1898,36 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 40px 48px;
+    padding: 48px 44px;
     background: #fff;
     gap: 0;
+}
+.acct-detail-header-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+}
+.acct-detail-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #111;
+    margin: 0;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+}
+.acct-detail-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 6px;
+    background: #f0f0f0;
+    color: #555;
+    white-space: nowrap;
+    line-height: 1;
 }
 .acct-detail-fields {
     display: flex;
@@ -1910,34 +1937,64 @@ body {
 .acct-detail-field {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 16px 0;
-    border-bottom: 1px solid #e8e8e8;
+    gap: 6px;
+    padding: 14px 0;
+    border-bottom: 1px solid #f0f0f0;
 }
 .acct-detail-field:last-child {
     border-bottom: none;
 }
 .acct-detail-label {
-    font-size: 13px;
-    color: #888;
-    font-weight: 400;
+    font-size: 12px;
+    color: #999;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 .acct-detail-val {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 500;
     color: #222;
     line-height: 1.4;
 }
 .acct-detail-uuid {
     font-family: 'Consolas', 'SF Mono', 'Fira Code', monospace;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 400;
-    color: #444;
+    color: #555;
     word-break: break-all;
     line-height: 1.6;
 }
+.acct-detail-copy-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.acct-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+    background: #fafafa;
+    color: #666;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    flex-shrink: 0;
+}
+.acct-copy-btn:hover {
+    background: #f0f0f0;
+    border-color: #ccc;
+    color: #333;
+}
+.acct-copy-btn:focus-visible {
+    outline: 2px solid #4a9eff;
+    outline-offset: 2px;
+}
 .acct-detail-actions {
-    margin-top: 28px;
+    margin-top: 32px;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -1948,32 +2005,56 @@ body {
 }
 .acct-btn {
     flex: 1;
-    padding: 12px 20px;
-    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 20px;
+    border-radius: 10px;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
     border: none;
     text-align: center;
+    line-height: 1.4;
+}
+.acct-btn:focus-visible {
+    outline: 2px solid #4a9eff;
+    outline-offset: 2px;
+}
+.acct-btn:active {
+    transform: scale(0.98);
 }
 .acct-btn-primary {
-    background: linear-gradient(180deg, #e0e0e0 0%, #c8c8c8 100%);
-    color: #333;
-    border: 1px solid #bbb;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    background: #111;
+    color: #fff;
+    border: 1px solid #111;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
 }
 .acct-btn-primary:hover {
-    background: linear-gradient(180deg, #d5d5d5 0%, #bbb 100%);
+    background: #333;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.16);
 }
-.acct-btn-outline {
-    background: #fff;
-    color: #444;
-    border: 1px solid #ccc;
+.acct-btn-ghost {
+    background: transparent;
+    color: #555;
+    border: 1px solid #ddd;
 }
-.acct-btn-outline:hover {
+.acct-btn-ghost:hover {
     background: #f5f5f5;
-    border-color: #aaa;
+    border-color: #bbb;
+    color: #333;
+}
+.acct-btn-danger {
+    background: transparent;
+    color: #d44;
+    border: 1px solid #f0d0d0;
+}
+.acct-btn-danger:hover {
+    background: #fef5f5;
+    border-color: #e8a0a0;
+    color: #b22;
 }
 @media (max-width: 800px) {
     .acct-detail { flex-direction: column; }
@@ -1987,6 +2068,15 @@ body.dark-theme .acct-detail-left {
 .dark-theme .acct-detail-right,
 body.dark-theme .acct-detail-right {
     background: var(--bg-primary);
+}
+.dark-theme .acct-detail-title,
+body.dark-theme .acct-detail-title {
+    color: var(--text-primary);
+}
+.dark-theme .acct-detail-badge,
+body.dark-theme .acct-detail-badge {
+    background: var(--bg-active);
+    color: var(--text-secondary);
 }
 .dark-theme .acct-detail-field,
 body.dark-theme .acct-detail-field {
@@ -2004,17 +2094,48 @@ body.dark-theme .acct-detail-val {
 body.dark-theme .acct-detail-uuid {
     color: var(--text-secondary);
 }
+.dark-theme .acct-copy-btn,
+body.dark-theme .acct-copy-btn {
+    background: var(--bg-tertiary);
+    border-color: var(--border);
+    color: var(--text-secondary);
+}
+.dark-theme .acct-copy-btn:hover,
+body.dark-theme .acct-copy-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
 .dark-theme .acct-btn-primary,
 body.dark-theme .acct-btn-primary {
-    background: linear-gradient(180deg, #3a3a4a 0%, #2a2a3a 100%);
-    color: var(--text-primary);
-    border-color: var(--border);
+    background: #fff;
+    color: #111;
+    border-color: #fff;
 }
-.dark-theme .acct-btn-outline,
-body.dark-theme .acct-btn-outline {
+.dark-theme .acct-btn-primary:hover,
+body.dark-theme .acct-btn-primary:hover {
+    background: #e0e0e0;
+}
+.dark-theme .acct-btn-ghost,
+body.dark-theme .acct-btn-ghost {
     background: transparent;
     color: var(--text-secondary);
     border-color: var(--border);
+}
+.dark-theme .acct-btn-ghost:hover,
+body.dark-theme .acct-btn-ghost:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+.dark-theme .acct-btn-danger,
+body.dark-theme .acct-btn-danger {
+    color: #f66;
+    border-color: rgba(255,100,100,0.2);
+}
+.dark-theme .acct-btn-danger:hover,
+body.dark-theme .acct-btn-danger:hover {
+    background: rgba(255,100,100,0.08);
+    border-color: rgba(255,100,100,0.3);
+    color: #f88;
 }
 .dark-theme .acct-detail-pixels .px,
 body.dark-theme .acct-detail-pixels .px {
