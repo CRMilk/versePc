@@ -4600,8 +4600,8 @@ function initSkinViewer(skinUrl) {
             skin: skinUrl || undefined
         });
         container.appendChild(_skinViewer.canvas);
-        _skinViewer.fov = 50;
-        _skinViewer.zoom = 0.85;
+        _skinViewer.fov = 40;
+        _skinViewer.zoom = 0.65;
         _skinViewer.autoRotate = true;
         _skinViewer.autoRotateSpeed = 0.5;
         _skinViewer.animation = new skinview3d.IdleAnimation();
