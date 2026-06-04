@@ -1869,26 +1869,7 @@ body {
     justify-content: center;
     position: relative;
     overflow: hidden;
-    background: #1a1c2e;
-}
-.acct-detail-grid {
-    position: absolute;
-    inset: 0;
-    background-image:
-        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-    background-size: 32px 32px;
-    pointer-events: none;
-}
-.acct-detail-pixels {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    overflow: hidden;
-}
-.acct-detail-pixels .px {
-    position: absolute;
-    border-radius: 2px;
+    background: #2b2d42;
 }
 #skin-3d-container {
     position: relative;
@@ -2130,13 +2111,7 @@ body {
 }
 .dark-theme .acct-detail-left,
 body.dark-theme .acct-detail-left {
-    background: #0d0f1a;
-}
-.dark-theme .acct-detail-grid,
-body.dark-theme .acct-detail-grid {
-    background-image:
-        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background: #1e2030;
 }
 .dark-theme .acct-detail-right,
 body.dark-theme .acct-detail-right {
@@ -2228,10 +2203,6 @@ body.dark-theme .acct-btn-danger:hover {
     background: rgba(255,100,100,0.08);
     border-color: rgba(255,100,100,0.3);
     color: #f88;
-}
-.dark-theme .acct-detail-pixels .px,
-body.dark-theme .acct-detail-pixels .px {
-    background: rgba(255,255,255,0.04);
 }
 
 .settings-container {

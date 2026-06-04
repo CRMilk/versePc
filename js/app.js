@@ -4611,7 +4611,7 @@ function initSkinViewer(skinUrl) {
         _skinViewer.animation.speed = 0.8;
         _skinViewer.cameraLight.intensity = 1.2;
         _skinViewer.globalLight.intensity = 2.5;
-        _skinViewer.background = null;
+        _skinViewer.background = 0x2b2d42;
         _skinViewer.nameTag = _currentDetailAccount ? _currentDetailAccount.username : null;
     } catch (e) {
         console.error('[SkinViewer] init error:', e);
@@ -4678,7 +4678,8 @@ function setAnim(type) {
     const factory = animMap[type];
     if (!factory) return;
     _skinViewer.animation = factory();
-    _skinViewer.animation.speed = type === 'idle' ? 0.8 : 1.2;
+    const speedMap = { idle: 0.6, walk: 0.8, run: 0.6, fly: 0.8, wave: 0.8, crouch: 0.5, hit: 0.9, swim: 0.7 };
+    _skinViewer.animation.speed = speedMap[type] || 0.7;
     document.querySelectorAll('.acct-anim-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.anim === type);
     });

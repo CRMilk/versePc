@@ -675,9 +675,14 @@ async function getSteveSkinFull() {
     if (_steveSkinFullPromise) { try { return await _steveSkinFullPromise; } catch (e) {} }
     _steveSkinFullPromise = (async () => {
         try {
-            const skinPath = path.join(__dirname, 'img', 'steve_head.png');
+            const skinPath = path.join(__dirname, 'img', 'steve_skin.png');
             if (fs.existsSync(skinPath)) {
                 _steveSkinFull = fs.readFileSync(skinPath);
+                return _steveSkinFull;
+            }
+            const headPath = path.join(__dirname, 'img', 'steve_head.png');
+            if (fs.existsSync(headPath)) {
+                _steveSkinFull = fs.readFileSync(headPath);
                 return _steveSkinFull;
             }
         } catch (e) {}
