@@ -4548,6 +4548,7 @@ async function deleteAccount(accountId) {
 }
 
 let _currentDetailAccount = null;
+let _skinViewer = null;
 
 function showAccountDetail(accountId) {
     API.getAccounts().then(accounts => {
@@ -4565,9 +4566,7 @@ function showAccountDetail(accountId) {
         if (header) header.style.display = 'none';
         document.getElementById('page-account-detail').style.display = '';
         generatePixelBackground();
-        if (skinUrl) {
-            renderMinecraftSkin(skinUrl);
-        }
+        initSkinViewer(skinUrl);
     });
 }
 
@@ -4576,7 +4575,45 @@ function showAccountList() {
     document.getElementById('accounts-list').style.display = '';
     const header = document.querySelector('#page-accounts .page-header');
     if (header) header.style.display = '';
+    destroySkinViewer();
     _currentDetailAccount = null;
+}
+
+function destroySkinViewer() {
+    if (_skinViewer) {
+        try { _skinViewer.dispose(); } catch (e) {}
+        _skinViewer = null;
+    }
+    const container = document.getElementById('skin-3d-container');
+    if (container) container.innerHTML = '';
+}
+
+function initSkinViewer(skinUrl) {
+    destroySkinViewer();
+    const container = document.getElementById('skin-3d-container');
+    if (!container) return;
+    try {
+        _skinViewer = new skinview3d.SkinViewer({
+            canvas: undefined,
+            width: container.clientWidth || 400,
+            height: container.clientHeight || 500,
+            skin: skinUrl || undefined
+        });
+        container.appendChild(_skinViewer.canvas);
+        _skinViewer.fov = 50;
+        _skinViewer.zoom = 0.85;
+        _skinViewer.autoRotate = true;
+        _skinViewer.autoRotateSpeed = 0.5;
+        _skinViewer.animation = new skinview3d.IdleAnimation();
+        _skinViewer.animation.speed = 0.8;
+        _skinViewer.cameraLight.intensity = 1.2;
+        _skinViewer.globalLight.intensity = 2.5;
+        _skinViewer.background = null;
+        _skinViewer.nameTag = _currentDetailAccount ? _currentDetailAccount.username : null;
+    } catch (e) {
+        console.error('[SkinViewer] init error:', e);
+        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;font-size:14px;">3D渲染初始化失败</div>';
+    }
 }
 
 async function detailSelectAccount() {
@@ -4592,13 +4629,17 @@ async function detailDeleteAccount() {
 }
 
 async function detailRefreshSkin() {
-    if (!_currentDetailAccount) return;
+    if (!_currentDetailAccount || !_skinViewer) return;
     const acc = _currentDetailAccount;
     const accUuid = (acc.uuid || '').replace(/-/g, '');
     if (!accUuid) { showToast('无UUID', 'error'); return; }
     const skinUrl = `/api/skin-texture?uuid=${accUuid}${acc.serverUrl ? '&serverUrl=' + encodeURIComponent(acc.serverUrl) : ''}${acc.username ? '&username=' + encodeURIComponent(acc.username) : ''}&_=${Date.now()}`;
-    renderMinecraftSkin(skinUrl);
-    showToast('皮肤已刷新', 'success');
+    try {
+        await _skinViewer.loadSkin(skinUrl);
+        showToast('皮肤已刷新', 'success');
+    } catch (e) {
+        showToast('皮肤刷新失败', 'error');
+    }
 }
 
 function generatePixelBackground() {
@@ -4616,115 +4657,6 @@ function generatePixelBackground() {
         div.style.opacity = 0.15 + Math.random() * 0.35;
         container.appendChild(div);
     }
-}
-
-function renderMinecraftSkin(skinUrl) {
-    const canvas = document.getElementById('account-skin-canvas');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = function() {
-        ctx.imageSmoothingEnabled = false;
-        drawMinecraftCharacter(ctx, img, canvas.width, canvas.height);
-    };
-    img.onerror = function() {
-        drawDefaultSteve(ctx, canvas.width, canvas.height);
-    };
-    img.src = skinUrl;
-}
-
-function drawMinecraftCharacter(ctx, skinImg, cw, ch) {
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    const sw = skinImg.naturalWidth || 64;
-    const sh = skinImg.naturalHeight || 64;
-    const isOldFormat = sh < 64;
-    const S = Math.floor(cw / 20);
-    const centerX = cw / 2;
-    const headSize = S * 8;
-    const headX = centerX - headSize / 2;
-    const headY = ch * 0.08;
-    ctx.drawImage(skinImg, 8, 8, 8, 8, Math.round(headX), Math.round(headY), Math.round(headSize), Math.round(headSize));
-    if (!isOldFormat && sw >= 64) {
-        try {
-            ctx.globalAlpha = 0.9;
-            ctx.drawImage(skinImg, 40, 8, 8, 8, Math.round(headX), Math.round(headY), Math.round(headSize), Math.round(headSize));
-            ctx.globalAlpha = 1;
-        } catch (e) { ctx.globalAlpha = 1; }
-    }
-    const bodyW = S * 8;
-    const bodyH = S * 12;
-    const bodyX = centerX - bodyW / 2;
-    const bodyY = headY + headSize + 2;
-    ctx.drawImage(skinImg, 20, 20, 8, 12, Math.round(bodyX), Math.round(bodyY), Math.round(bodyW), Math.round(bodyH));
-    if (!isOldFormat && sw >= 64) {
-        try {
-            ctx.globalAlpha = 0.9;
-            ctx.drawImage(skinImg, 20, 36, 8, 12, Math.round(bodyX), Math.round(bodyY), Math.round(bodyW), Math.round(bodyH));
-            ctx.globalAlpha = 1;
-        } catch (e) { ctx.globalAlpha = 1; }
-    }
-    const armW = S * 4;
-    const armH = S * 12;
-    const rArmX = centerX + bodyW / 2 + 1;
-    ctx.drawImage(skinImg, 44, 20, 4, 12, Math.round(rArmX), Math.round(bodyY), Math.round(armW), Math.round(armH));
-    const lArmX = centerX - bodyW / 2 - armW - 1;
-    ctx.drawImage(skinImg, 36, 20, 4, 12, Math.round(lArmX), Math.round(bodyY), Math.round(armW), Math.round(armH));
-    const legW = S * 4;
-    const legH = S * 12;
-    const legY = bodyY + bodyH;
-    const rLegX = centerX;
-    ctx.drawImage(skinImg, 4, 20, 4, 12, Math.round(rLegX), Math.round(legY), Math.round(legW), Math.round(legH));
-    const lLegX = centerX - legW;
-    ctx.drawImage(skinImg, 20, 52, 4, 12, Math.round(lLegX), Math.round(legY), Math.round(legW), Math.round(legH));
-    drawStoneBlock(ctx, centerX - S * 6, legY + legH + 6, S * 12, S * 5);
-    ctx.restore();
-}
-
-function drawDefaultSteve(ctx, cw, ch) {
-    const S = Math.floor(cw / 20);
-    const centerX = cw / 2;
-    ctx.fillStyle = '#a0a0a0';
-    ctx.font = '14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('皮肤加载失败', centerX, ch / 2);
-}
-
-function drawStoneBlock(ctx, x, y, w, h) {
-    ctx.save();
-    const topH = h * 0.4;
-    const frontH = h - topH;
-    const skew = w * 0.18;
-    ctx.fillStyle = '#d0d0d0';
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + skew, y - topH);
-    ctx.lineTo(x + w + skew, y - topH);
-    ctx.lineTo(x + w, y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#b0b0b0';
-    ctx.fillRect(x, y, w, frontH);
-    ctx.fillStyle = '#a0a0a0';
-    ctx.beginPath();
-    ctx.moveTo(x + w, y);
-    ctx.lineTo(x + w + skew, y - topH);
-    ctx.lineTo(x + w + skew, y - topH + frontH);
-    ctx.lineTo(x + w, y + frontH);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-    ctx.lineWidth = 0.5;
-    const gs = Math.max(6, Math.floor(w / 6));
-    for (let gx = x + gs; gx < x + w; gx += gs) {
-        ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx, y + frontH); ctx.stroke();
-    }
-    for (let gy = y + gs; gy < y + frontH; gy += gs) {
-        ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x + w, gy); ctx.stroke();
-    }
-    ctx.restore();
 }
 
 async function startMsAuth() {

@@ -22,6 +22,12 @@
  * 16. 通用组件 - Toast、模态框、空状态、动�?
  */
 
+@font-face {
+    font-family: 'Minecraft';
+    src: url('../fonts/minecraft.woff2') format('woff2');
+    font-display: swap;
+}
+
 :root {
     --bg-primary: #0a0a0a;
     --bg-secondary: #141414;
@@ -1876,6 +1882,15 @@ body {
     image-rendering: crisp-edges;
     position: relative;
     z-index: 1;
+}
+#skin-3d-container {
+    position: relative;
+    z-index: 1;
+}
+#skin-3d-container canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
 }
 .acct-detail-right {
     width: 440px;

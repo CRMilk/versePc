@@ -212,6 +212,11 @@ const AVATAR_SERVICES = [
     (uuid) => `https://visage.surgeplay.com/face/64/${uuid}`,
 ];
 
+function cleanServerUrl(url) {
+    if (!url) return '';
+    return url.replace(/@@@.*$/, '').replace(/@@.*$/, '').replace(/\/$/, '');
+}
+
 async function fetchSkinFromSessionServer(uuid, serverUrl) {
     try {
         const cleanUuid = uuid.replace(/-/g, '');
@@ -220,7 +225,7 @@ async function fetchSkinFromSessionServer(uuid, serverUrl) {
             : uuid;
 
         if (serverUrl) {
-            let apiUrl = serverUrl.replace(/\/$/, '');
+            let apiUrl = cleanServerUrl(serverUrl);
             const profileUrl = `${apiUrl}/sessionserver/session/minecraft/profile/${dashedUuid}`;
             const profileData = await fetchJSON(profileUrl);
             if (profileData && profileData.properties) {
@@ -398,10 +403,27 @@ async function cropSkinToHeadWithSharp(skinBuffer) {
     }
 }
 
-async function fetchAvatarData(cleanUuid, avatarServerUrl, avatarUsername) {
+async function fetchAvatarData(cleanUuid, avatarServerUrl, avatarUsername, storedSkinUrl) {
     let avatarData = null;
     let avatarContentType = 'image/png';
     let isFullSkin = false;
+
+    if (storedSkinUrl) {
+        try {
+            const skinRes = await new Promise((resolve, reject) => {
+                const req = https.get(storedSkinUrl, { timeout: 5000 }, resolve);
+                req.on('error', reject);
+                req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+            });
+            if (skinRes.statusCode === 200) {
+                const chunks = [];
+                for await (const chunk of skinRes) chunks.push(chunk);
+                avatarData = Buffer.concat(chunks);
+                avatarContentType = skinRes.headers['content-type'] || 'image/png';
+                isFullSkin = true;
+            } else { skinRes.resume(); }
+        } catch (e) {}
+    }
 
     if (!avatarServerUrl) {
         const serviceResults = await Promise.allSettled(
@@ -436,7 +458,7 @@ async function fetchAvatarData(cleanUuid, avatarServerUrl, avatarUsername) {
 
     if (!avatarData && avatarServerUrl && avatarUsername) {
         try {
-            let skinRoot = avatarServerUrl.replace(/\/$/, '');
+            let skinRoot = cleanServerUrl(avatarServerUrl);
             if (skinRoot.endsWith('/api/yggdrasil')) skinRoot = skinRoot.replace('/api/yggdrasil', '');
             const skinUrl = skinRoot + '/skin/' + encodeURIComponent(avatarUsername) + '.png';
             console.log('[Avatar] 传统API: ' + skinUrl);
@@ -456,7 +478,7 @@ async function fetchAvatarData(cleanUuid, avatarServerUrl, avatarUsername) {
 
     if (!avatarData && avatarServerUrl) {
         try {
-            let cslRoot = avatarServerUrl.replace(/\/$/, '');
+            let cslRoot = cleanServerUrl(avatarServerUrl);
             if (cslRoot.endsWith('/api/yggdrasil')) cslRoot = cslRoot.replace('/api/yggdrasil', '');
             const cslUsername = avatarUsername || '';
             if (cslUsername) {
@@ -529,10 +551,27 @@ function refreshAvatarCache(cacheKey, cleanUuid, avatarServerUrl, avatarUsername
     });
 }
 
-async function fetchAvatarDataFull(cleanUuid, avatarServerUrl, avatarUsername) {
+async function fetchAvatarDataFull(cleanUuid, avatarServerUrl, avatarUsername, storedSkinUrl) {
     let avatarData = null;
     let avatarContentType = 'image/png';
-    if (!avatarServerUrl) {
+
+    if (storedSkinUrl) {
+        try {
+            const skinRes = await new Promise((resolve, reject) => {
+                const req = https.get(storedSkinUrl, { timeout: 5000 }, resolve);
+                req.on('error', reject);
+                req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+            });
+            if (skinRes.statusCode === 200) {
+                const chunks = [];
+                for await (const chunk of skinRes) chunks.push(chunk);
+                avatarData = Buffer.concat(chunks);
+                avatarContentType = skinRes.headers['content-type'] || 'image/png';
+            } else { skinRes.resume(); }
+        } catch (e) {}
+    }
+
+    if (!avatarData && !avatarServerUrl) {
         const serviceResults = await Promise.allSettled(
             AVATAR_SERVICES.map(async (serviceFn) => {
                 const tryUrl = serviceFn(cleanUuid);
@@ -560,7 +599,7 @@ async function fetchAvatarDataFull(cleanUuid, avatarServerUrl, avatarUsername) {
     }
     if (!avatarData && avatarServerUrl && avatarUsername) {
         try {
-            let skinRoot = avatarServerUrl.replace(/\/$/, '');
+            let skinRoot = cleanServerUrl(avatarServerUrl);
             if (skinRoot.endsWith('/api/yggdrasil')) skinRoot = skinRoot.replace('/api/yggdrasil', '');
             const skinUrl = skinRoot + '/skin/' + encodeURIComponent(avatarUsername) + '.png';
             const skinRes = await new Promise((resolve, reject) => {
@@ -578,7 +617,7 @@ async function fetchAvatarDataFull(cleanUuid, avatarServerUrl, avatarUsername) {
     }
     if (!avatarData && avatarServerUrl && avatarUsername) {
         try {
-            let cslRoot = avatarServerUrl.replace(/\/$/, '');
+            let cslRoot = cleanServerUrl(avatarServerUrl);
             if (cslRoot.endsWith('/api/yggdrasil')) cslRoot = cslRoot.replace('/api/yggdrasil', '');
             const cslUrl = cslRoot + '/csl/' + encodeURIComponent(avatarUsername) + '.json';
             const cslRes = await new Promise((resolve, reject) => {
@@ -890,8 +929,13 @@ function crc32(buf) {
 
 function extractSkinUrlFromAuthResult(authResult) {
     try {
-        if (authResult && authResult.user && authResult.user.properties) {
-            const texturesProp = authResult.user.properties.find(p => p.name === 'textures');
+        const sources = [
+            authResult?.selectedProfile?.properties,
+            authResult?.user?.properties
+        ];
+        for (const properties of sources) {
+            if (!properties) continue;
+            const texturesProp = properties.find(p => p.name === 'textures');
             if (texturesProp && texturesProp.value) {
                 try {
                     const decoded = JSON.parse(Buffer.from(texturesProp.value, 'base64').toString('utf8'));
@@ -15142,7 +15186,13 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 }
 
                 try {
-                    const result = await fetchAvatarData(cleanUuid, avatarServerUrl, avatarUsername);
+                    let storedSkinUrl = '';
+                    try {
+                        const accounts = loadAccounts();
+                        const acc = accounts.find(a => a.uuid === cleanUuid || a.uuid === avatarUuid);
+                        if (acc && acc.skinUrl) storedSkinUrl = acc.skinUrl;
+                    } catch (e) {}
+                    const result = await fetchAvatarData(cleanUuid, avatarServerUrl, avatarUsername, storedSkinUrl);
                     if (result) {
                         AVATAR_CACHE.set(cacheKey, { data: result.data, contentType: result.contentType, time: Date.now() });
                         serveImage(result.data, result.contentType);
@@ -15182,7 +15232,13 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 };
                 if (stCached) { serveStImage(stCached.data, stCached.contentType); break; }
                 try {
-                    const stResult = await fetchAvatarDataFull(stClean, stServerUrl, stUsername);
+                    let stStoredSkinUrl = '';
+                    try {
+                        const accounts = loadAccounts();
+                        const acc = accounts.find(a => a.uuid === stClean || a.uuid === stUuid);
+                        if (acc && acc.skinUrl) stStoredSkinUrl = acc.skinUrl;
+                    } catch (e) {}
+                    const stResult = await fetchAvatarDataFull(stClean, stServerUrl, stUsername, stStoredSkinUrl);
                     if (stResult) {
                         AVATAR_CACHE.set(stCacheKey, { data: stResult.data, contentType: stResult.contentType, time: Date.now() });
                         serveStImage(stResult.data, stResult.contentType);
@@ -16719,6 +16775,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     if (!profile && availableProfiles.length === 1) {
                         profile = availableProfiles[0];
                     }
+                    let refreshResult = null;
                     try {
                         const refreshUrl = `${apiUrl}/authserver/refresh`;
                         const refreshPayload = JSON.stringify({
@@ -16727,7 +16784,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                             selectedProfile: profile,
                             requestUser: true
                         });
-                        const refreshResult = await new Promise((resolve, reject) => {
+                        refreshResult = await new Promise((resolve, reject) => {
                             const rParsedUrl = new URL(refreshUrl);
                             const req = https.request({
                                 hostname: rParsedUrl.hostname,
@@ -16766,7 +16823,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     }
 
                     console.log(`[ThirdParty] 登录成功: ${profile.name} (${profile.id})`);
-                    const extractedSkinUrl = extractSkinUrlFromAuthResult(authResult);
+                    const extractedSkinUrl = extractSkinUrlFromAuthResult(refreshResult || authResult) || extractSkinUrlFromAuthResult(authResult);
                     if (extractedSkinUrl) {
                         console.log(`[ThirdParty] 从登录响应提取到皮肤URL: ${extractedSkinUrl.substring(0, 60)}...`);
                     }
