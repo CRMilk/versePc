@@ -4555,7 +4555,7 @@ function showAccountDetail(accountId) {
         if (!acc) return;
         _currentDetailAccount = acc;
         const accUuid = (acc.uuid || '').replace(/-/g, '');
-        const skinUrl = accUuid ? `/api/avatar?uuid=${accUuid}${acc.serverUrl ? '&serverUrl=' + encodeURIComponent(acc.serverUrl) : ''}${acc.username ? '&username=' + encodeURIComponent(acc.username) : ''}` : '';
+        const skinUrl = accUuid ? `/api/skin-texture?uuid=${accUuid}${acc.serverUrl ? '&serverUrl=' + encodeURIComponent(acc.serverUrl) : ''}${acc.username ? '&username=' + encodeURIComponent(acc.username) : ''}` : '';
         document.getElementById('detail-username').textContent = acc.username;
         document.getElementById('detail-uuid').textContent = acc.uuid || '-';
         const typeLabel = acc.type === 'microsoft' ? '正版 (Steve)' : acc.type === 'thirdparty' ? '外置登录' : '经典';
@@ -4564,6 +4564,7 @@ function showAccountDetail(accountId) {
         const header = document.querySelector('#page-accounts .page-header');
         if (header) header.style.display = 'none';
         document.getElementById('page-account-detail').style.display = '';
+        generatePixelBackground();
         if (skinUrl) {
             renderMinecraftSkin(skinUrl);
         }
@@ -4595,9 +4596,26 @@ async function detailRefreshSkin() {
     const acc = _currentDetailAccount;
     const accUuid = (acc.uuid || '').replace(/-/g, '');
     if (!accUuid) { showToast('无UUID', 'error'); return; }
-    const skinUrl = `/api/avatar?uuid=${accUuid}${acc.serverUrl ? '&serverUrl=' + encodeURIComponent(acc.serverUrl) : ''}${acc.username ? '&username=' + encodeURIComponent(acc.username) : ''}&_=${Date.now()}`;
+    const skinUrl = `/api/skin-texture?uuid=${accUuid}${acc.serverUrl ? '&serverUrl=' + encodeURIComponent(acc.serverUrl) : ''}${acc.username ? '&username=' + encodeURIComponent(acc.username) : ''}&_=${Date.now()}`;
     renderMinecraftSkin(skinUrl);
     showToast('皮肤已刷新', 'success');
+}
+
+function generatePixelBackground() {
+    const container = document.getElementById('acct-pixels-bg');
+    if (!container || container.children.length > 0) return;
+    const count = 18;
+    for (let i = 0; i < count; i++) {
+        const div = document.createElement('div');
+        div.className = 'px';
+        const size = 8 + Math.floor(Math.random() * 24);
+        div.style.width = size + 'px';
+        div.style.height = size + 'px';
+        div.style.left = (Math.random() * 100) + '%';
+        div.style.top = (Math.random() * 100) + '%';
+        div.style.opacity = 0.15 + Math.random() * 0.35;
+        container.appendChild(div);
+    }
 }
 
 function renderMinecraftSkin(skinUrl) {
@@ -4609,62 +4627,77 @@ function renderMinecraftSkin(skinUrl) {
     img.crossOrigin = 'anonymous';
     img.onload = function() {
         ctx.imageSmoothingEnabled = false;
-        drawIsometricSteve(ctx, img, canvas.width, canvas.height);
+        drawMinecraftCharacter(ctx, img, canvas.width, canvas.height);
     };
     img.onerror = function() {
-        ctx.fillStyle = '#a0a0a0';
-        ctx.font = '14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('皮肤加载失败', canvas.width / 2, canvas.height / 2);
+        drawDefaultSteve(ctx, canvas.width, canvas.height);
     };
     img.src = skinUrl;
 }
 
-function drawIsometricSteSteve(ctx, skinImg, cw, ch) {
+function drawMinecraftCharacter(ctx, skinImg, cw, ch) {
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    const S = 4;
+    const sw = skinImg.naturalWidth || 64;
+    const sh = skinImg.naturalHeight || 64;
+    const isOldFormat = sh < 64;
+    const S = Math.floor(cw / 20);
     const centerX = cw / 2;
-    const topY = 30;
-    function drawBox(sx, sy, sw, sh, dx, dy, w, h) {
-        ctx.drawImage(skinImg, sx, sy, sw, sh, dx, dy, w, h);
+    const headSize = S * 8;
+    const headX = centerX - headSize / 2;
+    const headY = ch * 0.08;
+    ctx.drawImage(skinImg, 8, 8, 8, 8, Math.round(headX), Math.round(headY), Math.round(headSize), Math.round(headSize));
+    if (!isOldFormat && sw >= 64) {
+        try {
+            ctx.globalAlpha = 0.9;
+            ctx.drawImage(skinImg, 40, 8, 8, 8, Math.round(headX), Math.round(headY), Math.round(headSize), Math.round(headSize));
+            ctx.globalAlpha = 1;
+        } catch (e) { ctx.globalAlpha = 1; }
     }
-    const headX = centerX - S * 4;
-    const headY = topY;
-    drawBox(8, 8, 8, 8, headX, headY, S * 8, S * 8);
-    const bodyX = centerX - S * 4;
-    const bodyY = headY + S * 8 + 2;
-    drawBox(20, 20, 8, 12, bodyX, bodyY, S * 8, S * 12);
+    const bodyW = S * 8;
+    const bodyH = S * 12;
+    const bodyX = centerX - bodyW / 2;
+    const bodyY = headY + headSize + 2;
+    ctx.drawImage(skinImg, 20, 20, 8, 12, Math.round(bodyX), Math.round(bodyY), Math.round(bodyW), Math.round(bodyH));
+    if (!isOldFormat && sw >= 64) {
+        try {
+            ctx.globalAlpha = 0.9;
+            ctx.drawImage(skinImg, 20, 36, 8, 12, Math.round(bodyX), Math.round(bodyY), Math.round(bodyW), Math.round(bodyH));
+            ctx.globalAlpha = 1;
+        } catch (e) { ctx.globalAlpha = 1; }
+    }
     const armW = S * 4;
     const armH = S * 12;
-    const rArmX = centerX + S * 4 + 2;
-    drawBox(44, 20, 4, 12, rArmX, bodyY, armW, armH);
-    const lArmX = centerX - S * 4 - armW - 2;
-    drawBox(36, 20, 4, 12, lArmX, bodyY, armW, armH);
+    const rArmX = centerX + bodyW / 2 + 1;
+    ctx.drawImage(skinImg, 44, 20, 4, 12, Math.round(rArmX), Math.round(bodyY), Math.round(armW), Math.round(armH));
+    const lArmX = centerX - bodyW / 2 - armW - 1;
+    ctx.drawImage(skinImg, 36, 20, 4, 12, Math.round(lArmX), Math.round(bodyY), Math.round(armW), Math.round(armH));
     const legW = S * 4;
     const legH = S * 12;
-    const legY = bodyY + S * 12;
+    const legY = bodyY + bodyH;
     const rLegX = centerX;
-    drawBox(4, 20, 4, 12, rLegX, legY, legW, legH);
-    const lLegX = centerX - S * 4;
-    drawBox(20, 52, 4, 12, lLegX, legY, legW, legH);
-    drawStoneBlock(ctx, centerX - S * 6, legY + legH + 4, S * 12, S * 5);
+    ctx.drawImage(skinImg, 4, 20, 4, 12, Math.round(rLegX), Math.round(legY), Math.round(legW), Math.round(legH));
+    const lLegX = centerX - legW;
+    ctx.drawImage(skinImg, 20, 52, 4, 12, Math.round(lLegX), Math.round(legY), Math.round(legW), Math.round(legH));
+    drawStoneBlock(ctx, centerX - S * 6, legY + legH + 6, S * 12, S * 5);
     ctx.restore();
 }
 
-function drawIsometricSteve(ctx, skinImg, cw, ch) {
-    drawIsometricSteSteve(ctx, skinImg, cw, ch);
+function drawDefaultSteve(ctx, cw, ch) {
+    const S = Math.floor(cw / 20);
+    const centerX = cw / 2;
+    ctx.fillStyle = '#a0a0a0';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('皮肤加载失败', centerX, ch / 2);
 }
 
 function drawStoneBlock(ctx, x, y, w, h) {
     ctx.save();
-    const topH = h * 0.45;
+    const topH = h * 0.4;
     const frontH = h - topH;
-    const topColor = '#c8c8c8';
-    const frontColor = '#a0a0a0';
-    const rightColor = '#909090';
-    const skew = w * 0.2;
-    ctx.fillStyle = topColor;
+    const skew = w * 0.18;
+    ctx.fillStyle = '#d0d0d0';
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(x + skew, y - topH);
@@ -4672,9 +4705,9 @@ function drawStoneBlock(ctx, x, y, w, h) {
     ctx.lineTo(x + w, y);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = frontColor;
+    ctx.fillStyle = '#b0b0b0';
     ctx.fillRect(x, y, w, frontH);
-    ctx.fillStyle = rightColor;
+    ctx.fillStyle = '#a0a0a0';
     ctx.beginPath();
     ctx.moveTo(x + w, y);
     ctx.lineTo(x + w + skew, y - topH);
@@ -4682,20 +4715,14 @@ function drawStoneBlock(ctx, x, y, w, h) {
     ctx.lineTo(x + w, y + frontH);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
-    ctx.lineWidth = 1;
-    const gridSize = 8;
-    for (let gx = x + gridSize; gx < x + w; gx += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(gx, y);
-        ctx.lineTo(gx, y + frontH);
-        ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 0.5;
+    const gs = Math.max(6, Math.floor(w / 6));
+    for (let gx = x + gs; gx < x + w; gx += gs) {
+        ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx, y + frontH); ctx.stroke();
     }
-    for (let gy = y + gridSize; gy < y + frontH; gy += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(x, gy);
-        ctx.lineTo(x + w, gy);
-        ctx.stroke();
+    for (let gy = y + gs; gy < y + frontH; gy += gs) {
+        ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x + w, gy); ctx.stroke();
     }
     ctx.restore();
 }

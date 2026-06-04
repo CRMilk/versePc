@@ -1846,128 +1846,164 @@ body {
     color: var(--text-secondary);
 }
 
-.account-detail-page {
+.acct-detail {
     display: flex;
-    flex-direction: column;
     height: 100%;
-    padding: 0;
-}
-.account-detail-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 20px 24px 16px;
-    border-bottom: 1px solid var(--border);
-}
-.account-detail-header h3 {
-    font-size: 18px;
-    font-weight: 600;
-    margin: 0;
-    flex: 1;
-}
-.account-detail-back {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-size: 14px;
-    padding: 6px 10px;
-    border-radius: var(--radius);
-    transition: all var(--transition);
-}
-.account-detail-back:hover {
-    background: var(--bg-hover);
-    color: var(--accent);
-}
-.account-detail-body {
-    display: flex;
-    flex: 1;
     overflow: hidden;
 }
-.account-detail-skin {
+.acct-detail-left {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 32px;
-    background: linear-gradient(180deg, #f0f0f0 0%, #e8e8e8 40%, #d0d0d0 100%);
-    border-radius: 0;
     position: relative;
     overflow: hidden;
+    background: linear-gradient(180deg, #f5f5f5 0%, #eaeaea 50%, #ddd 100%);
 }
-.account-detail-skin canvas {
+.acct-detail-pixels {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+.acct-detail-pixels .px {
+    position: absolute;
+    background: rgba(255,255,255,0.6);
+    border-radius: 2px;
+}
+.acct-detail-left canvas {
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    max-width: 100%;
-    max-height: 100%;
+    position: relative;
+    z-index: 1;
 }
-.account-detail-info {
-    width: 420px;
-    min-width: 320px;
-    padding: 32px;
+.acct-detail-right {
+    width: 440px;
+    min-width: 360px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    overflow-y: auto;
-    background: var(--bg-primary);
-    border-left: 1px solid var(--border);
+    justify-content: center;
+    padding: 40px 48px;
+    background: #fff;
+    gap: 0;
 }
-.account-detail-info-section {
+.acct-detail-fields {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 0;
 }
-.account-detail-info-section label {
-    font-size: 12px;
-    color: var(--text-muted);
-    text-transform: none;
-    letter-spacing: 0;
+.acct-detail-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px 0;
+    border-bottom: 1px solid #e8e8e8;
 }
-.account-detail-value {
+.acct-detail-field:last-child {
+    border-bottom: none;
+}
+.acct-detail-label {
+    font-size: 13px;
+    color: #888;
+    font-weight: 400;
+}
+.acct-detail-val {
     font-size: 16px;
     font-weight: 500;
-    color: var(--text-primary);
-    padding-bottom: 14px;
-    border-bottom: 1px solid var(--border);
+    color: #222;
+    line-height: 1.4;
 }
-.account-detail-uuid {
+.acct-detail-uuid {
     font-family: 'Consolas', 'SF Mono', 'Fira Code', monospace;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 400;
-    color: var(--text-secondary);
+    color: #444;
     word-break: break-all;
-    line-height: 1.5;
+    line-height: 1.6;
 }
-.account-detail-actions {
-    margin-top: auto;
+.acct-detail-actions {
+    margin-top: 28px;
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
-.account-detail-actions .btn-block {
-    width: 100%;
-    padding: 12px 20px;
-}
-.account-detail-actions-row {
+.acct-detail-actions-row {
     display: flex;
     gap: 10px;
 }
-.account-detail-actions-row .btn {
+.acct-btn {
     flex: 1;
-    padding: 10px 16px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    text-align: center;
+}
+.acct-btn-primary {
+    background: linear-gradient(180deg, #e0e0e0 0%, #c8c8c8 100%);
+    color: #333;
+    border: 1px solid #bbb;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.acct-btn-primary:hover {
+    background: linear-gradient(180deg, #d5d5d5 0%, #bbb 100%);
+}
+.acct-btn-outline {
+    background: #fff;
+    color: #444;
+    border: 1px solid #ccc;
+}
+.acct-btn-outline:hover {
+    background: #f5f5f5;
+    border-color: #aaa;
 }
 @media (max-width: 800px) {
-    .account-detail-body { flex-direction: column; }
-    .account-detail-info { width: 100%; min-width: 0; border-left: none; border-top: 1px solid var(--border); }
-    .account-detail-skin { min-height: 280px; }
+    .acct-detail { flex-direction: column; }
+    .acct-detail-right { width: 100%; min-width: 0; padding: 24px; }
+    .acct-detail-left { min-height: 300px; }
 }
-
-.dark-theme .account-detail-skin,
-body.dark-theme .account-detail-skin {
-    background: linear-gradient(180deg, #2a2a3a 0%, #222233 40%, #1a1a2a 100%);
+.dark-theme .acct-detail-left,
+body.dark-theme .acct-detail-left {
+    background: linear-gradient(180deg, #2a2a3a 0%, #222233 50%, #1a1a2a 100%);
+}
+.dark-theme .acct-detail-right,
+body.dark-theme .acct-detail-right {
+    background: var(--bg-primary);
+}
+.dark-theme .acct-detail-field,
+body.dark-theme .acct-detail-field {
+    border-bottom-color: var(--border);
+}
+.dark-theme .acct-detail-label,
+body.dark-theme .acct-detail-label {
+    color: var(--text-muted);
+}
+.dark-theme .acct-detail-val,
+body.dark-theme .acct-detail-val {
+    color: var(--text-primary);
+}
+.dark-theme .acct-detail-uuid,
+body.dark-theme .acct-detail-uuid {
+    color: var(--text-secondary);
+}
+.dark-theme .acct-btn-primary,
+body.dark-theme .acct-btn-primary {
+    background: linear-gradient(180deg, #3a3a4a 0%, #2a2a3a 100%);
+    color: var(--text-primary);
+    border-color: var(--border);
+}
+.dark-theme .acct-btn-outline,
+body.dark-theme .acct-btn-outline {
+    background: transparent;
+    color: var(--text-secondary);
+    border-color: var(--border);
+}
+.dark-theme .acct-detail-pixels .px,
+body.dark-theme .acct-detail-pixels .px {
+    background: rgba(255,255,255,0.05);
 }
 
 .settings-container {

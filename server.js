@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/**
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/**
  * server.js - VersePC 服务端核心模块
  * ============================================================================
  * 所有版本管理、游戏启动、模组加载器集成、下载管理等核心业务逻辑。
@@ -527,6 +527,124 @@ function refreshAvatarCache(cacheKey, cleanUuid, avatarServerUrl, avatarUsername
     }).catch(e => {
         console.error('[Avatar] 后台刷新失败: ' + e.message);
     });
+}
+
+async function fetchAvatarDataFull(cleanUuid, avatarServerUrl, avatarUsername) {
+    let avatarData = null;
+    let avatarContentType = 'image/png';
+    if (!avatarServerUrl) {
+        const serviceResults = await Promise.allSettled(
+            AVATAR_SERVICES.map(async (serviceFn) => {
+                const tryUrl = serviceFn(cleanUuid);
+                const checkRes = await new Promise((resolve, reject) => {
+                    const req = https.get(tryUrl, { timeout: 4000 }, resolve);
+                    req.on('error', reject);
+                    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+                });
+                if (checkRes.statusCode === 200) {
+                    const chunks = [];
+                    for await (const chunk of checkRes) chunks.push(chunk);
+                    return { data: Buffer.concat(chunks), contentType: checkRes.headers['content-type'] || 'image/png' };
+                }
+                checkRes.resume();
+                throw new Error('non-200');
+            })
+        );
+        for (const r of serviceResults) {
+            if (r.status === 'fulfilled' && r.value) {
+                avatarData = r.value.data;
+                avatarContentType = r.value.contentType;
+                break;
+            }
+        }
+    }
+    if (!avatarData && avatarServerUrl && avatarUsername) {
+        try {
+            let skinRoot = avatarServerUrl.replace(/\/$/, '');
+            if (skinRoot.endsWith('/api/yggdrasil')) skinRoot = skinRoot.replace('/api/yggdrasil', '');
+            const skinUrl = skinRoot + '/skin/' + encodeURIComponent(avatarUsername) + '.png';
+            const skinRes = await new Promise((resolve, reject) => {
+                const req = https.get(skinUrl, { timeout: 5000 }, resolve);
+                req.on('error', reject);
+                req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+            });
+            if (skinRes.statusCode === 200) {
+                const chunks = [];
+                for await (const chunk of skinRes) chunks.push(chunk);
+                avatarData = Buffer.concat(chunks);
+                avatarContentType = skinRes.headers['content-type'] || 'image/png';
+            } else { skinRes.resume(); }
+        } catch (e) {}
+    }
+    if (!avatarData && avatarServerUrl && avatarUsername) {
+        try {
+            let cslRoot = avatarServerUrl.replace(/\/$/, '');
+            if (cslRoot.endsWith('/api/yggdrasil')) cslRoot = cslRoot.replace('/api/yggdrasil', '');
+            const cslUrl = cslRoot + '/csl/' + encodeURIComponent(avatarUsername) + '.json';
+            const cslRes = await new Promise((resolve, reject) => {
+                const req = https.get(cslUrl, { timeout: 4000 }, resolve);
+                req.on('error', reject);
+                req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+            });
+            if (cslRes.statusCode === 200) {
+                const cslChunks = [];
+                for await (const chunk of cslRes) cslChunks.push(chunk);
+                const cslData = JSON.parse(Buffer.concat(cslChunks).toString('utf8'));
+                const skinEntry = cslData.skins && cslData.skins.find(s => s.type === 'skin' || s.type === 'default');
+                if (skinEntry && skinEntry.url) {
+                    const texRes = await new Promise((resolve, reject) => {
+                        const req = https.get(skinEntry.url, { timeout: 5000 }, resolve);
+                        req.on('error', reject);
+                        req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+                    });
+                    if (texRes.statusCode === 200) {
+                        const texChunks = [];
+                        for await (const chunk of texRes) texChunks.push(chunk);
+                        avatarData = Buffer.concat(texChunks);
+                        avatarContentType = texRes.headers['content-type'] || 'image/png';
+                    } else { texRes.resume(); }
+                }
+            } else { cslRes.resume(); }
+        } catch (e) {}
+    }
+    if (!avatarData) {
+        const skinTextureUrl = await fetchSkinFromSessionServer(cleanUuid, avatarServerUrl);
+        if (skinTextureUrl) {
+            try {
+                const texRes = await new Promise((resolve, reject) => {
+                    const req = https.get(skinTextureUrl, { timeout: 5000 }, resolve);
+                    req.on('error', reject);
+                    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+                });
+                if (texRes.statusCode === 200) {
+                    const texChunks = [];
+                    for await (const chunk of texRes) texChunks.push(chunk);
+                    avatarData = Buffer.concat(texChunks);
+                    avatarContentType = texRes.headers['content-type'] || 'image/png';
+                } else { texRes.resume(); }
+            } catch (e) {}
+        }
+    }
+    if (!avatarData) return null;
+    return { data: avatarData, contentType: avatarContentType };
+}
+
+let _steveSkinFull = null;
+let _steveSkinFullPromise = null;
+async function getSteveSkinFull() {
+    if (_steveSkinFull) return _steveSkinFull;
+    if (_steveSkinFullPromise) { try { return await _steveSkinFullPromise; } catch (e) {} }
+    _steveSkinFullPromise = (async () => {
+        try {
+            const skinPath = path.join(__dirname, 'img', 'steve_head.png');
+            if (fs.existsSync(skinPath)) {
+                _steveSkinFull = fs.readFileSync(skinPath);
+                return _steveSkinFull;
+            }
+        } catch (e) {}
+        return null;
+    })();
+    return await _steveSkinFullPromise;
 }
 
 // 定期清理过期的头像缓存
@@ -15046,6 +15164,37 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         res.writeHead(302, { Location: '/img/steve_head.png' });
                         res.end();
                     }
+                }
+                break;
+            }
+
+            case '/api/skin-texture': {
+                const stUuid = parsedUrl.query.uuid || '';
+                const stServerUrl = parsedUrl.query.serverUrl || '';
+                const stUsername = parsedUrl.query.username || '';
+                if (!stUuid) { sendError('Missing uuid', 400); break; }
+                const stClean = stUuid.replace(/-/g, '');
+                const stCacheKey = `skin:${stClean}:${stServerUrl}:${stUsername}`;
+                const stCached = AVATAR_CACHE.get(stCacheKey);
+                const serveStImage = (data, ct) => {
+                    res.writeHead(200, { 'Content-Type': ct || 'image/png', 'Cache-Control': 'public, max-age=86400' });
+                    res.end(data);
+                };
+                if (stCached) { serveStImage(stCached.data, stCached.contentType); break; }
+                try {
+                    const stResult = await fetchAvatarDataFull(stClean, stServerUrl, stUsername);
+                    if (stResult) {
+                        AVATAR_CACHE.set(stCacheKey, { data: stResult.data, contentType: stResult.contentType, time: Date.now() });
+                        serveStImage(stResult.data, stResult.contentType);
+                    } else {
+                        const dh = await getSteveSkinFull();
+                        if (dh) serveStImage(dh, 'image/png');
+                        else { res.writeHead(302, { Location: '/img/steve_head.png' }); res.end(); }
+                    }
+                } catch (e) {
+                    const dh = await getSteveSkinFull();
+                    if (dh) serveStImage(dh, 'image/png');
+                    else { res.writeHead(302, { Location: '/img/steve_head.png' }); res.end(); }
                 }
                 break;
             }
