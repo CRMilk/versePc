@@ -3180,8 +3180,8 @@ Call attempt_completion when all operations are done and verified.
             div.innerHTML = `
                 <div class="ai-ask-card">
                     <div class="ai-ask-header">
-                        <span class="ai-ask-icon">❓</span>
-                        <span class="ai-ask-title">AI 需要你的输入</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <span class="ai-ask-title">需要你的输入</span>
                     </div>
                     ${context ? `<div class="ai-ask-context">${this.escapeHtml(context)}</div>` : ''}
                     <div class="ai-ask-question">${this.escapeHtml(question)}</div>
@@ -3189,7 +3189,9 @@ Call attempt_completion when all operations are done and verified.
                     ${!options || options.length === 0 ? `
                     <div class="ai-ask-free-input">
                         <input type="text" class="ai-ask-input" placeholder="输入你的回答..." data-ask-id="${askId}" />
-                        <button class="ai-ask-send-btn" data-ask-id="${askId}">发送</button>
+                        <button class="ai-ask-send-btn" data-ask-id="${askId}">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
                     </div>` : ''}
                 </div>`;
             const chatContainer = document.getElementById('ai-messages');
@@ -3203,7 +3205,10 @@ Call attempt_completion when all operations are done and verified.
                     if (window.electronAPI?.ai?.askUserRespond) {
                         window.electronAPI.ai.askUserRespond(askId, answer);
                     }
-                    btn.parentElement.innerHTML = `<span class="ai-ask-selected">已选择: ${this.escapeHtml(answer)}</span>`;
+                    btn.classList.add('selected');
+                    btn.parentElement.querySelectorAll('.ai-ask-option-btn').forEach(b => {
+                        if (b !== btn) b.classList.add('dimmed');
+                    });
                     const inputArea = div.querySelector('.ai-ask-free-input');
                     if (inputArea) inputArea.remove();
                 });
