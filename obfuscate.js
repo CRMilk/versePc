@@ -2,30 +2,10 @@ const JavaScriptObfuscator = require('javascript-obfuscator');
 const fs = require('fs');
 const path = require('path');
 
-const AI_TARGETS = [
+const OBFUSCATION_TARGETS = [
     'agent-engine.js',
     'agent-worker.js',
     'js/ai-chat.js'
-];
-
-const ALL_TARGETS = [
-    'main.js',
-    'server.js',
-    'agent-engine.js',
-    'agent-worker.js',
-    'plugin-manager.js',
-    'crashAnalyzer.js',
-    'sse-server.js',
-    'js/app.js',
-    'js/api.js',
-    'js/ai-chat.js',
-    'js/file-browser.js',
-    'js/crashAnalyzerUI.js',
-    'js/modpack-import.js',
-    'js/wallpaper-engine.js',
-    'js/mod-chinese-names.js',
-    'js/hljs-setup.js',
-    'plugins/modrinth/index.js'
 ];
 
 const OBFUSCATION_OPTIONS = {
@@ -85,18 +65,13 @@ function main() {
     const args = process.argv.slice(2);
     const isDryRun = args.includes('--dry-run');
     const isRestore = args.includes('--restore');
-    const isAll = args.includes('--all');
-
-    const targets = isAll ? ALL_TARGETS : AI_TARGETS;
-    const scopeLabel = isAll ? 'ALL modules' : 'AI modules only';
 
     if (isRestore) {
         if (!fs.existsSync(BACKUP_DIR)) {
             console.error('No backup found. Cannot restore.');
             process.exit(1);
         }
-        const restoreTargets = isAll ? ALL_TARGETS : AI_TARGETS;
-        for (const file of restoreTargets) {
+        for (const file of OBFUSCATION_TARGETS) {
             const backupPath = path.join(BACKUP_DIR, file);
             const targetPath = path.join(__dirname, file);
             if (fs.existsSync(backupPath)) {
@@ -110,8 +85,7 @@ function main() {
 
     console.log('VersePC Code Obfuscator');
     console.log('========================');
-    console.log(`Scope: ${scopeLabel}`);
-    console.log(`Files to obfuscate: ${targets.length}`);
+    console.log(`Files to obfuscate: ${OBFUSCATION_TARGETS.length}`);
     console.log(`Mode: ${isDryRun ? 'DRY RUN' : 'LIVE'}\n`);
 
     ensureDir(BACKUP_DIR);
