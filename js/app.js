@@ -933,9 +933,7 @@ function isSupportMilestone(c) { return SUPPORT_MILESTONES.indexOf(c) !== -1; }
 
 function checkSupportMilestone() {
     var c = getLaunchCount();
-    if (isSupportMilestone(c)) {
-        showSupportModal(c);
-    }
+    showSupportModal(c);
 }
 
 function showSupportModal(count) {
