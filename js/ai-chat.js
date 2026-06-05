@@ -1929,7 +1929,8 @@ const AIChat = {
             const isSelected = selected && v.id === selected;
             const iconUrl = `/api/version-icon?id=${encodeURIComponent(v.id)}&type=${v.type || 'release'}${v.isForge ? '&forge=true' : ''}${v.isFabric ? '&fabric=true' : ''}${v.isNeoForge ? '&neoforge=true' : ''}${v.isModpack ? '&modpack=true' : ''}`;
             const itemCls = isSelected ? 'ai-version-select-item selected-item' : 'ai-version-select-item';
-            itemsHtml += '<div class="' + itemCls + '">';
+            const escapedId = this._escapeHtml(v.id).replace(/'/g, "\\'");
+            itemsHtml += '<div class="' + itemCls + '" onclick="AIChat._onVersionSelected(\'' + escapedId + '\', \'' + this._escapeHtml(tcId).replace(/'/g, "\\'") + '\')">';
             itemsHtml += '<div class="ai-version-select-icon-wrap"><img src="' + iconUrl + '" alt="" class="ai-version-select-icon-img" onerror="this.style.display=\'none\'"></div>';
             itemsHtml += '<div class="ai-version-select-info">';
             itemsHtml += '<span class="ai-version-select-id">' + this._escapeHtml(v.id) + '</span>';
@@ -1940,7 +1941,7 @@ const AIChat = {
             if (isSelected) itemsHtml += '<svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" style="width:16px;height:16px;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg>';
             itemsHtml += '</div>';
         }
-        return '<div class="ai-version-select-card">' +
+        return '<div class="ai-version-select-card" data-sel-id="' + this._escapeHtml(tcId) + '">' +
             '<div class="ai-version-select-header"><span class="ai-version-select-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span><span class="ai-version-select-title">' + this._escapeHtml(purpose) + (selected ? ' ✓' : '') + '</span></div>' +
             '<div class="ai-version-select-list">' + itemsHtml + '</div></div>';
     },
@@ -2065,11 +2066,12 @@ const AIChat = {
             installed.map(v => {
                 const loader = v.loader || 'Vanilla';
                 const modsCount = v.modsCount || 0;
+                const loaderClass = loader === 'Fabric' ? 'fabric' : loader === 'Forge' ? 'forge' : loader === 'NeoForge' ? 'neoforge' : 'vanilla';
                 const iconUrl = `/api/version-icon?id=${encodeURIComponent(v.id)}&type=${v.type || 'release'}${v.isForge ? '&forge=true' : ''}${v.isFabric ? '&fabric=true' : ''}${v.isNeoForge ? '&neoforge=true' : ''}${v.isModpack ? '&modpack=true' : ''}`;
                 return '<div class="ai-version-select-item" onclick="AIChat._onVersionSelected(\'' + this._escapeHtml(v.id).replace(/'/g, "\\'") + '\', \'' + selId + '\')">' +
                     '<div class="ai-version-select-icon-wrap"><img src="' + iconUrl + '" alt="" class="ai-version-select-icon-img" onerror="this.style.display=\'none\'"></div>' +
                     '<div class="ai-version-select-info"><span class="ai-version-select-id">' + this._escapeHtml(v.id) + '</span>' +
-                    '<span class="ai-version-select-meta"><span class="ai-version-select-loader">' + loader + '</span>' +
+                    '<span class="ai-version-select-meta"><span class="ai-version-select-loader ' + loaderClass + '">' + loader + '</span>' +
                     (modsCount > 0 ? '<span class="ai-version-select-mods">' + modsCount + ' 模组</span>' : '') +
                     '</span></div>' +
                     '<svg class="ai-version-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="9 18 15 12 9 6"/></svg></div>';
@@ -2080,18 +2082,19 @@ const AIChat = {
     },
 
     _onVersionSelected(versionId, selId) {
-        const card = document.querySelector('.ai-version-select-card[data-sel-id="' + selId + '"]');
-        if (card) {
-            card.classList.add('selected');
-            card.querySelectorAll('.ai-version-select-item').forEach(item => {
-                item.onclick = null;
-                item.style.pointerEvents = 'none';
-            });
-            const title = card.querySelector('.ai-version-select-title');
-            if (title) title.textContent += ' → ' + versionId;
-        }
         if (window.electronAPI?.ai?.selectVersionResponse) {
             window.electronAPI.ai.selectVersionResponse(selId, versionId);
+        }
+        const card = document.querySelector('.ai-version-select-card[data-sel-id="' + selId + '"]');
+        if (card) {
+            const header = card.querySelector('.ai-version-select-header');
+            const list = card.querySelector('.ai-version-select-list');
+            if (list) list.remove();
+            if (header) {
+                header.innerHTML = '<span class="ai-version-select-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg></span><span class="ai-version-select-title" style="color:#22c55e">已选择 ' + this._escapeHtml(versionId) + '</span>';
+            }
+            card.style.opacity = '0.8';
+            card.style.pointerEvents = 'none';
         }
     },
 

@@ -1010,6 +1010,7 @@ class AgentEngine {
         this._activePlan = null;
         this._planStepResults = {};
         this._thinkingSteps = [];
+        this._noToolsNextRound = false;
         this._apiKey = apiKey;
         this._model = model || 'glm-5-flash';
 
@@ -1237,7 +1238,8 @@ class AgentEngine {
             }
 
             let bodyStr;
-            const hasTools = tools && tools.length > 0;
+            const hasTools = tools && tools.length > 0 && !this._noToolsNextRound;
+            this._noToolsNextRound = false;
 
             if (apiFormat === 'anthropic') {
                 const anthropicMessages = _toAnthropicMessages(conversation);
@@ -2413,6 +2415,7 @@ Take action now. Do not explain your limitations.`
                 role: 'system',
                 content: `用户已经回答了 ask_user 提问${askQuestion ? `（"${askQuestion}"）` : ''}，回答内容是："${userAnswer}"。你必须现在用一段简短的中文文本回应用户，然后继续执行原本的任务。`
             });
+            this._noToolsNextRound = true;
         }
 
         if (round >= 2 && this._repeatTextCount > 0) {
