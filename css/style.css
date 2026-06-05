@@ -10861,25 +10861,18 @@ body.dark-theme .rc-context-sep { background:#222; }
 /* --- 消息气泡 --- */
 .ai-msg { display:flex; flex-direction:column; gap:0; max-width:800px; width:100%; margin:0 auto; animation:rcMsgIn 0.2s ease; padding:8px 12px; }
 @keyframes rcMsgIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
-.ai-msg-user { align-items:stretch; }
+.ai-msg-user { align-items:flex-end; }
 .ai-msg-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
 .ai-msg-avatar { width:20px; height:20px; border-radius:4px; object-fit:cover; flex-shrink:0; background:var(--ai-bg-tertiary); }
 .ai-msg-content { flex:1; min-width:0; }
-.ai-msg-user .ai-msg-content { display:flex; flex-direction:column; align-items:stretch; }
+.ai-msg-user .ai-msg-content { display:flex; flex-direction:column; align-items:flex-end; }
 .ai-msg-bubble { display:inline-block; padding:8px 12px; border-radius:8px; font-size:13px; line-height:1.6; max-width:100%; word-wrap:break-word; overflow-wrap:break-word; }
-.ai-msg-user .ai-msg-bubble {
-    background:var(--ai-bg-secondary, #f7f7f8);
-    color:var(--ai-text-primary);
-    text-align:left;
-    border-radius:12px;
-    padding:12px 16px;
-    border:1px solid var(--ai-border, rgba(0,0,0,0.06));
-}
+.ai-msg-user .ai-msg-bubble { background:rgba(var(--ai-accent-rgb, 0, 120, 212), 0.12); color:var(--ai-text-primary); text-align:left; border-radius:12px 12px 4px 12px; }
 .ai-msg-assistant .ai-msg-bubble { background:transparent; color:var(--ai-text-primary); padding:0; max-width:100%; }
 .ai-msg-bubble p { margin:0 0 6px; }
 .ai-msg-bubble p:last-child { margin-bottom:0; }
 .ai-msg-bubble code { background:var(--ai-chat-assistant-code-bg, rgba(255,255,255,0.08)); padding:2px 5px; border-radius:3px; font-size:12px; font-family:var(--ai-font-mono); color:var(--ai-text-primary); }
-.ai-msg-user .ai-msg-bubble code { background:var(--ai-bg-tertiary, rgba(0,0,0,0.06)); color:var(--ai-text-primary); }
+.ai-msg-user .ai-msg-bubble code { background:var(--ai-chat-user-code-bg, rgba(255,255,255,0.18)); color:var(--ai-chat-user-code-text, white); }
 .ai-msg-bubble pre { background:rgba(0,0,0,0.25); padding:10px; border-radius:var(--ai-radius); overflow-x:auto; margin:6px 0; }
 .ai-msg-bubble pre code { background:none; padding:0; }
 .ai-msg-bubble ul, .ai-msg-bubble ol { margin:4px 0; padding-left:18px; }
@@ -10889,10 +10882,10 @@ body.dark-theme .rc-context-sep { background:#222; }
 .ai-msg-bubble h2 { font-size:15px; margin:9px 0 5px; }
 .ai-msg-bubble h3 { font-size:14px; margin:8px 0 4px; }
 .ai-msg-bubble blockquote { border-left:3px solid var(--ai-accent); padding-left:10px; margin:6px 0; color:var(--ai-text-secondary); }
-.ai-msg-user .ai-msg-bubble a { color:var(--ai-link, #2563eb); }
+.ai-msg-user .ai-msg-bubble a { color:var(--ai-chat-user-link, rgba(255,255,255,0.9)); }
 .ai-msg-bubble a { color:var(--ai-link); }
 .ai-msg-agent-dot { width:6px; height:6px; border-radius:50%; background:var(--ai-accent); flex-shrink:0; }
-.ai-msg-user .ai-msg-header { justify-content:flex-start; }
+.ai-msg-user .ai-msg-header { justify-content:flex-end; }
 .ai-msg-user .ai-msg-header span:last-child { margin-left:0; margin-right:0; }
 
 /* --- 光标闪烁 --- */
