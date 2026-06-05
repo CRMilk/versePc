@@ -32,6 +32,8 @@ build/
 *.bak
 *.backup
 *.broken_backup
+*.orig
+*.patched
 *.md.bak
 .source-backup/
 
