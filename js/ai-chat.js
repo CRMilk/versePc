@@ -440,38 +440,40 @@ const AIChat = {
 
         const div = document.createElement('div');
         div.className = `ai-msg ai-msg-${role}`;
-        div.style.cssText = 'padding:10px 15px 10px 6px;';
 
         const header = document.createElement('div');
         header.className = 'ai-msg-header';
 
         const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
         if (role === 'user') {
-            header.innerHTML = `<span style="font-weight:600;font-size:13px;color:var(--ai-text-primary)">你</span><span style="font-size:11px;color:var(--ai-text-muted)">${timeStr}</span>`;
+            header.innerHTML = `<span class="ai-msg-header-label">你</span><span class="ai-msg-header-time">${timeStr}</span>`;
         } else {
-            header.innerHTML = `<img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7" alt="" class="ai-msg-avatar" onerror="this.style.display='none'"><span style="font-weight:600;font-size:13px;color:var(--ai-text-primary)">VersePC Coder</span><span style="font-size:11px;color:var(--ai-text-muted);margin-left:auto">${timeStr}</span>`;
+            header.innerHTML = `<img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7" alt="" class="ai-msg-avatar" onerror="this.style.display='none'"><span class="ai-msg-header-label">VersePC Coder</span><span class="ai-msg-header-time">${timeStr}</span>`;
         }
 
         const contentWrapper = document.createElement('div');
-        contentWrapper.className = role === 'user' ? 'ai-msg-bubble' : 'ai-msg-body';
-        contentWrapper.style.cssText = role === 'user' ? '' : 'padding-left:30px;';
+        contentWrapper.className = 'ai-msg-content';
+
+        const inner = document.createElement('div');
+        inner.className = role === 'user' ? 'ai-msg-bubble' : 'ai-msg-body';
 
         if (isError) {
-            contentWrapper.innerHTML = `<span class="ai-msg-error">${this.escapeHtml(content)}</span>`;
+            inner.innerHTML = `<span class="ai-msg-error">${this.escapeHtml(content)}</span>`;
         } else if (role === 'user') {
-            contentWrapper.innerHTML = `<div style="white-space:pre-wrap;word-break:break-word">${this.escapeHtml(content)}</div>`;
+            inner.innerHTML = this.escapeHtml(content);
         } else {
             this.asyncRenderMarkdown(content, (html) => {
-                contentWrapper.innerHTML = html;
-                this._highlightCodeBlocks(contentWrapper);
+                inner.innerHTML = html;
+                this._highlightCodeBlocks(inner);
             });
         }
 
+        contentWrapper.appendChild(inner);
         div.appendChild(header);
         div.appendChild(contentWrapper);
         container.appendChild(div);
 
-        return contentWrapper;
+        return inner;
     },
 
     appendStreamingBubble() {
@@ -482,21 +484,20 @@ const AIChat = {
         div.className = 'ai-msg ai-msg-assistant ai-streaming-msg';
         div.id = 'ai-current-response';
 
+        const header = document.createElement('div');
+        header.className = 'ai-msg-header';
+        const streamTime = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        header.innerHTML = `<img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7" alt="" class="ai-msg-avatar" onerror="this.style.display='none'"><span class="ai-msg-header-label">VersePC Coder</span><span class="ai-msg-header-time">${streamTime}</span>`;
+
         const contentDiv = document.createElement('div');
         contentDiv.className = 'ai-msg-content';
 
-        const streamHeader = document.createElement('div');
-        streamHeader.className = 'ai-msg-header';
-        const streamTime = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-        streamHeader.innerHTML = `<img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7" alt="" class="ai-msg-avatar" onerror="this.style.display='none'"><span style="font-weight:600;font-size:13px;color:var(--ai-text-primary)">VersePC Coder</span><span style="font-size:11px;color:var(--ai-text-muted);margin-left:auto">${streamTime}</span>`;
-
         const bubble = document.createElement('div');
-        bubble.className = 'ai-msg-bubble';
-        bubble.style.cssText = 'padding-left:30px;';
+        bubble.className = 'ai-msg-body';
         bubble.innerHTML = '<span class="ai-cursor"></span>';
 
-        contentDiv.appendChild(streamHeader);
         contentDiv.appendChild(bubble);
+        div.appendChild(header);
         div.appendChild(contentDiv);
         container.appendChild(div);
 
@@ -526,23 +527,24 @@ const AIChat = {
         const div = document.createElement('div');
         div.className = 'ai-msg ai-msg-assistant';
         div.id = 'ai-active-workflow';
-        div.style.cssText = 'padding:10px 15px 10px 6px;';
 
         const header = document.createElement('div');
         header.className = 'ai-msg-header';
-        header.style.cssText = 'display:flex;align-items:center;gap:10px;cursor:default;margin-bottom:10px;word-break:break-word;';
         const timeStr2 = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-        header.innerHTML = `<img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7" alt="" class="ai-msg-avatar" onerror="this.style.display='none'"><span style="font-weight:600;font-size:13px;color:var(--ai-text-primary)">VersePC Coder</span><span class="ai-msg-header-thinking-toggle" onclick="AIChat._toggleWorkflowThinking()"><span>思考过程</span><span class="ai-msg-header-thinking-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><polyline points="6 9 12 15 18 9"/></svg></span></span><span style="font-size:11px;color:var(--ai-text-muted);margin-left:auto">${timeStr2}</span>`;
+        header.innerHTML = `<img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7" alt="" class="ai-msg-avatar" onerror="this.style.display='none'"><span class="ai-msg-header-label">VersePC Coder</span><span class="ai-msg-header-thinking-toggle" onclick="AIChat._toggleWorkflowThinking()"><span>思考过程</span><span class="ai-msg-header-thinking-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><polyline points="6 9 12 15 18 9"/></svg></span></span><span class="ai-msg-header-time">${timeStr2}</span>`;
 
         const contentDiv = document.createElement('div');
-        contentDiv.className = 'ai-msg-content ai-msg-body';
-        contentDiv.style.cssText = 'padding-left:30px;';
+        contentDiv.className = 'ai-msg-content';
 
+        const inner = document.createElement('div');
+        inner.className = 'ai-msg-body';
+
+        contentDiv.appendChild(inner);
         div.appendChild(header);
         div.appendChild(contentDiv);
         container.appendChild(div);
 
-        return contentDiv;
+        return inner;
     },
 
     _toggleWorkflowThinking() {
