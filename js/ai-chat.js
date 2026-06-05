@@ -1918,28 +1918,30 @@ const AIChat = {
         const versions = parsed.versions || [];
         const selected = parsed.selected;
         if (versions.length === 0) {
-            return '<div class="rc-file-card"><div class="rc-file-card-header"><div class="rc-file-card-info"><span class="rc-file-card-icon">📦</span><span class="rc-file-card-path">没有已安装的版本</span></div></div></div>';
+            return '<div class="rc-file-card"><div class="rc-file-card-header"><div class="rc-file-card-info"><span class="rc-file-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span><span class="rc-file-card-path">没有已安装的版本</span></div></div></div>';
         }
         let itemsHtml = '';
         for (let i = 0; i < versions.length; i++) {
             const v = versions[i];
             const loader = v.loader || 'Vanilla';
             const modsCount = v.modsCount || 0;
-            const loaderColor = loader === 'Fabric' ? '#f97316' : loader === 'Forge' ? '#ef4444' : loader === 'NeoForge' ? '#8b5cf6' : '#6b7280';
+            const loaderClass = loader === 'Fabric' ? 'fabric' : loader === 'Forge' ? 'forge' : loader === 'NeoForge' ? 'neoforge' : 'vanilla';
             const isSelected = selected && v.id === selected;
+            const iconUrl = `/api/version-icon?id=${encodeURIComponent(v.id)}&type=${v.type || 'release'}${v.isForge ? '&forge=true' : ''}${v.isFabric ? '&fabric=true' : ''}${v.isNeoForge ? '&neoforge=true' : ''}${v.isModpack ? '&modpack=true' : ''}`;
             const itemCls = isSelected ? 'ai-version-select-item selected-item' : 'ai-version-select-item';
             itemsHtml += '<div class="' + itemCls + '">';
+            itemsHtml += '<div class="ai-version-select-icon-wrap"><img src="' + iconUrl + '" alt="" class="ai-version-select-icon-img" onerror="this.style.display=\'none\'"></div>';
             itemsHtml += '<div class="ai-version-select-info">';
             itemsHtml += '<span class="ai-version-select-id">' + this._escapeHtml(v.id) + '</span>';
             itemsHtml += '<span class="ai-version-select-meta">';
-            itemsHtml += '<span class="ai-version-select-loader" style="color:' + loaderColor + '">' + loader + '</span>';
+            itemsHtml += '<span class="ai-version-select-loader ' + loaderClass + '">' + loader + '</span>';
             if (modsCount > 0) itemsHtml += '<span class="ai-version-select-mods">' + modsCount + ' 模组</span>';
             itemsHtml += '</span></div>';
             if (isSelected) itemsHtml += '<svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" style="width:16px;height:16px;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg>';
             itemsHtml += '</div>';
         }
         return '<div class="ai-version-select-card">' +
-            '<div class="ai-version-select-header"><span class="ai-version-select-icon">📦</span><span class="ai-version-select-title">' + this._escapeHtml(purpose) + (selected ? ' ✓' : '') + '</span></div>' +
+            '<div class="ai-version-select-header"><span class="ai-version-select-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span><span class="ai-version-select-title">' + this._escapeHtml(purpose) + (selected ? ' ✓' : '') + '</span></div>' +
             '<div class="ai-version-select-list">' + itemsHtml + '</div></div>';
     },
 
@@ -2058,15 +2060,16 @@ const AIChat = {
             '<img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7" alt="" class="ai-msg-avatar" onerror="this.style.display=\'none\'">' +
             '<div class="ai-message-content"><div class="ai-message-text">' +
             '<div class="ai-version-select-card" data-sel-id="' + selId + '">' +
-            '<div class="ai-version-select-header"><span class="ai-version-select-icon">📦</span><span class="ai-version-select-title">' + this._escapeHtml(purpose) + '</span><span class="ai-version-select-count">' + installed.length + ' 个版本</span></div>' +
+            '<div class="ai-version-select-header"><span class="ai-version-select-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span><span class="ai-version-select-title">' + this._escapeHtml(purpose) + '</span><span class="ai-version-select-count">' + installed.length + ' 个版本</span></div>' +
             '<div class="ai-version-select-list">' +
             installed.map(v => {
                 const loader = v.loader || 'Vanilla';
                 const modsCount = v.modsCount || 0;
-                const loaderColor = loader === 'Fabric' ? '#f97316' : loader === 'Forge' ? '#ef4444' : loader === 'NeoForge' ? '#8b5cf6' : '#6b7280';
+                const iconUrl = `/api/version-icon?id=${encodeURIComponent(v.id)}&type=${v.type || 'release'}${v.isForge ? '&forge=true' : ''}${v.isFabric ? '&fabric=true' : ''}${v.isNeoForge ? '&neoforge=true' : ''}${v.isModpack ? '&modpack=true' : ''}`;
                 return '<div class="ai-version-select-item" onclick="AIChat._onVersionSelected(\'' + this._escapeHtml(v.id).replace(/'/g, "\\'") + '\', \'' + selId + '\')">' +
+                    '<div class="ai-version-select-icon-wrap"><img src="' + iconUrl + '" alt="" class="ai-version-select-icon-img" onerror="this.style.display=\'none\'"></div>' +
                     '<div class="ai-version-select-info"><span class="ai-version-select-id">' + this._escapeHtml(v.id) + '</span>' +
-                    '<span class="ai-version-select-meta"><span class="ai-version-select-loader" style="color:' + loaderColor + '">' + loader + '</span>' +
+                    '<span class="ai-version-select-meta"><span class="ai-version-select-loader">' + loader + '</span>' +
                     (modsCount > 0 ? '<span class="ai-version-select-mods">' + modsCount + ' 模组</span>' : '') +
                     '</span></div>' +
                     '<svg class="ai-version-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="9 18 15 12 9 6"/></svg></div>';
@@ -3199,31 +3202,42 @@ Call attempt_completion when all operations are done and verified.
                 chatContainer.appendChild(div);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
+            const answerCard = (answer, hasOptions) => {
+                div.classList.add('ai-ask-answered');
+                const contextEl = div.querySelector('.ai-ask-context');
+                const optionsEl = div.querySelector('.ai-ask-options');
+                const freeInputEl = div.querySelector('.ai-ask-free-input');
+                if (optionsEl) optionsEl.remove();
+                if (freeInputEl) freeInputEl.remove();
+                let answerEl = div.querySelector('.ai-ask-answer');
+                if (!answerEl) {
+                    answerEl = document.createElement('div');
+                    answerEl.className = 'ai-ask-answer';
+                    div.appendChild(answerEl);
+                }
+                answerEl.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>${this.escapeHtml(answer)}</span>`;
+            };
             div.querySelectorAll('.ai-ask-option-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const answer = btn.getAttribute('data-answer');
                     if (window.electronAPI?.ai?.askUserRespond) {
                         window.electronAPI.ai.askUserRespond(askId, answer);
                     }
-                    btn.classList.add('selected');
-                    btn.parentElement.querySelectorAll('.ai-ask-option-btn').forEach(b => {
-                        if (b !== btn) b.classList.add('dimmed');
-                    });
-                    const inputArea = div.querySelector('.ai-ask-free-input');
-                    if (inputArea) inputArea.remove();
+                    answerCard(answer, true);
                 });
             });
             const sendBtn = div.querySelector('.ai-ask-send-btn');
             if (sendBtn) {
                 sendBtn.addEventListener('click', () => {
                     const input = div.querySelector('.ai-ask-input');
-                    if (input && input.value.trim()) {
+                    const val = input && input.value.trim();
+                    if (val) {
                         if (window.electronAPI?.ai?.askUserRespond) {
-                            window.electronAPI.ai.askUserRespond(askId, input.value.trim());
+                            window.electronAPI.ai.askUserRespond(askId, val);
                         }
                         input.disabled = true;
                         sendBtn.disabled = true;
-                        sendBtn.textContent = '已发送';
+                        answerCard(val, false);
                     }
                 });
             }
@@ -6979,16 +6993,18 @@ Call attempt_completion when all operations are done and verified.
         const body = this._currentSubAgent.body;
         const thinking = this._currentSubAgent.thinking;
 
-        if (chunk.type === 'say' && chunk.say === 'text_delta') {
+        if (chunk.type === 'say' && (chunk.say === 'text_delta' || chunk.say === 'text')) {
             if (thinking && thinking.parentElement) thinking.remove();
             this._updateSubAgentStatus(agentType, '分析中...');
             let textBlock = body.querySelector('.ai-subagent-text-block');
             if (!textBlock) {
                 textBlock = document.createElement('div');
                 textBlock.className = 'ai-subagent-text-block';
+                textBlock._rawText = '';
                 body.appendChild(textBlock);
             }
-            textBlock.textContent += chunk.text || '';
+            textBlock._rawText += (chunk.text || '');
+            textBlock.innerHTML = this.renderMarkdown(textBlock._rawText);
             body.scrollTop = body.scrollHeight;
         } else if (chunk.type === 'say' && chunk.say === 'tool_start') {
             if (thinking && thinking.parentElement) thinking.remove();

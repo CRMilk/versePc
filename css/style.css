@@ -8546,6 +8546,35 @@ body.dark-theme .acct-btn-danger:hover {
     padding: 16px;
     margin: 8px 0;
     max-width: 480px;
+    transition: opacity 0.2s ease;
+}
+.ai-ask-card.ai-ask-answered {
+    opacity: 0.85;
+}
+.ai-ask-card.ai-ask-answered .ai-ask-options,
+.ai-ask-card.ai-ask-answered .ai-ask-free-input {
+    display: none;
+}
+.ai-ask-answer {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    padding: 6px 12px;
+    background: rgba(var(--ai-accent-rgb, 99,102,241), 0.10);
+    border: 1px solid rgba(var(--ai-accent-rgb, 99,102,241), 0.30);
+    color: var(--ai-accent, #6366f1);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    max-width: 100%;
+    word-break: break-word;
+}
+.ai-ask-answer svg {
+    flex-shrink: 0;
+}
+.ai-ask-answer span {
+    line-height: 1.4;
 }
 .ai-ask-header {
     display: flex;
@@ -10260,7 +10289,7 @@ body.dark-theme .rc-context-sep { background:#222; }
     border-radius: 10px;
 }
 .ai-version-select-list {
-    max-height: 320px;
+    max-height: 360px;
     overflow-y: auto;
 }
 .ai-version-select-list::-webkit-scrollbar { width: 4px; }
@@ -10281,6 +10310,24 @@ body.dark-theme .rc-context-sep { background:#222; }
 .ai-version-select-item:hover {
     background: var(--ai-bg-hover, rgba(0,0,0,0.03));
 }
+.ai-version-select-icon-wrap {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: var(--ai-bg-tertiary, rgba(0,0,0,0.04));
+    overflow: hidden;
+}
+.ai-version-select-icon-img {
+    max-width: 32px;
+    max-height: 32px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
 .ai-version-select-info {
     flex: 1;
     min-width: 0;
@@ -10300,6 +10347,24 @@ body.dark-theme .rc-context-sep { background:#222; }
 .ai-version-select-loader {
     font-size: 11px;
     font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.ai-version-select-loader.fabric {
+    background: rgba(249, 115, 22, 0.15);
+    color: #f97316;
+}
+.ai-version-select-loader.forge {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+.ai-version-select-loader.neoforge {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+}
+.ai-version-select-loader.vanilla {
+    background: rgba(107, 114, 128, 0.15);
+    color: #6b7280;
 }
 .ai-version-select-mods {
     font-size: 11px;
@@ -10342,6 +10407,25 @@ body.dark-theme .rc-context-sep { background:#222; }
 }
 [data-theme="dark"] .ai-version-select-count {
     background: rgba(255,255,255,0.06);
+}
+[data-theme="dark"] .ai-version-select-icon-wrap {
+    background: rgba(255,255,255,0.04);
+}
+[data-theme="dark"] .ai-version-select-loader.fabric {
+    background: rgba(249, 115, 22, 0.25);
+    color: #f97316;
+}
+[data-theme="dark"] .ai-version-select-loader.forge {
+    background: rgba(239, 68, 68, 0.25);
+    color: #ef4444;
+}
+[data-theme="dark"] .ai-version-select-loader.neoforge {
+    background: rgba(139, 92, 246, 0.25);
+    color: #8b5cf6;
+}
+[data-theme="dark"] .ai-version-select-loader.vanilla {
+    background: rgba(107, 114, 128, 0.25);
+    color: #9ca3af;
 }
 
 .rc-todo-bar {

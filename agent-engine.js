@@ -2386,6 +2386,35 @@ Take action now. Do not explain your limitations.`
             if (guidance) conversation.push({ role: 'system', content: guidance });
         }
 
+        // ask_user 收到用户回答后，强制模型给用户一个文本回复
+        const askUserResult = allResults.find(r => {
+            if (r.name !== 'ask_user') return false;
+            try {
+                const p = JSON.parse(r.result);
+                return p.status === 'success' && p.answer && p.answer !== '(用户交互不可用)';
+            } catch (e) { return false; }
+        });
+        if (askUserResult) {
+            let userAnswer = '';
+            try { userAnswer = (JSON.parse(askUserResult.result).answer || '').toString(); } catch (e) {}
+            if (userAnswer.length > 200) userAnswer = userAnswer.slice(0, 200) + '…';
+            const lastAssistantAsk = [...conversation].reverse().find(m =>
+                m.role === 'assistant' && m.tool_calls && m.tool_calls.some(tc => tc.id === askUserResult.id)
+            );
+            let askQuestion = '';
+            if (lastAssistantAsk) {
+                const askTc = lastAssistantAsk.tool_calls.find(tc => tc.id === askUserResult.id);
+                if (askTc) {
+                    try { askQuestion = (JSON.parse(askTc.function.arguments).question || '').toString(); } catch (e) {}
+                }
+            }
+            if (askQuestion.length > 100) askQuestion = askQuestion.slice(0, 100) + '…';
+            conversation.push({
+                role: 'system',
+                content: `用户已经回答了 ask_user 提问${askQuestion ? `（"${askQuestion}"）` : ''}，回答内容是："${userAnswer}"。你必须现在用一段简短的中文文本回应用户，然后继续执行原本的任务。`
+            });
+        }
+
         if (round >= 2 && this._repeatTextCount > 0) {
             conversation.push({
                 role: 'system',
@@ -2452,6 +2481,7 @@ Take action now. Do not explain your limitations.`
             apiUrl: this._apiUrl,
             apiHeaders: this._apiHeaders,
             enableTools: true,
+            enablePlanning: false,
             logger: this.logger,
             onChunk: (chunk) => {
                 this._send({ type: 'subagent_chunk', agentType, chunk });
