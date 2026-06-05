@@ -3377,11 +3377,17 @@ body.dark-theme .acct-btn-danger:hover {
 
 .page {
     display: none;
+    position: relative;
 }
 
 .page.active {
     display: block;
     animation: pageIn 0.35s var(--ease-out-expo) both;
+    pointer-events: auto;
+}
+
+.page:not(.active) {
+    pointer-events: none;
 }
 
 #page-version-settings.active {
@@ -8985,7 +8991,7 @@ body.dark-theme .acct-btn-danger:hover {
     position: absolute;
     left: 8px;
     top: 8px;
-    z-index: 50;
+    z-index: 10;
     display: flex;
     align-items: center;
     gap: 2px;
