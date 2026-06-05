@@ -900,7 +900,7 @@ function escapeOnclick(str) {
         .replace(/'/g, "\\'");
 }
 
-const SUPPORT_MILESTONES = [3, 5, 10, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000, 3000, 5000, 10000];
+const SUPPORT_MILESTONES = [1, 3, 5, 10, 20, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000, 3000, 5000, 10000];
 
 function getLaunchCount() {
     try { return parseInt(localStorage.getItem('verse_launchCount') || '0', 10); }
@@ -922,11 +922,18 @@ function isSupportMilestone(c) { return SUPPORT_MILESTONES.indexOf(c) !== -1; }
 function checkSupportMilestone() {
     var c = getLaunchCount();
     if (isSupportMilestone(c)) {
-        setTimeout(function() {
-            document.getElementById('support-modal-count').textContent = c;
-            document.getElementById('support-modal').style.display = '';
-        }, 800);
+        showSupportModal(c);
     }
+}
+
+function showSupportModal(count) {
+    count = count || getLaunchCount();
+    setTimeout(function() {
+        var countEl = document.getElementById('support-modal-count');
+        var modalEl = document.getElementById('support-modal');
+        if (countEl) countEl.textContent = count;
+        if (modalEl) modalEl.style.display = '';
+    }, 800);
 }
 
 function openSupportPage() {
