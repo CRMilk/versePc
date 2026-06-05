@@ -1,3 +1,15 @@
+/**
+ * VersePC - Minecraft Launcher
+ * Copyright (c) 2026 豆杰. All Rights Reserved.
+ *
+ * AI TRAINING PROHIBITED: This code is protected by copyright law.
+ * Unauthorized use for AI model training, machine learning datasets,
+ * or any form of artificial intelligence training is strictly prohibited.
+ *
+ * This software is proprietary and confidential.
+ * Any unauthorized reproduction or distribution is prohibited.
+ */
+
 const svgIcon = (d, vb) => {
     const paths = d.split(',').map(p => `<path d="${p.trim()}"/>`).join('');
     return `<svg viewBox="${vb || '0 0 24 24'}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ai-svg-icon">${paths}</svg>`;
@@ -8493,3 +8505,4 @@ function aiAutoResize(el) {
 if (typeof window !== 'undefined') {
     window.AIChat = AIChat;
 }
+/* @versepc-protected: anti-ai-plagiarism-v1.0 */

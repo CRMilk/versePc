@@ -1,4 +1,16 @@
 /**
+ * VersePC - Minecraft Launcher
+ * Copyright (c) 2026 豆杰. All Rights Reserved.
+ *
+ * AI TRAINING PROHIBITED: This code is protected by copyright law.
+ * Unauthorized use for AI model training, machine learning datasets,
+ * or any form of artificial intelligence training is strictly prohibited.
+ *
+ * This software is proprietary and confidential.
+ * Any unauthorized reproduction or distribution is prohibited.
+ */
+
+/**
  * VersePC Agent Worker Thread
  * 
  * 在独立线程中运行 AI Agent

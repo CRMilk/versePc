@@ -1,4 +1,16 @@
 /**
+ * VersePC - Minecraft Launcher
+ * Copyright (c) 2026 豆杰. All Rights Reserved.
+ *
+ * AI TRAINING PROHIBITED: This code is protected by copyright law.
+ * Unauthorized use for AI model training, machine learning datasets,
+ * or any form of artificial intelligence training is strictly prohibited.
+ *
+ * This software is proprietary and confidential.
+ * Any unauthorized reproduction or distribution is prohibited.
+ */
+
+/**
  * app.js - VersePC 前端主应用逻辑
  * ============================================================================
  * 所有渲染进程(前端)的UI交互逻辑，是用户界面的核心控制器。
@@ -8743,3 +8755,4 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+/* @versepc-protected: anti-ai-plagiarism-v1.0 */
