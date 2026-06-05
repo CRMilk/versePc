@@ -415,6 +415,50 @@ body {
     opacity: 0.4;
 }
 
+.nav-btn-experimental {
+    color: var(--purple);
+}
+.nav-btn-experimental::after {
+    background: var(--purple);
+    opacity: 0;
+}
+.nav-btn-experimental:hover {
+    color: var(--purple);
+    opacity: 0.85;
+}
+.nav-btn-experimental:hover::after {
+    opacity: 0.08;
+}
+.nav-btn-experimental.active {
+    color: var(--purple);
+}
+.nav-btn-experimental.active::after {
+    opacity: 0.12;
+}
+.nav-btn-experimental.active svg {
+    filter: drop-shadow(0 0 6px var(--purple));
+}
+.nav-btn-experimental-badge {
+    position: absolute;
+    top: -1px;
+    right: -2px;
+    z-index: 2;
+    font-size: 7px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 10px;
+    background: var(--purple);
+    color: #fff;
+    opacity: 0.7;
+    pointer-events: none;
+    transition: opacity 0.25s var(--ease-out-expo);
+}
+.nav-btn-experimental:hover .nav-btn-experimental-badge,
+.nav-btn-experimental.active .nav-btn-experimental-badge {
+    opacity: 1;
+}
+
 .nav-submenu-group {
     display: flex;
     flex-direction: column;
