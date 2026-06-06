@@ -38,7 +38,7 @@
      - install-modal     版本安装模态框
      - mod-detail-modal  模组详情模态框
      ========================================================================== -->
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -264,37 +264,35 @@
             <div class="content-area">
                 <div id="page-home" class="page active">
                     <div class="home-quick-actions">
-                        <div class="card">
-                            <h3>快速启动</h3>
-                            <div class="quick-launch">
-                                <div class="custom-select" id="home-version-select-wrapper">
-                                    <div class="custom-select-trigger" id="home-version-select-trigger">
-                                        <span class="custom-select-value" id="home-version-select-value">选择版本...</span>
-                                        <svg class="custom-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <polyline points="6 9 12 15 18 9"></polyline>
-                                        </svg>
-                                    </div>
-                                    <div class="custom-select-dropdown" id="home-version-select-dropdown">
-                                        <div class="custom-select-search">
-                                            <input type="text" placeholder="搜索版本..." class="custom-select-input" id="home-version-search">
-                                        </div>
-                                        <div class="custom-select-options" id="home-version-select-options">
-                                        </div>
-                                    </div>
-                                </div>
-                                <button id="home-launch-btn" class="btn btn-primary btn-lg">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                    启动游戏
-                                </button>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <h3>当前账户</h3>
-                            <div id="home-account-info" class="account-quick-info">
-                                <div class="account-avatar" id="home-avatar">?</div>
+                        <div class="card home-launch-card">
+                            <div class="home-launch-left">
+                                <div class="account-avatar" id="home-avatar"><img src="img/icon.png" alt="" class="account-avatar-img"></div>
                                 <div class="account-details">
                                     <span class="account-name" id="home-player-name">未登录</span>
                                     <span class="account-type" id="home-account-type">离线模式</span>
+                                </div>
+                            </div>
+                            <div class="home-launch-right">
+                                <div class="quick-launch">
+                                    <div class="custom-select" id="home-version-select-wrapper">
+                                        <div class="custom-select-trigger" id="home-version-select-trigger">
+                                            <span class="custom-select-value" id="home-version-select-value">选择版本...</span>
+                                            <svg class="custom-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <polyline points="6 9 12 15 18 9"></polyline>
+                                            </svg>
+                                        </div>
+                                        <div class="custom-select-dropdown" id="home-version-select-dropdown">
+                                            <div class="custom-select-search">
+                                                <input type="text" placeholder="搜索版本..." class="custom-select-input" id="home-version-search">
+                                            </div>
+                                            <div class="custom-select-options" id="home-version-select-options">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button id="home-launch-btn" class="btn btn-primary btn-lg">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                        启动游戏
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1196,33 +1194,11 @@
                                 <div class="lan-status-desc" id="terracotta-status-desc">创建房间或输入房间码加入</div>
                             </div>
                         </div>
-                        <div id="terracotta-actions" class="lan-actions">
-                            <div class="lan-action-card" onclick="terracottaHost()">
-                                <div class="lan-action-icon">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                                        <polyline points="9 22 9 12 15 12 15 22"/>
-                                    </svg>
-                                </div>
-                                <div class="lan-action-title">创建房间</div>
-                                <div class="lan-action-desc">创建 P2P 房间，分享房间码给朋友</div>
-                            </div>
-                            <div class="lan-action-card" onclick="terracottaJoin()">
-                                <div class="lan-action-icon">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-                                    </svg>
-                                </div>
-                                <div class="lan-action-title">加入房间</div>
-                                <div class="lan-action-desc">输入房主分享的房间码加入</div>
-                            </div>
+                        <div class="lan-tabs" id="terracotta-tabs">
+                            <button class="lan-tab active" data-panel="terracotta-host-panel" onclick="switchLanTab('terracotta', 'host', this)">创建房间</button>
+                            <button class="lan-tab" data-panel="terracotta-join-panel" onclick="switchLanTab('terracotta', 'join', this)">加入房间</button>
                         </div>
-                        <div class="lan-room-panel" id="terracotta-host-panel" style="display:none">
-                            <div class="lan-room-header">
-                                <h3>创建房间</h3>
-                                <button class="btn btn-secondary btn-sm" onclick="terracottaBackToActions()">返回</button>
-                            </div>
+                        <div class="lan-room-panel" id="terracotta-host-panel">
                             <div class="lan-room-steps">
                                 <div class="lan-room-steps-title">使用步骤</div>
                                 <ol>
@@ -1240,10 +1216,6 @@
                             </div>
                         </div>
                         <div class="lan-room-panel" id="terracotta-join-panel" style="display:none">
-                            <div class="lan-room-header">
-                                <h3>加入房间</h3>
-                                <button class="btn btn-secondary btn-sm" onclick="terracottaBackToActions()">返回</button>
-                            </div>
                             <div class="lan-create-form">
                                 <div class="lan-create-field">
                                     <label>房间码</label>
@@ -1295,23 +1267,11 @@
                                 <div class="lan-status-desc" id="portmap-status-desc">创建房间或加入朋友的房间</div>
                             </div>
                         </div>
-                        <div id="portmap-actions" class="lan-actions" style="grid-template-columns:1fr 1fr">
-                            <div class="lan-action-card" onclick="portmapCreateRoom()">
-                                <svg class="lan-icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                                <div class="lan-action-title">创建房间</div>
-                                <div class="lan-action-desc">检测公网IP并尝试UPnP映射端口</div>
-                            </div>
-                            <div class="lan-action-card" onclick="portmapJoinRoom()">
-                                <svg class="lan-icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-                                <div class="lan-action-title">加入房间</div>
-                                <div class="lan-action-desc">输入房主的连接地址加入</div>
-                            </div>
+                        <div class="lan-tabs" id="portmap-tabs">
+                            <button class="lan-tab active" data-panel="portmap-create-panel" onclick="switchLanTab('portmap', 'create', this)">创建房间</button>
+                            <button class="lan-tab" data-panel="portmap-join-panel" onclick="switchLanTab('portmap', 'join', this)">加入房间</button>
                         </div>
-                        <div class="lan-room-panel" id="portmap-create-panel" style="display:none">
-                            <div class="lan-room-header">
-                                <h3>创建端口映射房间</h3>
-                                <button class="btn btn-secondary btn-sm" onclick="portmapBackToActions()">返回</button>
-                            </div>
+                        <div class="lan-room-panel" id="portmap-create-panel">
                             <div class="lan-create-form">
                                 <div class="lan-create-field">
                                     <label>房间名称</label>
@@ -1346,10 +1306,6 @@
                             </div>
                         </div>
                         <div class="lan-room-panel" id="portmap-join-panel" style="display:none">
-                            <div class="lan-room-header">
-                                <h3>加入端口映射房间</h3>
-                                <button class="btn btn-secondary btn-sm" onclick="portmapBackToActions()">返回</button>
-                            </div>
                             <div class="lan-create-form">
                                 <div class="lan-tip-box" style="background:rgba(74,158,255,0.08)">
                                     <div class="lan-tip-title" style="color:var(--accent)">加入步骤</div>
@@ -1673,7 +1629,7 @@
                             <div class="onboard-step onboard-step-active" data-step="welcome">
                                 <div class="onboard-welcome">
                                     <div class="onboard-avatar">
-                                        <img src="img/steve_head.png" alt="" class="onboard-avatar-img" onerror="this.style.display='none'">
+                                        <img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7&offline=1" alt="" class="onboard-avatar-img" onerror="this.parentElement.innerHTML='<svg width=&quot;96&quot; height=&quot;96&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.5&quot;><circle cx=&quot;12&quot; cy=&quot;12&quot; r=&quot;10&quot;/><polygon points=&quot;16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76&quot;/></svg>'">
                                     </div>
                                     <div class="onboard-typewriter" id="onboard-typewriter"></div>
                                     <p class="onboard-subtitle">在你开始之前，让我们先来认识一下吧</p>
@@ -1733,6 +1689,9 @@
                                         <div class="onboard-msg-bubble">由于 API 功能需要大量经费，只能由小伙伴们自行接入。请选择你的 API 接入商：</div>
                                     </div>
                                     <div class="onboard-provider-list" id="onboard-provider-list"></div>
+                                    <div class="onboard-actions">
+                                        <button class="onboard-btn onboard-btn-ghost" id="onboard-provider-skip">跳过，稍后设置</button>
+                                    </div>
                                 </div>
                             </div>
                             <div class="onboard-step" data-step="tutorial">
@@ -1800,21 +1759,21 @@
                         <h3 class="toolbox-category">百科攻略</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://zh.minecraft.wiki')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/zh.minecraft.wiki" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=zh.minecraft.wiki&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Minecraft Wiki</span>
                                     <span class="toolbox-desc">最权威的官方百科</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.mcmod.cn')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/mcmod.cn" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=mcmod.cn&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MC百科</span>
                                     <span class="toolbox-desc">中文 Mod 百科数据库</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.digminecraft.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/digminecraft.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=digminecraft.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">DigMinecraft</span>
                                     <span class="toolbox-desc">全物品/方块 ID 查询</span>
@@ -1827,35 +1786,35 @@
                         <h3 class="toolbox-category">模组与整合包</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.curseforge.com/minecraft')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/curseforge.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=curseforge.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">CurseForge</span>
                                     <span class="toolbox-desc">全球最大 Mod 整合包平台</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://modrinth.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/modrinth.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=modrinth.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Modrinth</span>
                                     <span class="toolbox-desc">新兴开源 Mod 平台</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.planetminecraft.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/planetminecraft.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=planetminecraft.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Planet Minecraft</span>
                                     <span class="toolbox-desc">全球最大 MC 社区</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.mcbbs.net')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/mcbbs.net" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=mcbbs.net&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MCBBS</span>
                                     <span class="toolbox-desc">国内最大 MC 中文论坛</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://mcpedl.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/mcpedl.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=mcpedl.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MCPEDL</span>
                                     <span class="toolbox-desc">基岩版资源大全</span>
@@ -1868,21 +1827,21 @@
                         <h3 class="toolbox-category">玩家社区</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.minebbs.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/minebbs.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=minebbs.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MineBBS</span>
                                     <span class="toolbox-desc">国内 MC 中文论坛</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://klpbbs.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/klpbbs.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=klpbbs.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">苦力怕论坛</span>
                                     <span class="toolbox-desc">资源丰富的中文社区</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://search.bilibili.com/all?keyword=我的世界')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/bilibili.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=bilibili.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Bilibili MC</span>
                                     <span class="toolbox-desc">视频教程 / 实况 / 攻略</span>
@@ -1895,21 +1854,21 @@
                         <h3 class="toolbox-category">材质与光影</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://resourcepack.net')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/resourcepack.net" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=resourcepack.net&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">ResourcePack</span>
                                     <span class="toolbox-desc">海量材质包下载</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://shadersmods.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/shadersmods.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=shadersmods.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">ShadersMods</span>
                                     <span class="toolbox-desc">光影资源合集</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://vanillatweaks.net')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/vanillatweaks.net" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=vanillatweaks.net&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Vanilla Tweaks</span>
                                     <span class="toolbox-desc">原版微调增强包</span>
@@ -1922,28 +1881,28 @@
                         <h3 class="toolbox-category">地图与建筑</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.plotz.co.uk')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/plotz.co.uk" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=plotz.co.uk&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Plotz</span>
                                     <span class="toolbox-desc">圆形/球形建造蓝图</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.blockpalettes.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/blockpalettes.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=blockpalettes.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Block Palettes</span>
                                     <span class="toolbox-desc">方块配色方案库</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://minecraftshapes.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/minecraftshapes.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=minecraftshapes.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MinecraftShapes</span>
                                     <span class="toolbox-desc">几何形状建造指南</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.minecraftmaps.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/minecraftmaps.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=minecraftmaps.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Minecraft Maps</span>
                                     <span class="toolbox-desc">冒险/解谜地图下载</span>
@@ -1956,63 +1915,63 @@
                         <h3 class="toolbox-category">在线工具</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.chunkbase.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/chunkbase.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=chunkbase.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Chunkbase</span>
                                     <span class="toolbox-desc">种子地图 / 结构定位</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://mcstacker.net')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/mcstacker.net" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=mcstacker.net&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MCStacker</span>
                                     <span class="toolbox-desc">命令在线生成器</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://minecraft.tools')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/minecraft.tools" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=minecraft.tools&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MC Tools</span>
                                     <span class="toolbox-desc">合成/烟花/药水/旗帜</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://misode.github.io')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/misode.github.io" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=misode.github.io&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Misode</span>
                                     <span class="toolbox-desc">数据包 / 世界编辑器</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://mclo.gs')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/mclo.gs" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=mclo.gs&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">mclo.gs</span>
                                     <span class="toolbox-desc">游戏日志分析工具</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://minecraft-heads.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/minecraft-heads.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=minecraft-heads.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Minecraft Heads</span>
                                     <span class="toolbox-desc">头颅数据库/give指令</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://colorize.fun')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/colorize.fun" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=colorize.fun&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Colorize FUN</span>
                                     <span class="toolbox-desc">MC 彩色文本生成器</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://textcraft.net')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/textcraft.net" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=textcraft.net&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Textcraft</span>
                                     <span class="toolbox-desc">MC 风格 Logo 生成</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.craftmc.net')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/craftmc.net" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=craftmc.net&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">CraftMC Tools</span>
                                     <span class="toolbox-desc">红石模拟/圆形生成</span>
@@ -2025,35 +1984,35 @@
                         <h3 class="toolbox-category">皮肤资源</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://namemc.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/namemc.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=namemc.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">NameMC</span>
                                     <span class="toolbox-desc">正版皮肤 / UUID 查询</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://littleskin.cn')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/littleskin.cn" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=littleskin.cn&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">LittleSkin</span>
                                     <span class="toolbox-desc">国内皮肤站</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://novaskin.me')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/novaskin.me" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=novaskin.me&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">Nova Skin</span>
                                     <span class="toolbox-desc">3D 皮肤编辑器</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.minecraftskins.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/minecraftskins.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=minecraftskins.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">The Skindex</span>
                                     <span class="toolbox-desc">百万皮肤分享社区</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://skinmc.net')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/skinmc.net" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=skinmc.net&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">SkinMC</span>
                                     <span class="toolbox-desc">3D 皮肤查看器</span>
@@ -2066,28 +2025,28 @@
                         <h3 class="toolbox-category">服务器与插件</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://findmcserver.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/findmcserver.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=findmcserver.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">FindMCServer</span>
                                     <span class="toolbox-desc">Mojang 官方服务器列表</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://minecraftservers.org')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/minecraftservers.org" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=minecraftservers.org&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MC Servers</span>
                                     <span class="toolbox-desc">国际服务器列表</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.spigotmc.org')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/spigotmc.org" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=spigotmc.org&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">SpigotMC</span>
                                     <span class="toolbox-desc">服务器插件/Paper核心</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.mczfw.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/mczfw.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=mczfw.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">找服网</span>
                                     <span class="toolbox-desc">国内服务器大全</span>
@@ -2100,14 +2059,14 @@
                         <h3 class="toolbox-category">资源导航</h3>
                         <div class="toolbox-grid">
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.mcnav.net')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/mcnav.net" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=mcnav.net&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MCNav</span>
                                     <span class="toolbox-desc">MC 资源大全一站导航</span>
                                 </div>
                             </div>
                             <div class="toolbox-card" onclick="window.electronAPI.openExternal('https://www.minecraftxz.com')">
-                                <img src="img/icon.png" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='img/icon.png'">
+                                <img src="https://favicon.im/minecraftxz.com" alt="" class="toolbox-icon" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?domain=minecraftxz.com&sz=32'" loading="lazy">
                                 <div class="toolbox-info">
                                     <span class="toolbox-name">MinecraftXZ</span>
                                     <span class="toolbox-desc">中文资源下载站</span>
@@ -2725,7 +2684,7 @@
                             <div class="form-group">
                                 <label>主题颜色</label>
                                 <div class="theme-picker-grid">
-                                    <div class="theme-option active" data-theme="dark" onclick="selectTheme(this)">
+                                    <div class="theme-option" data-theme="dark" onclick="selectTheme(this)">
                                         <div class="theme-swatch">
                                             <div class="theme-dot" style="background: #ffffff;"></div>
                                             <div class="theme-dot" style="background: #d0d0d0;"></div>
@@ -2733,7 +2692,7 @@
                                         </div>
                                         <span class="theme-name">黑色</span>
                                     </div>
-                                    <div class="theme-option" data-theme="light" onclick="selectTheme(this)">
+                                    <div class="theme-option active" data-theme="light" onclick="selectTheme(this)">
                                         <div class="theme-swatch">
                                             <div class="theme-dot" style="background: #1a1a1a;"></div>
                                             <div class="theme-dot" style="background: #333333;"></div>
@@ -2743,17 +2702,6 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="form-group">
-                                <label>自定义强调色</label>
-                                <div class="color-picker-row">
-                                    <input type="color" id="custom-accent-color" value="#4a9eff" class="color-input" style="position:absolute;width:0;height:0;opacity:0;pointer-events:none;" onchange="updateCustomAccentColor(this.value)" tabindex="-1">
-                                    <button class="btn btn-secondary btn-sm color-preview-btn" onclick="document.getElementById('custom-accent-color').click()" title="点击选择颜色">
-                                        <span class="color-preview-dot" id="color-preview-dot" style="background:#4a9eff;"></span>
-                                        选择颜色
-                                    </button>
-                                    <span id="custom-color-value">#4a9eff</span>
-                                </div>
-                            </div>
                         </div>
 
                         <div class="card">
@@ -2761,13 +2709,13 @@
                             <div class="form-group">
                                 <label>选择背景风格</label>
                                 <div class="wallpaper-picker-grid">
-                                    <div class="wallpaper-option active" data-wallpaper="panorama" onclick="selectWallpaper(this)">
+                                    <div class="wallpaper-option" data-wallpaper="panorama" onclick="selectWallpaper(this)">
                                         <div class="wallpaper-preview" id="wp-preview-panorama">
                                             <div class="wp-preview-icon">◎</div>
                                         </div>
                                         <span class="wallpaper-name">MC全景</span>
                                     </div>
-                                    <div class="wallpaper-option" data-wallpaper="none" onclick="selectWallpaper(this)">
+                                    <div class="wallpaper-option active" data-wallpaper="none" onclick="selectWallpaper(this)">
                                         <div class="wallpaper-preview" id="wp-preview-none">
                                             <div class="wp-preview-icon">◻</div>
                                         </div>
@@ -3136,6 +3084,10 @@
                         <div id="java-download-list" class="java-download-list">
                             <div class="loading">正在获取Java版本列表...</div>
                         </div>
+                        
+                        <div class="java-download-tip" style="margin-top: 16px; padding: 12px 16px; background: var(--bg-tertiary); border-radius: var(--radius); border-left: 3px solid var(--orange); font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+                            <strong style="color: var(--orange);">提示：</strong>如果下载速度缓慢，可能是当前镜像源或网络环境导致的。你也可以前往 <a href="https://adoptium.net/zh-CN/temurin/releases/" target="_blank" style="color: var(--accent); text-decoration: underline;">Adoptium 官网</a> 手动下载所需的 Java 版本，安装后在上方「已安装的Java」中点击刷新即可自动检测。
+                        </div>
                     </div>
                     
                     <div id="java-download-progress" class="card" style="margin-top: 20px; display: none;">
@@ -3191,7 +3143,7 @@
                     </div>
                 </div>
                 <div class="launch-account-info">
-                    <div class="account-avatar-sm" id="launch-avatar">?</div>
+                    <div class="account-avatar-sm" id="launch-avatar"><img src="img/icon.png" alt="" class="account-avatar-img"></div>
                     <span id="launch-player-name">Player</span>
                 </div>
             </div>

@@ -4664,14 +4664,13 @@ Call attempt_completion when all operations are done and verified.
 
     _renderProvidersTab() {
         const providerNames = { zhipu:'智谱 GLM', deepseek:'DeepSeek', qwen:'通义千问', moonshot:'Kimi', yi:'零一万物', baichuan:'百川', minimax:'MiniMax', stepfun:'阶跃星辰', siliconflow:'SiliconFlow', openrouter:'OpenRouter', groq:'Groq', openai:'OpenAI', anthropic:'Anthropic', google:'Google' };
-        const providerIcons = { zhipu:'Z', deepseek:'D', qwen:'Q', moonshot:'K', yi:'Y', baichuan:'B', minimax:'M', stepfun:'S', siliconflow:'SF', openrouter:'OR', groq:'G', openai:'O', anthropic:'A', google:'G', custom:'C' };
         const providerUrls = { zhipu:'https://open.bigmodel.cn', deepseek:'https://platform.deepseek.com', qwen:'https://dashscope.aliyuncs.com', moonshot:'https://platform.moonshot.cn', openai:'https://platform.openai.com', anthropic:'https://console.anthropic.com', google:'https://aistudio.google.com', siliconflow:'https://cloud.siliconflow.cn', openrouter:'https://openrouter.ai', groq:'https://console.groq.com' };
         let modelsHtml = '';
         const allModels = Array.isArray(this.addedModels) ? this.addedModels : [];
         for (const m of allModels) {
-            const iconChar = m.providerKey ? (providerIcons[m.providerKey] || m.providerKey[0].toUpperCase()) : '?';
             const isCurrent = m.modelId === this.model;
-            modelsHtml += `<tr><td><div class="rc-model-name-cell"><div class="rc-model-icon ${m.providerKey||''}">${iconChar}</div><div><div class="rc-model-name">${isCurrent?'<span class="rc-model-active-dot"></span>':''}${m.modelName||m.modelId}</div><div class="rc-model-id">${m.modelId}</div></div></div></td><td><span class="rc-provider-badge">${providerNames[m.providerKey]||m.providerKey||'-'}${m.free?'<span class="rc-free-badge">FREE</span>':''}</span></td><td>${isCurrent?'<span class="rc-model-in-use">使用中</span>':`<button class="rc-table-action" onclick="AIChat.selectModelFromTable('${m.modelId}')">使用</button> <button class="rc-table-action danger" onclick="AIChat.removeModelFromTable('${m.modelId}')">移除</button>`}</td></tr>`;
+            const modelIconSvg = m.providerKey ? this._getProviderSvgIcon(m.providerKey) : '';
+            modelsHtml += `<tr><td><div class="rc-model-name-cell"><div class="rc-model-icon ${m.providerKey||''}">${modelIconSvg}</div><div><div class="rc-model-name">${isCurrent?'<span class="rc-model-active-dot"></span>':''}${m.modelName||m.modelId}</div><div class="rc-model-id">${m.modelId}</div></div></div></td><td><span class="rc-provider-badge">${providerNames[m.providerKey]||m.providerKey||'-'}${m.free?'<span class="rc-free-badge">FREE</span>':''}</span></td><td>${isCurrent?'<span class="rc-model-in-use">使用中</span>':`<button class="rc-table-action" onclick="AIChat.selectModelFromTable('${m.modelId}')">使用</button> <button class="rc-table-action danger" onclick="AIChat.removeModelFromTable('${m.modelId}')">移除</button>`}</td></tr>`;
         }
         if (!allModels.length) modelsHtml = '<tr><td colspan="3" class="rc-model-table-empty">暂无模型，点击下方平台卡片添加</td></tr>';
 
@@ -4683,14 +4682,14 @@ Call attempt_completion when all operations are done and verified.
             { key:'openrouter', name:'OpenRouter' }
         ];
         for (const p of builtinProviders) {
-            const icon = providerIcons[p.key] || p.name[0];
+            const iconSvg = this._getProviderSvgIcon(p.key);
             const url = providerUrls[p.key] || '';
             const hasKey = this._checkProviderHasKey(p.key);
             const chevronSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="6 9 12 15 18 9"/></svg>';
             const checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="6 12 10 16 18 8"/></svg>';
             providerCardsHtml += `<div class="rc-provider-card${hasKey?' has-key':''}" data-provider="${p.key}" onclick="AIChat._toggleProviderCard('${p.key}')">
                 <div class="rc-provider-card-header">
-                    <div class="rc-provider-card-icon-wrapper"><div class="rc-provider-card-icon ${p.key}">${icon}</div></div>
+                    <div class="rc-provider-card-icon-wrapper"><div class="rc-provider-card-icon ${p.key}">${iconSvg}</div></div>
                     <span class="rc-provider-card-name">${p.name}</span>
                     <span class="rc-provider-card-status-icon">
                         <span class="rc-provider-card-chevron">${chevronSvg}</span>
@@ -5286,13 +5285,7 @@ Call attempt_completion when all operations are done and verified.
     },
 
     getDefaultModels() {
-        const defaults = [
-            { modelId:'glm-5-flash', modelName:'GLM-5-Flash', providerKey:'zhipu', free:true },
-            { modelId:'deepseek-v4-flash', modelName:'DeepSeek-V4-Flash', providerKey:'deepseek', free:true },
-            { modelId:'qwen3.6-flash', modelName:'Qwen3.6-Flash', providerKey:'qwen', free:true },
-            { modelId:'gpt-4o-mini', modelName:'GPT-4o-mini', providerKey:'openai' },
-            { modelId:'gemini-2.5-flash', modelName:'Gemini 2.5 Flash', providerKey:'google', free:true }
-        ];
+        const defaults = [];
         if (this._customProvider && this._customProvider.modelId) {
             const fullId = 'custom:' + this._customProvider.baseUrl + ':' + this._customProvider.modelId;
             defaults.unshift({ modelId: fullId, modelName: this._customProvider.modelName || this._customProvider.modelId, providerKey: 'custom', free: false });
@@ -5322,24 +5315,7 @@ Call attempt_completion when all operations are done and verified.
     },
 
     _getProviderSvgIcon(key) {
-        const icons = {
-            deepseek: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#6B7DE3"/><path d="M11 12c0-1.1.9-2 2-2h6c1.1 0 2 .9 2 2v8c0 1.1-.9 2-2 2h-6c-1.1 0-2-.9-2-2v-8zm4 1.5v5h4v-5h-4z" fill="white" opacity="0.9"/></svg>',
-            openai: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#10A37F"/><path d="M13.5 10.5c.8-.9 2.1-1.3 3.3-1l.5.1c.3.1.5.4.5.7v2.2c0 .3-.2.6-.5.7l-1.5.5c-.4.1-.7.5-.7.9v1.3c0 .4.1.7.4 1l3 2.7c.3.3.3.7 0 1l-3 2.2c-.3.2-.6.2-.9 0l-3-2.5c-.3-.3-.5-.7-.5-1.1v-2.5c0-.4.2-.8.5-1l1.5-1.2c.3-.2.4-.5.4-.8v-2c0-.3.1-.5.4-.7z" fill="white" opacity="0.9"/></svg>',
-            anthropic: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#D97706"/><path d="M16 8l6 16h-3l-1.2-3h-3.6L13 24h-3l6-16h3zm0 5l-1.5 5h3L16 13z" fill="white" opacity="0.9"/></svg>',
-            google: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#4285F4"/><path d="M16 10c1.6 0 2.7.7 3.3 1.3l2.4-2.3C20.3 7.3 18.3 6.5 16 6.5c-3.8 0-7 2.2-8.6 5.4l2.8 2.2c.8-2.4 3.1-4.1 5.8-4.1z" fill="white" opacity="0.9"/><path d="M24.3 16.5c0-.7-.1-1.4-.2-2H16v3.8h4.7c-.2 1.1-.8 2-1.7 2.6l2.7 2.1c1.6-1.5 2.6-3.6 2.6-6.5z" fill="white" opacity="0.7"/><path d="M10.2 18.4c-.2-.7-.3-1.4-.3-2.2s.1-1.5.3-2.2L7.4 11.8C6.5 13.5 6 15.2 6 17s.5 3.5 1.4 5.2l2.8-2.2z" fill="white" opacity="0.7"/><path d="M16 24c2.3 0 4.2-.8 5.6-2.1l-2.7-2.1c-.8.5-1.7.8-2.9.8-2.7 0-4.9-1.7-5.8-4.1l-2.8 2.2C8.3 21.8 11.8 24 16 24z" fill="white" opacity="0.7"/></svg>',
-            zhipu: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#4A6CF7"/><path d="M10 12h12v2H10v-2zm0 4h8v2H10v-2zm0 4h10v2H10v-2z" fill="white" opacity="0.9"/></svg>',
-            qwen: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#FF6A00"/><path d="M9 14c1.5-3 4.5-5 7-5s5.5 2 7 5c-1.5 3-4.5 5-7 5s-5.5-2-7-5z" fill="none" stroke="white" stroke-width="1.5" opacity="0.9"/><circle cx="16" cy="14" r="2" fill="white" opacity="0.9"/></svg>',
-            moonshot: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#6941C6"/><path d="M20 10c-4.4 0-8 3.6-8 8s3.6 8 8 8c1.5 0 3-.4 4.2-1.1-1.3.5-2.8.8-4.2.8-5.5 0-10-4.5-10-10S12.5 8 18 8c.7 0 1.4.1 2 .3-.7-.2-1.3-.3-2-.3z" fill="white" opacity="0.9"/></svg>',
-            siliconflow: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#F59E0B"/><rect x="11" y="11" width="10" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5" opacity="0.9"/><circle cx="16" cy="16" r="2.5" fill="white" opacity="0.9"/><line x1="16" y1="8" x2="16" y2="11" stroke="white" stroke-width="1.2" opacity="0.7"/><line x1="16" y1="21" x2="16" y2="24" stroke="white" stroke-width="1.2" opacity="0.7"/><line x1="8" y1="16" x2="11" y2="16" stroke="white" stroke-width="1.2" opacity="0.7"/><line x1="21" y1="16" x2="24" y2="16" stroke="white" stroke-width="1.2" opacity="0.7"/></svg>',
-            groq: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#A855F7"/><path d="M14 9l-2 7h4l-2 7" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/></svg>',
-            openrouter: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#30A14E"/><rect x="10" y="10" width="5" height="5" rx="1" fill="white" opacity="0.9"/><rect x="17" y="10" width="5" height="5" rx="1" fill="white" opacity="0.7"/><rect x="10" y="17" width="5" height="5" rx="1" fill="white" opacity="0.7"/><rect x="17" y="17" width="5" height="5" rx="1" fill="white" opacity="0.5"/></svg>',
-            yi: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#6366F1"/><path d="M12 10l4 6-4 6M18 10l-4 6 4 6" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/></svg>',
-            baichuan: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#2563EB"/><path d="M8 20c2-4 4-8 8-8s6 4 8 8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.9"/><path d="M10 16c1.5-3 3.5-5 6-5s4.5 2 6 5" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/></svg>',
-            minimax: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#3B82F6"/><path d="M11 16c0-2.8 2.2-5 5-5s5 2.2 5 5-2.2 5-5 5" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/><circle cx="16" cy="16" r="1.5" fill="white" opacity="0.9"/></svg>',
-            stepfun: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#EC4899"/><path d="M11 20l3-4 3 2 3-5 3 3" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/></svg>',
-            custom: '<svg viewBox="0 0 32 32" width="20" height="20"><circle cx="16" cy="16" r="14" fill="#6B7280"/><line x1="16" y1="10" x2="16" y2="22" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.9"/><line x1="10" y1="16" x2="22" y2="16" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.9"/></svg>'
-        };
-        return icons[key] || icons.custom;
+        return `<img src="img/providers/${key}.png" width="20" height="20" style="border-radius:4px;object-fit:contain;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"><span style="display:none;width:20px;height:20px;border-radius:4px;background:#6B7280;color:white;font-size:10px;font-weight:700;align-items:center;justify-content:center;">${(key||'?')[0].toUpperCase()}</span>`;
     },
 
     _showAddModelDialog() {
@@ -8376,6 +8352,7 @@ const Onboarding = {
         document.getElementById('onboard-folder-back')?.addEventListener('click', () => this._goTo('role'));
         document.getElementById('onboard-folder-pick')?.addEventListener('click', () => this._pickFolder());
         document.getElementById('onboard-folder-next')?.addEventListener('click', () => this._goTo('provider'));
+        document.getElementById('onboard-provider-skip')?.addEventListener('click', () => this._finish());
         document.getElementById('onboard-tutorial-back')?.addEventListener('click', () => this._goTo('provider'));
         document.getElementById('onboard-tutorial-ack')?.addEventListener('click', () => this._goTo('apikey'));
         document.getElementById('onboard-apikey-back')?.addEventListener('click', () => this._goTo('tutorial'));
@@ -8560,7 +8537,7 @@ const Onboarding = {
         ];
         list.innerHTML = providers.map(p => `
             <button class="onboard-provider-item" data-provider="${p.key}">
-                <div class="onboard-provider-icon">${p.name.charAt(0)}</div>
+                <div class="onboard-provider-icon"><img src="img/providers/${p.key}.png" width="24" height="24" style="border-radius:4px;object-fit:contain;" onerror="this.style.display='none';this.parentNode.textContent='${p.name.charAt(0)}';"></div>
                 <div class="onboard-provider-text">
                     <span class="onboard-provider-name">${p.name}</span>
                     <span class="onboard-provider-desc">${p.desc}</span>
@@ -8714,12 +8691,24 @@ const Onboarding = {
                 }
                 AIChat._customProvider = { baseUrl, apiKey: key, modelId: model, modelName: displayName, apiFormat, maxTokens };
                 await window.electronAPI.store.set('versepc_ai_custom_provider', JSON.stringify(AIChat._customProvider));
+                const fullId = 'custom:' + baseUrl + ':' + model;
+                const entry = { modelId: fullId, modelName: displayName, providerKey: 'custom', free: false, apiKey: key, baseUrl, maxTokens, apiFormat };
+                const exists = AIChat.addedModels.findIndex(m => m.modelId === fullId);
+                if (exists >= 0) AIChat.addedModels[exists] = entry;
+                else AIChat.addedModels.push(entry);
+                await window.electronAPI.store.set('versepc_ai_model', fullId);
+                AIChat.model = fullId;
             } else {
                 await window.electronAPI.store.set('versepc_ai_api_key', key);
                 AIChat.apiKey = key;
+                const entry = { providerKey: this.provider, modelId: model, modelName: model, free: false, apiKey: key };
+                const exists = AIChat.addedModels.findIndex(m => m.modelId === model);
+                if (exists >= 0) AIChat.addedModels[exists] = entry;
+                else AIChat.addedModels.push(entry);
+                await window.electronAPI.store.set('versepc_ai_model', model);
+                AIChat.model = model;
             }
-            await window.electronAPI.store.set('versepc_ai_model', model);
-            AIChat.model = model;
+            await window.electronAPI.store.set('versepc_ai_added_models', JSON.stringify(AIChat.addedModels));
             this._persist();
             if (status) { status.textContent = '已保存，正在进入新对话...'; status.className = 'onboard-apikey-status ok'; }
             setTimeout(() => this._finish(), 600);

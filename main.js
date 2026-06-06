@@ -1499,11 +1499,44 @@ function registerModsIPC() {
         }
     });
 
-    // 获取默认模组路径
+    // 获取默认模组路径（根据当前选中版本自动定位到对应版本的mods文件夹）
     ipcMain.handle("getDefaultModPath", async () => {
         try {
             const homeDir = require('os').homedir();
-            return { success: true, path: path.join(homeDir, '.minecraft', 'mods') };
+            const dataDir = path.join(homeDir, '.versepc');
+            const versionsDir = path.join(dataDir, 'versions');
+            let defaultPath = '';
+
+            const settingsFile = path.join(dataDir, 'settings.json');
+            if (fs.existsSync(settingsFile)) {
+                try {
+                    const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+                    if (settings.selectedVersion) {
+                        const modsDir = path.join(versionsDir, settings.selectedVersion, 'mods');
+                        if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir, { recursive: true });
+                        defaultPath = modsDir;
+                    }
+                } catch (e) {}
+            }
+
+            if (!defaultPath) {
+                if (fs.existsSync(versionsDir)) {
+                    const versions = fs.readdirSync(versionsDir).filter(d =>
+                        fs.statSync(path.join(versionsDir, d)).isDirectory()
+                    );
+                    if (versions.length > 0) {
+                        const modsDir = path.join(versionsDir, versions[0], 'mods');
+                        if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir, { recursive: true });
+                        defaultPath = modsDir;
+                    }
+                }
+            }
+
+            if (!defaultPath) {
+                defaultPath = path.join(homeDir, '.minecraft', 'mods');
+            }
+
+            return { success: true, path: defaultPath };
         } catch (e) {
             return { success: false, error: e.message };
         }

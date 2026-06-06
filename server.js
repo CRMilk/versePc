@@ -5590,23 +5590,37 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile) {
         const arch = archMap[platformKey] || 'x64';
         const osName = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'macos' : 'linux');
         
-        const apiUrl = `${TEMURIN_API}/assets/latest/${majorVersion}/hotspot?architecture=${arch}&image_type=jdk&os=${osName}&vendor=eclipse`;
-        console.log(`[Java] 请求Adoptium API: ${apiUrl}`);
+        const apiHosts = [
+            `${TEMURIN_API}/assets/latest`,
+            'https://mirrors.tuna.tsinghua.edu.cn/Adoptium/v3/assets/latest'
+        ];
         
         let downloadUrl = '';
         let fileName = '';
         let totalSize = 0;
         
-        const apiResponse = await fetchJSONWithMethod(apiUrl, 'GET');
+        for (const host of apiHosts) {
+            try {
+                const apiUrl = `${host}/${majorVersion}/hotspot?architecture=${arch}&image_type=jdk&os=${osName}&vendor=eclipse`;
+                console.log(`[Java] 请求Adoptium API: ${apiUrl}`);
+                
+                const apiResponse = await fetchJSONWithMethod(apiUrl, 'GET');
+                
+                if (apiResponse && apiResponse.length > 0 && apiResponse[0].binary && apiResponse[0].binary.package && apiResponse[0].binary.package.link) {
+                    const latest = apiResponse[0];
+                    downloadUrl = latest.binary.package.link;
+                    fileName = latest.binary.package.name || `jdk-${majorVersion}.zip`;
+                    totalSize = latest.binary.package.size || 0;
+                    console.log(`[Java] API返回下载链接: ${downloadUrl.substring(0, 80)}...`);
+                    break;
+                }
+            } catch (e) {
+                console.warn(`[Java] 获取JDK ${majorVersion} 下载信息失败 (${host}): ${e.message}`);
+            }
+        }
         
-        if (apiResponse && apiResponse.length > 0 && apiResponse[0].binary && apiResponse[0].binary.package) {
-            const latest = apiResponse[0];
-            downloadUrl = latest.binary.package.link;
-            fileName = latest.binary.package.name || `jdk-${majorVersion}.zip`;
-            totalSize = latest.binary.package.size || 0;
-            console.log(`[Java] API返回下载链接: ${downloadUrl.substring(0, 80)}...`);
-        } else {
-            throw new Error(`未找到JDK ${majorVersion}的下载信息`);
+        if (!downloadUrl) {
+            throw new Error(`未找到JDK ${majorVersion}的下载信息，所有源均不可用`);
         }
         
         console.log(`[Java] 文件大小: ${totalSize} bytes`);
@@ -10154,6 +10168,7 @@ async function performInstallation(sessionId, versionDetails) {
         return session.status === 'cancelled' || (session._abortController && session._abortController.signal.aborted);
     };
     const abortCleanup = () => {
+        if (speedSyncTimer) clearInterval(speedSyncTimer);
         const vd = path.join(VERSIONS_DIR, versionDetails.id);
         if (fs.existsSync(vd)) {
             try { fs.rmSync(vd, { recursive: true, force: true }); console.log(`[Install] 已清理中止的安装: ${versionDetails.id}`); } catch (e) {}
@@ -10172,6 +10187,12 @@ async function performInstallation(sessionId, versionDetails) {
         session.stage = 'version_json';
         session.message = '下载版本信息...';
         session.progress = 2;
+
+        var speedSyncTimer = setInterval(() => {
+            if (session.status === 'downloading') {
+                session.speed = DownloadManager.getSpeed();
+            }
+        }, 200);
 
         const versionJsonPath = path.join(versionDir, `${versionId}.json`);
         fs.writeFileSync(versionJsonPath, JSON.stringify(versionDetails, null, 2));
@@ -10209,6 +10230,7 @@ async function performInstallation(sessionId, versionDetails) {
         session.message = '下载依赖库文件..';
         session.progress = 25;
         session.currentFile = '';
+        session.speed = 0;
 
         const libraries = versionDetails.libraries || [];
         const validLibraries = libraries.filter(lib => {
@@ -10244,7 +10266,7 @@ async function performInstallation(sessionId, versionDetails) {
                             const baseProgress = 25 + (i / validLibraries.length) * 30;
                             const libProgress = (p.progress / 100) * (30 / validLibraries.length);
                             session.progress = baseProgress + libProgress;
-                            session.speed = p.speed;
+                            session.speed = p.speed || DownloadManager.getSpeed();
                             session.bytesDownloaded = p.bytesDownloaded;
                             session.totalBytes = p.totalBytes;
                             session.message = `下载库文件 (${i + 1}/${validLibraries.length}): ${path.basename(libPath)}`;
@@ -10345,6 +10367,9 @@ async function performInstallation(sessionId, versionDetails) {
                         if (!fs.existsSync(nativeFile)) {
                             try {
                                 await downloadFileWithMirror(nativeDownload.url, nativeFile, (p) => {
+                                    session.speed = p.speed || DownloadManager.getSpeed();
+                                    session.bytesDownloaded = p.bytesDownloaded;
+                                    session.totalBytes = p.totalBytes;
                                     session.message = `下载原生库: ${path.basename(nativeDownload.path)}`;
                                 });
                             } catch (e) {
@@ -10365,6 +10390,7 @@ async function performInstallation(sessionId, versionDetails) {
         session.message = '下载资源索引...';
         session.progress = 65;
         session.currentFile = '';
+        session.speed = 0;
 
         if (versionDetails.assetIndex) {
             const assetIndexInfo = versionDetails.assetIndex;
@@ -10413,7 +10439,11 @@ async function performInstallation(sessionId, versionDetails) {
                     if (needDownload) {
                         try {
                             if (fs.existsSync(assetPath)) fs.unlinkSync(assetPath);
-                            await downloadFileWithMirror(assetUrl, assetPath);
+                            await downloadFileWithMirror(assetUrl, assetPath, (p) => {
+                                session.speed = p.speed || DownloadManager.getSpeed();
+                                session.bytesDownloaded = p.bytesDownloaded;
+                                session.totalBytes = p.totalBytes;
+                            });
                         } catch (e) {
                             session.errors.push(`资源下载失败: ${name}`);
                         }
@@ -10586,10 +10616,12 @@ async function performInstallation(sessionId, versionDetails) {
         session.message = `${versionId} 安装完成！`;
         session.progress = 100;
         session.speed = 0;
+        if (speedSyncTimer) clearInterval(speedSyncTimer);
 
         console.log(`Installation completed: ${versionId}`);
 
     } catch (e) {
+        if (speedSyncTimer) clearInterval(speedSyncTimer);
         session.status = 'failed';
         session.stage = 'failed';
         session.message = `安装失败: ${e.message}`;
@@ -12247,7 +12279,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         if (mcVersion) facets.push([`versions:${mcVersion}`]);
                         if (category) facets.push([`categories:${category}`]);
                         const sortMap = { relevance: 'relevance', downloads: 'downloads', newest: 'newest', updated: 'updated' };
-                        const sortField = query ? (sortMap[sort] || 'relevance') : 'downloads';
+                        const sortField = sortMap[sort] || (query ? 'relevance' : 'downloads');
                         let searchUrl = `${MODRINTH_API}/search?query=${encodeURIComponent(query)}&index=${sortField}&limit=${limit}&offset=${offset}`;
                         searchUrl += `&facets=${encodeURIComponent(JSON.stringify(facets))}`;
                         const result = await fetchJSON(searchUrl);
@@ -16269,7 +16301,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                             await downloadFile(downloadUrl, destPath, (p) => {
                                 const session = modDownloadSessions.get(sessionId);
                                 if (session) {
-                                    session.progress = rdType === 'modpack' ? Math.round(p.progress * 0.45) : Math.round(p.progress);
+                                    session.progress = Math.round(p.progress);
                                     session.downloaded = p.bytesDownloaded || 0;
                                     session.message = `下载 ${safeName} ${p.progress.toFixed(0)}%`;
                                 }
@@ -16507,7 +16539,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     if (resCategory) facets.push([`categories:${resCategory}`]);
 
                     const sortMap = { relevance: 'relevance', downloads: 'downloads', newest: 'newest', updated: 'updated' };
-                    const sortField = resQuery ? (sortMap[resSort] || 'relevance') : 'downloads';
+                    const sortField = sortMap[resSort] || (resQuery ? 'relevance' : 'downloads');
 
                     let searchUrl = `${MODRINTH_API}/search?query=${encodeURIComponent(resQuery)}&index=${sortField}&limit=${resLimit}&offset=${resOffset}`;
                     searchUrl += `&facets=${encodeURIComponent(JSON.stringify(facets))}`;
@@ -16592,18 +16624,21 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 const rdVersionId = rdData.versionId;
                 const rdProjectId = rdData.projectId;
                 const rdType = rdData.projectType || 'mod';
+                const rdSavePath = rdData.savePath || '';
 
                 if (!rdVersionId && !rdProjectId) { sendError('Missing versionId or projectId', 400); break; }
 
                 const settings = loadSettingsCached();
                 let destDir;
-                
+
                 let targetVersionId = rdData.targetVersionId || '';
                 if (!targetVersionId && rdType !== 'modpack') {
                     targetVersionId = settings.selectedVersion || '';
                 }
-                
-                if (rdType === 'modpack') {
+
+                if (rdSavePath) {
+                    destDir = rdSavePath;
+                } else if (rdType === 'modpack') {
                     destDir = path.join(DATA_DIR, 'modpacks');
                 } else if (rdType === 'resourcepack') {
                     destDir = path.join(DATA_DIR, 'resourcepacks');
@@ -17825,29 +17860,43 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     const javaVersions = [];
                     const requiredVersions = [8, 17, 21, 25];
                     
+                    const apiHosts = [
+                        `${TEMURIN_API}/assets/latest`,
+                        'https://mirrors.tuna.tsinghua.edu.cn/Adoptium/v3/assets/latest'
+                    ];
+                    
                     for (const majorVersion of requiredVersions) {
-                        try {
-                            const apiUrl = `${TEMURIN_API}/assets/latest/${majorVersion}/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse`;
-                            const response = await fetchJSONWithMethod(apiUrl, 'GET');
-                            
-                            if (response && response.length > 0 && response[0].binary && response[0].binary.package) {
-                                const latest = response[0];
-                                javaVersions.push({
-                                    majorVersion: majorVersion,
-                                    version: latest.version.semver || `${majorVersion}.0.0`,
-                                    binary: { package: { link: latest.binary.package.link, name: latest.binary.package.name, size: latest.binary.package.size || 0, checksum: '' } },
-                                    source: 'Adoptium (Temurin)'
-                                });
-                            } else {
-                                javaVersions.push({ majorVersion, version: `${majorVersion}.0.0`, binary: { package: { link: '', name: `jdk-${majorVersion}`, size: 0, checksum: '' } }, source: 'Adoptium (Temurin)' });
+                        let found = false;
+                        for (const host of apiHosts) {
+                            try {
+                                const apiUrl = `${host}/${majorVersion}/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse`;
+                                console.log(`[Java] 获取版本列表: ${apiUrl}`);
+                                const response = await fetchJSONWithMethod(apiUrl, 'GET');
+                                
+                                if (response && response.length > 0 && response[0].binary && response[0].binary.package && response[0].binary.package.link) {
+                                    const latest = response[0];
+                                    javaVersions.push({
+                                        majorVersion: majorVersion,
+                                        version: latest.version.semver || `${majorVersion}.0.0`,
+                                        binary: { package: { link: latest.binary.package.link, name: latest.binary.package.name, size: latest.binary.package.size || 0, checksum: '' } },
+                                        source: 'Adoptium (Temurin)'
+                                    });
+                                    found = true;
+                                    console.log(`[Java] Java ${majorVersion} 版本获取成功: ${latest.version.semver}`);
+                                    break;
+                                }
+                            } catch (e) {
+                                console.warn(`[Java] 获取 Java ${majorVersion} 失败 (${host}): ${e.message}`);
                             }
-                        } catch (e) {
-                            javaVersions.push({ majorVersion, version: `${majorVersion}.0.0`, binary: { package: { link: '', name: '', size: 0, checksum: '' } }, source: 'Adoptium (Temurin)' });
+                        }
+                        if (!found) {
+                            console.warn(`[Java] Java ${majorVersion} 所有源均失败，跳过`);
                         }
                     }
                     
                     sendJSON({ versions: javaVersions });
                 } catch (e) {
+                    console.error('[Java] 获取Java列表失败:', e.message);
                     sendError('获取Java列表失败: ' + e.message);
                 }
                 break;
@@ -18348,6 +18397,38 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 break;
             }
 
+            case '/api/filesystem/default-resource-path': {
+                try {
+                    const drpType = parsedUrl.query.type || '';
+                    const folderMap = { resourcepack: 'resourcepacks', shader: 'shaderpacks', datapack: 'datapacks' };
+                    const folderName = folderMap[drpType];
+                    if (!folderName) { sendError('Invalid resource type', 400); break; }
+
+                    const settings = loadSettingsCached();
+                    let defaultPath;
+
+                    if (settings.selectedVersion) {
+                        defaultPath = path.join(VERSIONS_DIR, settings.selectedVersion, folderName);
+                    } else {
+                        const installedVersions = getInstalledVersions();
+                        if (installedVersions.length > 0) {
+                            defaultPath = path.join(VERSIONS_DIR, installedVersions[0].id, folderName);
+                        } else {
+                            defaultPath = path.join(DATA_DIR, folderName);
+                        }
+                    }
+
+                    if (!fs.existsSync(defaultPath)) {
+                        fs.mkdirSync(defaultPath, { recursive: true });
+                    }
+
+                    sendJSON(defaultPath);
+                } catch (e) {
+                    sendError(e.message);
+                }
+                break;
+            }
+
             case '/api/filesystem/open-in-explorer': {
                 const oieBody = await readBody();
                 const { targetPath } = oieBody;
@@ -18484,25 +18565,49 @@ $sc.Save()
     }
 }
 
-function fetchJSONWithMethod(urlStr, method, body, headers) {
+function fetchJSONWithMethod(urlStr, method, body, headers, _redirectCount) {
+    if (!_redirectCount) _redirectCount = 0;
     return new Promise((resolve, reject) => {
+        if (_redirectCount > 5) { reject(new Error('Too many redirects')); return; }
         const urlObj = new URL(urlStr);
+        const isHttps = urlObj.protocol === 'https:';
+        const mod = isHttps ? https : http;
+        const agent = isHttps ? SHARED_HTTPS_AGENT : SHARED_HTTP_AGENT;
         const options = {
             hostname: urlObj.hostname,
+            port: urlObj.port || (isHttps ? 443 : 80),
             path: urlObj.pathname + urlObj.search,
             method: method,
-            headers: headers || {}
+            agent: agent,
+            headers: {
+                'User-Agent': 'VersePC/1.0 (Minecraft Launcher)',
+                'Accept': 'application/json',
+                ...(headers || {})
+            }
         };
-        const req = https.request(options, (res) => {
+        const req = mod.request(options, (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                let redirectUrl = res.headers.location;
+                if (redirectUrl.startsWith('/')) redirectUrl = `${urlObj.protocol}//${urlObj.host}${redirectUrl}`;
+                res.resume();
+                fetchJSONWithMethod(redirectUrl, method, body, headers, _redirectCount + 1).then(resolve).catch(reject);
+                return;
+            }
+            if (res.statusCode >= 400) {
+                let errData = '';
+                res.on('data', chunk => errData += chunk);
+                res.on('end', () => reject(new Error(`HTTP ${res.statusCode}: ${errData.substring(0, 200)}`)));
+                return;
+            }
             let data = '';
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
                 try { resolve(JSON.parse(data)); }
-                catch (e) { reject(e); }
+                catch (e) { reject(new Error(`JSON parse error: ${e.message}, data: ${data.substring(0, 200)}`)); }
             });
         });
         req.on('error', reject);
-        req.setTimeout(15000, () => { req.destroy(); reject(new Error('Request timeout')); });
+        req.setTimeout(30000, () => { req.destroy(); reject(new Error('Request timeout: ' + urlStr)); });
         if (body) req.write(body);
         req.end();
     });

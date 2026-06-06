@@ -45,7 +45,7 @@ class WallpaperEngine {
         this.mouseY = 0;
         this.lastTime = 0;
         this.isDarkTheme = true;
-        this.currentMode = 'panorama';
+        this.currentMode = 'none';
         this.renderer = null;
         this.transitionAlpha = 1;
         this.transitioning = false;

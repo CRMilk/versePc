@@ -2,9 +2,19 @@
 ; VersePC Installer - Modern MUI2 Customization
 ; ============================================================
 
-; Show file extraction details during install/uninstall
-ShowInstDetails show
-ShowUninstDetails show
+; --- DPI Awareness ---
+ManifestDPIAware true
+ManifestSupportedOS all
+
+; --- MUI InstFiles Page Callback ---
+!macro customHeader
+    !define MUI_PAGE_CUSTOMFUNCTION_SHOW VersePC_InstFilesShow
+!macroend
+
+Function VersePC_InstFilesShow
+    SetDetailsPrint both
+    DetailPrint "正在安装 VersePC，请稍候..."
+FunctionEnd
 
 ; --- Modern UI Settings (use /ifndef to avoid conflicts) ---
 !define /ifndef MUI_WELCOMEPAGE_TITLE "欢迎安装 VersePC"
@@ -50,13 +60,13 @@ ShowUninstDetails show
     ${If} $INSTDIR == ""
         StrCpy $INSTDIR "$PROGRAMFILES64\Verse"
     ${EndIf}
-    SetDetailsView show
-    SetDetailsPrint textonly
     SetAutoClose false
 !macroend
 
 !macro customInstall
     !insertmacro customInstallDir
+    DetailPrint "正在完成安装配置..."
+    DetailPrint "安装完成！"
 !macroend
 
 ; --- Uninstall: no extra prompt, NSIS default handles it ---

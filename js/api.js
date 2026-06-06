@@ -413,6 +413,7 @@ const API = {
     openFolder: (folder) => apiPost('/api/open-folder', { folder }),
     openInExplorer: (targetPath) => apiPost('/api/filesystem/open-in-explorer', { targetPath }),
     getDefaultModPath: () => apiGet('/api/filesystem/default-mod-path'),
+    getDefaultResourcePath: (type) => apiGet('/api/filesystem/default-resource-path', { type }),
     getQuickAccessPaths: () => apiGet('/api/filesystem/quick-access'),
     getDrives: () => apiGet('/api/filesystem/drives'),
     getFolderContents: (folderPath) => apiGet('/api/filesystem/list', { path: folderPath }),
@@ -439,8 +440,8 @@ const API = {
     getResourceDetail: (projectId) => apiGet('/api/resources/detail', { projectId }),
     getResourceVersions: (projectId, loader = '', gameVersion = '') =>
         apiGet('/api/resources/versions', { projectId, loader, gameVersion }),
-    downloadResource: (versionId, projectId, projectType = 'mod', targetVersionId = '') =>
-        apiPost('/api/resources/download', { versionId, projectId, projectType, targetVersionId }),
+    downloadResource: (versionId, projectId, projectType = 'mod', targetVersionId = '', savePath = '') =>
+        apiPost('/api/resources/download', { versionId, projectId, projectType, targetVersionId, savePath }),
 
     // === 局域网联机 (LAN) ===
     lanCreateRoom: (name, port, playerName) =>

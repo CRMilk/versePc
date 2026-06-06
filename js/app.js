@@ -53,8 +53,10 @@ let gameLogEventSource = null;
 let currentModDetailId = null;
 let currentModDetailSource = 'modrinth';
 let previousPage = null;
+let modDetailHistory = [];
 let modDetailVersions = [];
 let modDownloadPollTimers = [];
+let _isRestoringModDetail = false;
 const dlManager = {
     tasks: new Map(),
     order: [],
@@ -902,6 +904,19 @@ function formatBytes(bytes) {
     return (bytes / 1073741824).toFixed(2) + ' GB';
 }
 
+function formatDuration(seconds) {
+    seconds = Math.ceil(seconds);
+    if (seconds < 60) return seconds + '秒';
+    if (seconds < 3600) {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return m + '分' + (s > 0 ? s + '秒' : '');
+    }
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return h + '时' + (m > 0 ? m + '分' : '');
+}
+
 function escapeOnclick(str) {
     return str
         .replace(/&/g, '&amp;')
@@ -1009,11 +1024,16 @@ async function init() {
         const earlyTheme = await window.electronAPI.store.get('versepc_theme');
         if (earlyTheme) {
             const legacyThemes = ['blue', 'purple', 'green', 'orange', 'red', 'pink', 'teal', 'cyan', 'amber'];
-            const themeName = legacyThemes.includes(earlyTheme) ? 'dark' : earlyTheme;
+            const themeName = legacyThemes.includes(earlyTheme) ? 'light' : earlyTheme;
             document.documentElement.setAttribute('data-theme', themeName);
+            document.documentElement.classList.toggle('dark-theme', themeName === 'dark');
+            document.documentElement.classList.toggle('light-theme', themeName === 'light');
             document.querySelectorAll('.theme-option').forEach(btn => {
                 btn.classList.toggle('active', btn.getAttribute('data-theme') === themeName);
             });
+        } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+            document.documentElement.classList.add('light-theme');
         }
     } catch (e) {}
 
@@ -1451,11 +1471,11 @@ function setupSettingsPage() {
             try {
                 const result = await API.resetSettings();
                 if (result.success) {
-                    document.documentElement.setAttribute('data-theme', 'dark');
+                    document.documentElement.setAttribute('data-theme', 'light');
                     document.querySelectorAll('.theme-option').forEach(btn => {
-                        btn.classList.toggle('active', btn.getAttribute('data-theme') === 'dark');
+                        btn.classList.toggle('active', btn.getAttribute('data-theme') === 'light');
                     });
-                    applyAccentColor('#ffffff');
+                    applyAccentColor('#1a1a1a');
                     await loadSettings();
                     showToast('设置已重置为默认值', 'success');
                 } else {
@@ -1559,8 +1579,8 @@ async function loadJavaDownloadList() {
     try {
         const result = await API.getJavaList();
         
-        if (result.versions.length === 0) {
-            listEl.innerHTML = '<div class="hint">无法获取Java版本列表</div>';
+        if (!result.versions || result.versions.length === 0) {
+            listEl.innerHTML = '<div class="hint">无法获取Java版本列表，请检查网络后重试<button class="btn btn-secondary btn-sm" style="margin-left:8px" onclick="loadJavaDownloadList()">重试</button></div>';
             return;
         }
         
@@ -1572,17 +1592,19 @@ async function loadJavaDownloadList() {
             </div>
         `).join('');
     } catch (e) {
-        listEl.innerHTML = '<div class="hint">获取Java版本列表失败</div>';
+        listEl.innerHTML = '<div class="hint">获取Java版本列表失败: ' + escapeHtml(e.message || '网络错误') + ' <button class="btn btn-secondary btn-sm" style="margin-left:8px" onclick="loadJavaDownloadList()">重试</button></div>';
     }
 }
 
 let javaDownloadSessionId = null;
 let javaDownloadPollTimer = null;
+let javaDownloadProgressHistory = [];
 
 async function downloadJava(majorVersion) {
     try {
         const result = await API.downloadJava(majorVersion);
         javaDownloadSessionId = result.sessionId;
+        javaDownloadProgressHistory = [];
         
         document.getElementById('java-download-progress').style.display = 'block';
         document.getElementById('java-progress-fill').style.width = '0%';
@@ -1603,14 +1625,32 @@ async function pollJavaDownloadStatus() {
     
     try {
         const status = await API.getJavaDownloadStatus(javaDownloadSessionId);
+        const now = Date.now();
         
         document.getElementById('java-progress-fill').style.width = status.progress + '%';
         document.getElementById('java-progress-text').textContent = status.progress + '%';
         let msg = status.message || '处理中...';
         if (status.speed && status.speed > 0) {
-            const speedMB = (status.speed / 1024 / 1024).toFixed(2);
-            msg += ` (${speedMB} MB/s)`;
+            const speedKB = (status.speed / 1024).toFixed(1);
+            msg += ` (${speedKB} KB/s)`;
         }
+        
+        javaDownloadProgressHistory.push({ time: now, progress: status.progress });
+        if (javaDownloadProgressHistory.length > 20) javaDownloadProgressHistory.shift();
+        
+        if (status.progress > 0 && status.progress < 100 && javaDownloadProgressHistory.length >= 2) {
+            const oldest = javaDownloadProgressHistory[0];
+            const elapsed = (now - oldest.time) / 1000;
+            const progressDelta = status.progress - oldest.progress;
+            if (elapsed > 0 && progressDelta > 0) {
+                const progressPerSec = progressDelta / elapsed;
+                const remaining = (100 - status.progress) / progressPerSec;
+                if (remaining > 0 && remaining < 86400) {
+                    msg += ' · 剩余 ' + formatDuration(remaining);
+                }
+            }
+        }
+        
         document.getElementById('java-progress-message').textContent = msg;
         
         if (status.status === 'completed') {
@@ -1711,9 +1751,9 @@ async function loadSettings() {
         const accentColorValueEl = document.getElementById('custom-color-value');
         if (accentColorValueEl) accentColorValueEl.textContent = accentColor;
 
-        let savedTheme = settings.theme || 'dark';
+        let savedTheme = settings.theme || 'light';
         const legacyThemes = ['blue', 'purple', 'green', 'orange', 'red', 'pink', 'teal', 'cyan', 'amber'];
-        if (legacyThemes.includes(savedTheme)) savedTheme = 'dark';
+        if (legacyThemes.includes(savedTheme)) savedTheme = 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
         document.querySelectorAll('.theme-option').forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-theme') === savedTheme);
@@ -2030,6 +2070,13 @@ function navigateToPage(pageName) {
             previousPage = currentPageName;
         }
     }
+
+    if (pageName === 'mod-detail' && currentPage && currentPage.id === 'page-mod-detail' && !_isRestoringModDetail) {
+        modDetailHistory.push({
+            id: currentModDetailId,
+            source: currentModDetailSource
+        });
+    }
     
     if (currentPage && currentPage !== target) {
         if (currentPage.id === 'page-version-settings') {
@@ -2098,6 +2145,7 @@ function navigateToPage(pageName) {
     }
 
     if (pageName === 'modpacks') {
+        modDetailHistory = [];
         const activeTab = document.querySelector('#page-modpacks .tab-btn.active');
         if (activeTab && activeTab.dataset.tab === 'installed-modpacks') {
             setTimeout(() => loadInstalledModpacks(), 100);
@@ -2113,6 +2161,7 @@ function navigateToPage(pageName) {
     } else if (pageName === 'shaders') {
         setTimeout(() => loadResourcePage('shader'), 100);
     } else if (pageName === 'mods' && modMultiSelectMode) {
+        modDetailHistory = [];
         setTimeout(() => {
             document.getElementById('mod-multiselect-bar').style.display = 'flex';
             document.getElementById('mod-multiselect-toggle').classList.add('btn-primary');
@@ -2120,6 +2169,8 @@ function navigateToPage(pageName) {
             updateModSelectUI();
             loadMods();
         }, 200);
+    } else if (pageName === 'mods') {
+        modDetailHistory = [];
     } else if (pageName === 'downloads') {
         dlManager.render();
     } else if (pageName === 'explore') {
@@ -2135,8 +2186,15 @@ function navigateToPage(pageName) {
 }
 
 function goBackFromDetail() {
-    const backPage = previousPage || 'mods';
-    navigateToPage(backPage);
+    if (modDetailHistory.length > 0) {
+        const prev = modDetailHistory.pop();
+        _isRestoringModDetail = true;
+        openModDetail(prev.id, prev.source);
+        _isRestoringModDetail = false;
+    } else {
+        const backPage = previousPage || 'mods';
+        navigateToPage(backPage);
+    }
 }
 
 function openVersionDetail(versionId, versionUrl, versionType) {
@@ -2363,7 +2421,7 @@ async function pollInstallProgress(sessionId) {
             if (data.stage) {
                 files.push({
                     name: '当前阶段: ' + (getStageText(data.stage) || data.stage),
-                    progress: downloadStatus === 'completed' ? 100 : 0,
+                    progress: downloadStatus === 'completed' ? 100 : Math.round(data.progress || 0),
                     status: data.stage === 'completed' ? 'completed' : downloadStatus
                 });
             }
@@ -3226,12 +3284,19 @@ function renderMdVersionList(versions) {
 
                     const isMod = currentModDetailType === 'mod';
                     const isModpack = currentModDetailType === 'modpack';
-                    const addBtn = isModpack
-                           ? `<button class="btn btn-primary btn-sm mdv-install-btn" onclick="event.stopPropagation();installModpackVersionSafe(this.closest('.mdv-file-item'))">下载</button>`
-                           : (isMod
-                              ? `<button class="btn btn-primary btn-sm mdv-install-btn" onclick="event.stopPropagation();installModFileSafe(this.closest('.mdv-file-item'))">安装</button>`
-                              : `<button class="btn btn-primary btn-sm mdv-install-btn" onclick="event.stopPropagation();installResourceVersionSafe(this.closest('.mdv-file-item'))">安装</button>`);
-                    const rowOnclick = isModpack ? `installModpackVersionSafe(this)` : (isMod ? `installModFileSafe(this)` : `installResourceVersionSafe(this)`);
+                    let addBtn, rowOnclick;
+                    if (modMultiSelectMode && isMod) {
+                        const alreadySelected = modSelectedIds.has(currentModDetailId);
+                        addBtn = `<button class="btn ${alreadySelected ? 'btn-secondary' : 'btn-primary'} btn-sm mdv-install-btn" onclick="event.stopPropagation();addModFromDetail('${escapeOnclick(currentModDetailId)}', '${escapeOnclick(currentModDetailSource)}', '${safeVid}', '${safeFid}')">${alreadySelected ? '已添加' : '添加'}</button>`;
+                        rowOnclick = `addModFromDetail('${escapeOnclick(currentModDetailId)}', '${escapeOnclick(currentModDetailSource)}', '${safeVid}', '${safeFid}')`;
+                    } else {
+                        addBtn = isModpack
+                               ? `<button class="btn btn-primary btn-sm mdv-install-btn" onclick="event.stopPropagation();installModpackVersionSafe(this.closest('.mdv-file-item'))">下载</button>`
+                               : (isMod
+                                  ? `<button class="btn btn-primary btn-sm mdv-install-btn" onclick="event.stopPropagation();installModFileSafe(this.closest('.mdv-file-item'))">安装</button>`
+                                  : `<button class="btn btn-primary btn-sm mdv-install-btn" onclick="event.stopPropagation();installResourceVersionSafe(this.closest('.mdv-file-item'))">安装</button>`);
+                        rowOnclick = isModpack ? `installModpackVersionSafe(this)` : (isMod ? `installModFileSafe(this)` : `installResourceVersionSafe(this)`);
+                    }
                     return `<div class="mdv-file-item" data-vid="${safeVid}" data-fid="${safeFid}" onclick="${rowOnclick}">
                         <div class="mdv-file-icon">${loaderIcon}</div>
                         <div class="mdv-file-info">
@@ -3254,6 +3319,51 @@ function installModFileSafe(el) {
     installModFile(currentModDetailId, currentModDetailSource, vid, fid);
 }
 
+function addModFromDetail(projectId, source, safeVid, safeFid) {
+    const vid = decodeURIComponent(atob(safeVid || ''));
+    const fid = decodeURIComponent(atob(safeFid || ''));
+
+    if (modSelectedIds.has(projectId)) {
+        const existing = modSelectedVersions.get(projectId);
+        if (existing && existing.versionId === vid && existing.fileId === fid) {
+            modSelectedIds.delete(projectId);
+            modSelectedVersions.delete(projectId);
+            showToast('已从选择中移除', 'info');
+        } else {
+            modSelectedVersions.set(projectId, {
+                versionId: vid,
+                fileId: fid,
+                source: source
+            });
+            showToast('已更新选择的版本', 'success');
+        }
+    } else {
+        modSelectedIds.add(projectId);
+        modSelectedVersions.set(projectId, {
+            versionId: vid,
+            fileId: fid,
+            source: source
+        });
+        showToast('已添加到下载列表', 'success');
+    }
+    updateModSelectUI();
+
+    const container = document.getElementById('md-version-list');
+    if (container) {
+        container.querySelectorAll('.mdv-file-item').forEach(item => {
+            const btn = item.querySelector('.mdv-install-btn');
+            if (!btn) return;
+            const itemVid = decodeURIComponent(atob(item.dataset.vid || ''));
+            const itemFid = decodeURIComponent(atob(item.dataset.fid || ''));
+            const isSelected = modSelectedIds.has(projectId);
+            const isCurrentVersion = isSelected && modSelectedVersions.get(projectId)?.versionId === itemVid;
+            btn.textContent = isCurrentVersion ? '已添加' : '添加';
+            btn.classList.toggle('btn-secondary', isCurrentVersion);
+            btn.classList.toggle('btn-primary', !isCurrentVersion);
+        });
+    }
+}
+
 function installModpackVersionSafe(el) {
     if (!el) return;
     const vid = decodeURIComponent(atob(el.dataset.vid || ''));
@@ -3268,9 +3378,25 @@ function installResourceVersionSafe(el) {
 
 async function quickInstallResourceVersion(projectId, type, versionId) {
     const typeNames = { resourcepack: '材质包', shader: '光影包', datapack: '数据包' };
-    showToast(`正在安装${typeNames[type] || '资源'}...`, 'info');
+    const typeName = typeNames[type] || '资源';
+    showToast('请选择保存文件夹...', 'info');
     try {
-        const result = await API.downloadResource(versionId, projectId, type);
+        const defaultPath = await resolveResourceSavePath(type);
+        const folderResult = await API.selectSaveFolder(defaultPath);
+        if (folderResult.cancelled) {
+            if (folderResult.error) {
+                showToast('文件夹选择失败: ' + folderResult.error, 'error');
+            }
+            return;
+        }
+        const savePath = folderResult.path;
+        if (!savePath) {
+            showToast('未选择文件夹', 'error');
+            return;
+        }
+        localStorage.setItem('lastResourceSavePath_' + type, savePath);
+        showToast(`正在安装${typeName}...`, 'info');
+        const result = await API.downloadResource(versionId, projectId, type, '', savePath);
         if (result.success) {
             showModDownloadModal(result.fileName, result.sessionId);
         } else {
@@ -3399,15 +3525,43 @@ function getDownloadStageText(data) {
     return data.message || '处理中...';
 }
 
+async function resolveModSavePath() {
+    try {
+        const gpRes = await API.getDefaultModPath().catch(() => null);
+        let path = '';
+        if (typeof gpRes === 'string') {
+            path = gpRes;
+        } else if (gpRes && typeof gpRes === 'object') {
+            path = gpRes.path || gpRes.data || '';
+        }
+        if (path) return path;
+    } catch (e) {}
+    return localStorage.getItem('lastModSavePath') || '';
+}
+
+const resourceFolderMap = { resourcepack: 'resourcepacks', shader: 'shaderpacks', datapack: 'datapacks' };
+
+async function resolveResourceSavePath(type) {
+    const folderName = resourceFolderMap[type];
+    if (!folderName) return '';
+    const storageKey = 'lastResourceSavePath_' + type;
+    try {
+        const res = await API.getDefaultResourcePath(type).catch(() => null);
+        let p = '';
+        if (typeof res === 'string') {
+            p = res;
+        } else if (res && typeof res === 'object') {
+            p = res.path || res.data || '';
+        }
+        if (p) return p;
+    } catch (e) {}
+    return localStorage.getItem(storageKey) || '';
+}
+
 async function showModInstallConfirm(projectId, source, versionId, fileId) {
     showToast('请选择保存文件夹...', 'info');
     try {
-        const settings = await API.getSettings();
-        let defaultPath = '';
-        if (settings.selectedVersion) {
-            const gpRes = await API.getDefaultModPath().catch(() => null);
-            defaultPath = (gpRes && gpRes.path) ? gpRes.path : '';
-        }
+        const defaultPath = await resolveModSavePath();
         const folderResult = await API.selectSaveFolder(defaultPath);
         if (folderResult.cancelled) {
             if (folderResult.error) {
@@ -3422,6 +3576,7 @@ async function showModInstallConfirm(projectId, source, versionId, fileId) {
             showToast('未选择文件夹', 'error');
             return;
         }
+        localStorage.setItem('lastModSavePath', savePath);
 
         const currentGameVersion = document.getElementById('mod-filter-version')?.value || '';
         const currentLoader = document.getElementById('mod-filter-loader')?.value || '';
@@ -3674,7 +3829,15 @@ function updateModSelectUI() {
 async function batchDownloadMods() {
     if (modSelectedIds.size === 0) return;
 
-    try { await API.openModSaveFolder(); } catch (e) {}
+    const defaultPath = await resolveModSavePath();
+    const folderResult = await API.selectSaveFolder(defaultPath);
+    if (folderResult.cancelled) return;
+    const savePath = folderResult.path;
+    if (!savePath) {
+        showToast('未选择文件夹', 'error');
+        return;
+    }
+    localStorage.setItem('lastModSavePath', savePath);
 
     const currentGameVersion = getCustomSelectValue('mod-filter-version');
     const currentLoader = getCustomSelectValue('mod-filter-loader');
@@ -3716,7 +3879,7 @@ async function batchDownloadMods() {
             const fileId = selectedVer?.fileId || '';
             const source = selectedVer?.source || 'modrinth';
             
-            const result = await API.downloadModVersion(versionId, modId, source, fileId, currentGameVersion, currentLoader);
+            const result = await API.downloadModVersion(versionId, modId, source, fileId, currentGameVersion, currentLoader, savePath);
             
             if (result.success) {
                 await pollBatchModDownload(result.sessionId, modId);
@@ -3774,6 +3937,33 @@ function pollBatchModDownload(sessionId, modId) {
 
 
 
+function switchLanTab(page, tab, btnEl) {
+    const tabsContainer = btnEl.closest('.lan-tabs');
+    tabsContainer.querySelectorAll('.lan-tab').forEach(t => t.classList.remove('active'));
+    btnEl.classList.add('active');
+    
+    if (page === 'terracotta') {
+        const hostPanel = document.getElementById('terracotta-host-panel');
+        const joinPanel = document.getElementById('terracotta-join-panel');
+        const connected = document.getElementById('terracotta-connected');
+        if (connected.style.display !== 'none') return;
+        hostPanel.style.display = tab === 'host' ? '' : 'none';
+        joinPanel.style.display = tab === 'join' ? '' : 'none';
+        if (tab === 'host') {
+            terracottaHost();
+        } else {
+            updateTerracottaStatus('陶瓦联机 - 加入房间', '输入房间码加入', 'disconnected');
+        }
+    } else if (page === 'portmap') {
+        const createPanel = document.getElementById('portmap-create-panel');
+        const joinPanel = document.getElementById('portmap-join-panel');
+        const connected = document.getElementById('portmap-connected');
+        if (connected.style.display !== 'none') return;
+        createPanel.style.display = tab === 'create' ? '' : 'none';
+        joinPanel.style.display = tab === 'join' ? '' : 'none';
+    }
+}
+
 let terracottaPollTimer = null;
 let terracottaState = { mode: null, connected: false };
 
@@ -3788,10 +3978,10 @@ function updateTerracottaStatus(title, desc, state) {
 }
 
 async function terracottaHost() {
-    document.getElementById('terracotta-actions').style.display = 'none';
-    document.getElementById('terracotta-host-panel').style.display = 'block';
+    document.getElementById('terracotta-host-panel').style.display = '';
     document.getElementById('terracotta-join-panel').style.display = 'none';
     document.getElementById('terracotta-connected').style.display = 'none';
+    document.getElementById('terracotta-tabs').style.display = '';
     updateTerracottaStatus('陶瓦联机 - 创建房间', '准备创建房间', 'disconnected');
     try {
         const lanResult = await fetch('/api/lan/port');
@@ -3805,26 +3995,28 @@ async function terracottaHost() {
 }
 
 async function terracottaJoin() {
-    document.getElementById('terracotta-actions').style.display = 'none';
-    document.getElementById('terracotta-join-panel').style.display = 'block';
+    document.getElementById('terracotta-join-panel').style.display = '';
     document.getElementById('terracotta-host-panel').style.display = 'none';
     document.getElementById('terracotta-connected').style.display = 'none';
+    document.getElementById('terracotta-tabs').style.display = '';
     updateTerracottaStatus('陶瓦联机 - 加入房间', '输入房间码加入', 'disconnected');
 }
 
 function terracottaBackToActions() {
-    document.getElementById('terracotta-host-panel').style.display = 'none';
+    document.getElementById('terracotta-host-panel').style.display = '';
     document.getElementById('terracotta-join-panel').style.display = 'none';
     document.getElementById('terracotta-connected').style.display = 'none';
-    document.getElementById('terracotta-actions').style.display = '';
-    updateTerracottaStatus('未连接', '创建房间或加入朋友的房间', 'disconnected');
+    document.getElementById('terracotta-tabs').style.display = '';
+    const tabs = document.getElementById('terracotta-tabs');
+    tabs.querySelectorAll('.lan-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+    updateTerracottaStatus('未连接', '创建房间或输入房间码加入', 'disconnected');
 }
 
 function terracottaHide() {
     document.getElementById('terracotta-host-panel').style.display = 'none';
     document.getElementById('terracotta-join-panel').style.display = 'none';
     document.getElementById('terracotta-connected').style.display = 'none';
-    document.getElementById('terracotta-actions').style.display = 'none';
+    document.getElementById('terracotta-tabs').style.display = 'none';
     if (terracottaPollTimer) { clearInterval(terracottaPollTimer); terracottaPollTimer = null; }
 }
 
@@ -4000,19 +4192,26 @@ function updatePortmapStatus(title, desc, state) {
 }
 
 function portmapCreateRoom() {
-    document.getElementById('portmap-actions').style.display = 'none';
-    document.getElementById('portmap-create-panel').style.display = 'block';
+    document.getElementById('portmap-create-panel').style.display = '';
+    document.getElementById('portmap-join-panel').style.display = 'none';
+    document.getElementById('portmap-connected').style.display = 'none';
+    document.getElementById('portmap-tabs').style.display = '';
 }
 
 function portmapJoinRoom() {
-    document.getElementById('portmap-actions').style.display = 'none';
-    document.getElementById('portmap-join-panel').style.display = 'block';
+    document.getElementById('portmap-join-panel').style.display = '';
+    document.getElementById('portmap-create-panel').style.display = 'none';
+    document.getElementById('portmap-connected').style.display = 'none';
+    document.getElementById('portmap-tabs').style.display = '';
 }
 
 function portmapBackToActions() {
-    document.getElementById('portmap-create-panel').style.display = 'none';
+    document.getElementById('portmap-create-panel').style.display = '';
     document.getElementById('portmap-join-panel').style.display = 'none';
-    document.getElementById('portmap-actions').style.display = '';
+    document.getElementById('portmap-connected').style.display = 'none';
+    document.getElementById('portmap-tabs').style.display = '';
+    const tabs = document.getElementById('portmap-tabs');
+    tabs.querySelectorAll('.lan-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
     updatePortmapStatus('未连接', '创建房间或加入朋友的房间', 'disconnected');
 }
 
@@ -4068,7 +4267,11 @@ function portmapDoJoin() {
 
 function portmapLeave() {
     document.getElementById('portmap-connected').style.display = 'none';
-    document.getElementById('portmap-actions').style.display = '';
+    document.getElementById('portmap-tabs').style.display = '';
+    document.getElementById('portmap-create-panel').style.display = '';
+    document.getElementById('portmap-join-panel').style.display = 'none';
+    const tabs = document.getElementById('portmap-tabs');
+    tabs.querySelectorAll('.lan-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
     const logEl = document.getElementById('portmap-room-log');
     if (logEl) logEl.textContent = '';
     updatePortmapStatus('未连接', '创建房间或加入朋友的房间', 'disconnected');
@@ -4555,6 +4758,14 @@ async function loadAccounts() {
                 };
                 launchAvatar.appendChild(img2);
             }
+        } else {
+            const homeAvatar = document.getElementById('home-avatar');
+            homeAvatar.innerHTML = '<img src="img/icon.png" alt="" class="account-avatar-img">';
+            document.getElementById('home-player-name').textContent = '未登录';
+            document.getElementById('home-account-type').textContent = '离线模式';
+            const launchAvatar = document.getElementById('launch-avatar');
+            launchAvatar.innerHTML = '<img src="img/icon.png" alt="" class="account-avatar-img">';
+            document.getElementById('launch-player-name').textContent = 'Player';
         }
     } catch (e) { console.error('[Accounts] Failed to update account display:', e); }
 }
@@ -6277,10 +6488,17 @@ function applyAccentColor(color) {
 
 function switchTheme(themeName) {
     document.documentElement.setAttribute('data-theme', themeName);
+    document.documentElement.classList.toggle('dark-theme', themeName === 'dark');
+    document.documentElement.classList.toggle('light-theme', themeName === 'light');
 
     document.documentElement.style.removeProperty('--accent');
     document.documentElement.style.removeProperty('--accent-hover');
     document.documentElement.style.removeProperty('--accent-rgb');
+
+    const app = document.getElementById('app');
+    if (app && themeName === 'light') {
+        app.classList.remove('wp-light', 'wp-dark');
+    }
 
     if (typeof updateWallpaperTheme === 'function') {
         updateWallpaperTheme(themeName === 'dark');
@@ -6831,9 +7049,24 @@ async function quickInstallResource(projectId, type) {
             showToast('安装失败', 'error');
         }
     } else {
-        showToast(`正在安装${typeNames[type]}...`, 'info');
+        showToast('请选择保存文件夹...', 'info');
         try {
-            const result = await API.downloadResource('', projectId, type);
+            const defaultPath = await resolveResourceSavePath(type);
+            const folderResult = await API.selectSaveFolder(defaultPath);
+            if (folderResult.cancelled) {
+                if (folderResult.error) {
+                    showToast('文件夹选择失败: ' + folderResult.error, 'error');
+                }
+                return;
+            }
+            const savePath = folderResult.path;
+            if (!savePath) {
+                showToast('未选择文件夹', 'error');
+                return;
+            }
+            localStorage.setItem('lastResourceSavePath_' + type, savePath);
+            showToast(`正在安装${typeNames[type]}...`, 'info');
+            const result = await API.downloadResource('', projectId, type, '', savePath);
             if (result.success) {
                 showModDownloadModal(result.fileName, result.sessionId);
             } else {
@@ -8008,19 +8241,17 @@ async function selectTheme(element) {
 
     const theme = element.dataset.theme;
     document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.classList.toggle('dark-theme', theme === 'dark');
+    document.documentElement.classList.toggle('light-theme', theme === 'light');
 
-    try {
-        const savedColor = await window.electronAPI.store.get('versepc_custom_accent_color');
-        if (savedColor) {
-            document.documentElement.style.setProperty('--accent', savedColor);
-            const r = parseInt(savedColor.slice(1, 3), 16);
-            const g = parseInt(savedColor.slice(3, 5), 16);
-            const b = parseInt(savedColor.slice(5, 7), 16);
-            const lighter = `rgb(${Math.min(255, r + 40)}, ${Math.min(255, g + 40)}, ${Math.min(255, b + 40)})`;
-            document.documentElement.style.setProperty('--accent-hover', lighter);
-            document.documentElement.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
-        }
-    } catch (e) {}
+    const app = document.getElementById('app');
+    if (app && theme === 'light') {
+        app.classList.remove('wp-light', 'wp-dark');
+    }
+
+    document.documentElement.style.setProperty('--accent', '#ffffff');
+    document.documentElement.style.setProperty('--accent-hover', '#e0e0e0');
+    document.documentElement.style.setProperty('--accent-rgb', '255, 255, 255');
 
     if (typeof updateWallpaperTheme === 'function') {
         updateWallpaperTheme(theme === 'dark');
@@ -8180,10 +8411,14 @@ function initWallpaperAutoAdapt() {
         const app = document.getElementById('app');
         if (!app) return;
 
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
         const isLight = brightness > 0.55;
         const isDark = brightness < 0.35;
 
-        if (isLight) {
+        if (currentTheme === 'light') {
+            app.classList.remove('wp-light', 'wp-dark');
+            overlay.style.background = 'transparent';
+        } else if (isLight) {
             overlay.style.background = 'rgba(0, 0, 0, 0.15)';
             app.classList.add('wp-light');
             app.classList.remove('wp-dark');
@@ -8233,48 +8468,20 @@ function aiToggleApiKeyVisibility() {
 }
 
 function applyThemeColors(themeName) {
-    const themes = {
-        dark: { accent: '#ffffff', accentHover: '#d0d0d0' },
-        light: { accent: '#1a1a1a', accentHover: '#333333' }
-    };
-
-    const theme = themes[themeName] || themes.dark;
-    document.documentElement.style.setProperty('--accent', theme.accent);
-    document.documentElement.style.setProperty('--accent-hover', theme.accentHover);
+    document.documentElement.style.setProperty('--accent', '#ffffff');
+    document.documentElement.style.setProperty('--accent-hover', '#e0e0e0');
 }
 
 async function updateCustomAccentColor(color) {
-    const colorValue = document.getElementById('custom-color-value');
-    if (colorValue) {
-        colorValue.textContent = color;
-    }
-
-    const colorPreviewDot = document.getElementById('color-preview-dot');
-    if (colorPreviewDot) {
-        colorPreviewDot.style.background = color;
-    }
-
-    document.documentElement.style.setProperty('--accent', color);
-
-    const r = parseInt(color.slice(1, 3), 16);
-    const g = parseInt(color.slice(3, 5), 16);
-    const b = parseInt(color.slice(5, 7), 16);
-    const lighter = `rgb(${Math.min(255, r + 40)}, ${Math.min(255, g + 40)}, ${Math.min(255, b + 40)})`;
-    document.documentElement.style.setProperty('--accent-hover', lighter);
-    document.documentElement.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
-
-    try {
-        await window.electronAPI.store.set('versepc_custom_accent_color', color);
-    } catch (e) {
-        console.error('[Settings] Save custom color error:', e);
-    }
+    document.documentElement.style.setProperty('--accent', '#ffffff');
+    document.documentElement.style.setProperty('--accent-hover', '#e0e0e0');
+    document.documentElement.style.setProperty('--accent-rgb', '255, 255, 255');
 }
 
 async function savePersonalizeSettings() {
     const settings = {
-        theme: document.querySelector('.theme-option.active')?.dataset.theme || 'dark',
-        customAccentColor: document.getElementById('custom-accent-color')?.value,
-        wallpaper: document.querySelector('.wallpaper-option.active')?.dataset.wallpaper || 'panorama'
+        theme: document.querySelector('.theme-option.active')?.dataset.theme || 'light',
+        wallpaper: document.querySelector('.wallpaper-option.active')?.dataset.wallpaper || 'none'
     };
 
     try {
@@ -8290,12 +8497,9 @@ async function resetPersonalizeSettings() {
     const confirmed = await showConfirmDialog('重置设置', '确定要重置个性化设置为默认值吗?', '重置', '取消');
     if (!confirmed) return;
 
-    document.querySelector('.theme-option[data-theme="dark"]')?.click();
-    document.getElementById('custom-accent-color').value = '#ffffff';
-    const colorPreviewDot = document.getElementById('color-preview-dot');
-    if (colorPreviewDot) colorPreviewDot.style.background = '#ffffff';
+    document.querySelector('.theme-option[data-theme="light"]')?.click();
 
-    document.querySelector('.wallpaper-option[data-wallpaper="panorama"]')?.click();
+    document.querySelector('.wallpaper-option[data-wallpaper="none"]')?.click();
 
     const opacitySlider = document.getElementById('wallpaper-opacity-slider');
     if (opacitySlider) { opacitySlider.value = 100; onWallpaperOpacityChange(100); }
@@ -8306,11 +8510,10 @@ async function resetPersonalizeSettings() {
 
     try {
         await window.electronAPI.store.set('versepc_personalize_settings', JSON.stringify({
-            theme: 'dark',
-            customAccentColor: '#ffffff',
-            wallpaper: 'panorama'
+            theme: 'light',
+            wallpaper: 'none'
         }));
-        await window.electronAPI.store.set('versepc_wallpaper', 'panorama');
+        await window.electronAPI.store.set('versepc_wallpaper', 'none');
         await window.electronAPI.store.delete('versepc_solid_color');
         await window.electronAPI.store.set('versepc_wallpaper_opacity', 100);
         await window.electronAPI.store.set('versepc_wallpaper_blur', 0);
@@ -8335,13 +8538,9 @@ async function loadPersonalizeSettings() {
             if (settings.theme) {
                 let themeName = settings.theme;
                 const legacyThemes = ['blue', 'purple', 'green', 'orange', 'red', 'pink', 'teal', 'cyan', 'amber'];
-                if (legacyThemes.includes(themeName)) themeName = 'dark';
+                if (legacyThemes.includes(themeName)) themeName = 'light';
                 const themeEl = document.querySelector(`.theme-option[data-theme="${themeName}"]`);
                 if (themeEl) selectTheme(themeEl);
-            }
-            if (settings.customAccentColor) {
-                document.getElementById('custom-accent-color').value = settings.customAccentColor;
-                updateCustomAccentColor(settings.customAccentColor);
             }
             if (settings.wallpaper) {
                 let wpName = settings.wallpaper;
@@ -8354,15 +8553,15 @@ async function loadPersonalizeSettings() {
             if (savedTheme) {
                 let themeName = savedTheme;
                 const legacyThemes = ['blue', 'purple', 'green', 'orange', 'red', 'pink', 'teal', 'cyan', 'amber'];
-                if (legacyThemes.includes(themeName)) themeName = 'dark';
+                if (legacyThemes.includes(themeName)) themeName = 'light';
                 const themeEl = document.querySelector(`.theme-option[data-theme="${themeName}"]`);
                 if (themeEl) selectTheme(themeEl);
+            } else {
+                const defaultThemeEl = document.querySelector('.theme-option[data-theme="light"]');
+                if (defaultThemeEl) selectTheme(defaultThemeEl);
             }
-            const savedCustomColor = await window.electronAPI.store.get('versepc_custom_accent_color');
-            if (savedCustomColor) {
-                document.getElementById('custom-accent-color').value = savedCustomColor;
-                updateCustomAccentColor(savedCustomColor);
-            }
+            const defaultWpEl = document.querySelector('.wallpaper-option[data-wallpaper="none"]');
+            if (defaultWpEl && !document.querySelector('.wallpaper-option.active')) selectWallpaper(defaultWpEl);
         }
     } catch (e) {
         console.error('[Settings] Load personalize settings error:', e);
