@@ -533,9 +533,17 @@ ipcMain.handle('store-get-multiple', async (event, keys) => {
 });
 
 ipcMain.handle('store-set', async (event, key, value) => {
-    const store = loadStore();
-    store[key] = value;
-    saveStore(store);
+    if (!global._storeWriteQueue) global._storeWriteQueue = Promise.resolve();
+    global._storeWriteQueue = global._storeWriteQueue.then(() => {
+        return new Promise((resolve) => {
+            const store = loadStore();
+            store[key] = value;
+            fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), (err) => {
+                if (err) console.error('Failed to save store:', err);
+                resolve(true);
+            });
+        });
+    });
     return true;
 });
 
@@ -555,32 +563,6 @@ ipcMain.handle('store-delete', async (event, key) => {
             return { success: true, port: oldPort };
         }
         return { success: false, message: '没有运行中的预览服务器' };
-    });
-
-    ipcMain.handle('backup:list', async (event, filePath) => {
-        return BackupManager.listBackups(filePath || null);
-    });
-    ipcMain.handle('backup:restore', async (event, backupId) => {
-        const result = BackupManager.restoreBackup(backupId);
-        if (result.success && mainWindow && !mainWindow.isDestroyed()) {
-            try {
-                const content = fs.readFileSync(result.restoredPath, 'utf-8');
-                mainWindow.webContents.send('editor:show-diff', result.restoredPath, '', content);
-            } catch (e) {}
-        }
-        return result;
-    });
-    ipcMain.handle('backup:diff', async (event, backupId) => {
-        return BackupManager.getDiff(backupId);
-    });
-    ipcMain.handle('history:changes', async (event, filter) => {
-        return ChangeTracker.getChanges(filter || null);
-    });
-    ipcMain.handle('history:audit', async (event, filter) => {
-        return ChangeTracker.getAuditLog(filter || null);
-    });
-    ipcMain.handle('history:summary', async () => {
-        return ChangeTracker.getSessionSummary();
     });
 
 // 在系统默认浏览器中打开外部链接
@@ -652,7 +634,8 @@ ipcMain.handle('editor:open-file-dialog', async (event) => {
 ipcMain.handle('editor:read-file', async (event, filePath) => {
     try {
         const resolved = path.resolve(filePath);
-        if (resolved.includes('..') || !fs.existsSync(resolved)) {
+        const allowedBase = path.resolve(__dirname);
+        if (!resolved.toLowerCase().startsWith(allowedBase.toLowerCase()) || !fs.existsSync(resolved)) {
             return { error: '无效的文件路径' };
         }
         const content = fs.readFileSync(resolved, 'utf-8');
@@ -665,7 +648,8 @@ ipcMain.handle('editor:read-file', async (event, filePath) => {
 ipcMain.handle('editor:write-file', async (event, filePath, content) => {
     try {
         const resolved = path.resolve(filePath);
-        if (resolved.includes('..')) {
+        const allowedBase = path.resolve(__dirname);
+        if (!resolved.toLowerCase().startsWith(allowedBase.toLowerCase())) {
             return { error: '无效的文件路径' };
         }
         const dir = path.dirname(resolved);
@@ -684,7 +668,11 @@ ipcMain.handle('editor:open', async (event, filePath) => {
 
 ipcMain.handle('editor:scan-dir', async (event, dirPath) => {
     try {
+        const allowedBase = path.resolve(__dirname);
         const resolved = path.resolve(dirPath);
+        if (!resolved.toLowerCase().startsWith(allowedBase.toLowerCase())) {
+            return [];
+        }
         const entries = fs.readdirSync(resolved, { withFileTypes: true });
         const IGNORE = ['node_modules', '.git', '.svn', '__pycache__', '.DS_Store', 'Thumbs.db', 'dist', '.next', '.cache'];
         return entries
@@ -1082,7 +1070,7 @@ async function handleAPIRequest(request, reqUrl) {
     try {
         const result = await apiHandler.handleNativeAPI(pathname, method, body, query);
         const responseHeaders = new Headers();
-        Object.entries(result.headers).forEach(([key, value]) => {
+        Object.entries(result.headers || {}).forEach(([key, value]) => {
             try { responseHeaders.set(key, value); } catch (e) {}
         });
 
@@ -1120,7 +1108,7 @@ function handleSSERequest(pathname, method, body, query) {
     responseHeaders.set('Content-Type', 'text/event-stream');
     responseHeaders.set('Cache-Control', 'no-cache');
     responseHeaders.set('Connection', 'keep-alive');
-    Object.entries(headers).forEach(([key, value]) => {
+    Object.entries(headers || {}).forEach(([key, value]) => {
         try { responseHeaders.set(key, value); } catch (e) {}
     });
 
@@ -1144,7 +1132,7 @@ async function handleStaticFile(pathname) {
 
     filePath = path.resolve(filePath);
     const appDir = path.resolve(__dirname);
-    if (!filePath.startsWith(appDir) && !filePath.startsWith(appDir.toLowerCase())) {
+    if (!filePath.toLowerCase().startsWith(appDir.toLowerCase())) {
         return new Response('Forbidden', { status: 403 });
     }
 
@@ -1177,7 +1165,8 @@ function isPathAllowed(filePath) {
     for (const blocked of BLOCKED_PATH_PREFIXES) {
         if (resolved.toLowerCase().startsWith(blocked.toLowerCase())) return false;
     }
-    if (resolved.includes('..')) return false;
+    const originalSegments = filePath.replace(/\\/g, '/').split('/');
+    if (originalSegments.includes('..')) return false;
     return true;
 }
 
@@ -1431,7 +1420,14 @@ function registerModsIPC() {
             } catch (e) {
                 const tmpPath = jarPath + '.tmp';
                 fs.copyFileSync(jarPath, tmpPath);
-                zip = new AdmZip(tmpPath);
+                try {
+                    zip = new AdmZip(tmpPath);
+                    zip.addFile(entryName, Buffer.from(content, 'utf-8'));
+                    zip.writeZip(jarPath);
+                } finally {
+                    try { fs.unlinkSync(tmpPath); } catch (e) {}
+                }
+                return { success: true, entryName };
             }
             zip.addFile(entryName, Buffer.from(content, 'utf-8'));
             zip.writeZip(jarPath);
@@ -3188,6 +3184,32 @@ function registerAIChatIPC() {
     };
     ChangeTracker.init();
 
+    ipcMain.handle('backup:list', async (_event, filePath) => {
+        return BackupManager.listBackups(filePath || null);
+    });
+    ipcMain.handle('backup:restore', async (_event, backupId) => {
+        const result = BackupManager.restoreBackup(backupId);
+        if (result.success && result.restoredPath && mainWindow && !mainWindow.isDestroyed()) {
+            try {
+                const content = fs.readFileSync(result.restoredPath, 'utf-8');
+                mainWindow.webContents.send('editor:show-diff', result.restoredPath, '', content);
+            } catch (e) {}
+        }
+        return result;
+    });
+    ipcMain.handle('backup:diff', async (_event, backupId) => {
+        return BackupManager.getDiff(backupId);
+    });
+    ipcMain.handle('history:changes', async (_event, filter) => {
+        return ChangeTracker.getChanges(filter || null);
+    });
+    ipcMain.handle('history:audit', async (_event, filter) => {
+        return ChangeTracker.getAuditLog(filter || null);
+    });
+    ipcMain.handle('history:summary', async () => {
+        return ChangeTracker.getSessionSummary();
+    });
+
     const CodeValidator = {
         validate(content, filePath) {
             if (!content || !filePath) return { valid: true };
@@ -3938,13 +3960,33 @@ function registerAIChatIPC() {
                             resolve(JSON.stringify({ error: `命令执行超时(${timeout}ms)`, timedOut: true }));
                         }, timeout);
 
-                        child = exec(command, {
+                        const { spawn } = require('child_process');
+                        const isWin = process.platform === 'win32';
+                        child = spawn(isWin ? 'cmd.exe' : '/bin/sh', [isWin ? '/c' : '-c', command], {
                             cwd: workDir,
-                            timeout: timeout,
-                            maxBuffer: 1024 * 1024,
                             windowsHide: true,
                             env: { ...process.env }
-                        }, (error, stdout, stderr) => {
+                        });
+
+                        let stdout = '';
+                        let stderr = '';
+                        child.stdout.on('data', (d) => { stdout += d.toString(); });
+                        child.stderr.on('data', (d) => { stderr += d.toString(); });
+
+                        child.on('error', (error) => {
+                            clearTimeout(timer);
+                            resolve(JSON.stringify({
+                                success: false,
+                                command,
+                                cwd: workDir,
+                                exitCode: error.code || 1,
+                                stdout: stdout.trim(),
+                                stderr: stderr.trim(),
+                                error: `命令执行失败: ${error.message}`
+                            }));
+                        });
+
+                        child.on('close', (code) => {
                             clearTimeout(timer);
                             let out = stdout || '';
                             let err = stderr || '';
@@ -3953,16 +3995,15 @@ function registerAIChatIPC() {
                             if (err.length > maxOutput) err = err.slice(0, maxOutput) + '\n...[截断]';
 
                             const result = {
-                                success: !error || error.killed,
+                                success: code === 0,
                                 command,
                                 cwd: workDir,
-                                exitCode: error ? (error.code || 1) : 0,
+                                exitCode: code,
                                 stdout: out.trim(),
                                 stderr: err.trim()
                             };
-                            if (error && !error.killed) {
-                                result.error = `命令执行失败(exit ${error.code || 1})`;
-                                result.success = false;
+                            if (code !== 0) {
+                                result.error = `命令执行失败(exit ${code})`;
                             }
                             resolve(JSON.stringify(result));
                         });
@@ -3977,14 +4018,15 @@ function registerAIChatIPC() {
                     try {
                         const dir = path.dirname(filePath);
                         await fs.promises.mkdir(dir, { recursive: true });
-                        if (fs.existsSync(filePath)) BackupManager.createBackup(filePath, 'write_file', {});
+                        const existed = fs.existsSync(filePath);
+                        if (existed) BackupManager.createBackup(filePath, 'write_file', {});
                         const validation = CodeValidator.validate(content, filePath);
                         if (!validation.valid) {
                             return JSON.stringify({ error: `代码验证失败: ${validation.error}${validation.line ? ' (行 ' + validation.line + ')' : ''}`, validation, suggestion: validation.suggestion || '请修复语法错误后重试' });
                         }
                         await fs.promises.writeFile(filePath, content, 'utf-8');
                         ChangeTracker.recordChange({
-                            type: fs.existsSync(filePath) ? 'overwrite' : 'create',
+                            type: existed ? 'overwrite' : 'create',
                             toolName: 'write_file',
                             filePath: filePath,
                             newContent: content.substring(0, 2000)
@@ -4330,6 +4372,9 @@ function registerAIChatIPC() {
                     if (action === 'add' && content) {
                         const memId = id || 'mem-' + Date.now();
                         global._coreMemory.push({ id: memId, category: category || 'knowledge', content, timestamp: Date.now() });
+                        if (global._coreMemory.length > 500) {
+                            global._coreMemory = global._coreMemory.slice(-300);
+                        }
                         return JSON.stringify({ status: 'success', action: 'added', id: memId, count: global._coreMemory.length });
                     } else if (action === 'update' && id && content) {
                         const idx = global._coreMemory.findIndex(m => m.id === id);
@@ -4356,7 +4401,7 @@ function registerAIChatIPC() {
                             { role: 'system', content: `你是一个子代理，负责完成以下任务。直接给出结果，不要询问用户。任务描述: ${description}` },
                             { role: 'user', content: prompt }
                         ];
-                        const subApiKey = '';
+                        const subApiKey = loadStore().apiKey || '';
                         if (!subApiKey) return JSON.stringify({ error: '未配置 API Key，子代理无法运行' });
                         const subResult = await llmNonStream(subApiKey, 'glm-5-flash', subMessages, 0.3);
                         return JSON.stringify({ success: true, description, result: subResult });
@@ -4419,7 +4464,7 @@ function registerAIChatIPC() {
                     const namespaces = Object.keys(langFiles);
                     if (namespaces.length === 0) return JSON.stringify({ error: '未找到任何英文语言文件(en_us.json/lang)' });
 
-                    const apiKey = '';
+                    const apiKey = loadStore().apiKey || '';
                     if (!apiKey) return JSON.stringify({ error: '未配置 API Key，无法进行AI翻译' });
 
                     const outputDir = path.join(os.homedir(), '.versepc', 'translations', targetLang);
@@ -4646,20 +4691,31 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                     const streamId = args._streamId || null;
                     if (args.background) {
                         try {
-                            const child = spawn(cmd, [], {
-                                shell: true, cwd: workDir, detached: true,
+                            const isWin = process.platform === 'win32';
+                            const child = spawn(isWin ? 'cmd.exe' : '/bin/sh', [isWin ? '/c' : '-c', cmd], {
+                                cwd: workDir, detached: true,
                                 stdio: ['ignore', 'pipe', 'pipe'],
                                 windowsHide: true
                             });
-                            let stdout = '', stderr = '';
-                            child.stdout.on('data', d => { stdout += d.toString(); });
-                            child.stderr.on('data', d => { stderr += d.toString(); });
                             child.unref();
                             if (!global._bgProcesses) global._bgProcesses = {};
                             const pid = child.pid;
+                            const MAX_BG_OUTPUT = 1024 * 1024;
                             global._bgProcesses[pid] = { child, stdout: '', stderr: '', startTime: Date.now() };
-                            child.stdout.on('data', d => { if (global._bgProcesses[pid]) global._bgProcesses[pid].stdout += d.toString(); });
-                            child.stderr.on('data', d => { if (global._bgProcesses[pid]) global._bgProcesses[pid].stderr += d.toString(); });
+                            child.stdout.on('data', d => {
+                                if (!global._bgProcesses[pid]) return;
+                                const chunk = d.toString();
+                                if (global._bgProcesses[pid].stdout.length < MAX_BG_OUTPUT) {
+                                    global._bgProcesses[pid].stdout += chunk;
+                                }
+                            });
+                            child.stderr.on('data', d => {
+                                if (!global._bgProcesses[pid]) return;
+                                const chunk = d.toString();
+                                if (global._bgProcesses[pid].stderr.length < MAX_BG_OUTPUT) {
+                                    global._bgProcesses[pid].stderr += chunk;
+                                }
+                            });
                             child.on('exit', (code) => { if (global._bgProcesses[pid]) global._bgProcesses[pid].exitCode = code; });
                             global._bashSession.cwd = workDir;
                             return JSON.stringify({ output: `后台进程已启动 (PID: ${pid})。使用 bash(command="taskkill /PID ${pid} /F") 停止。`, pid, background: true });
@@ -4727,9 +4783,12 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                     const rootDir = args.root_dir || args.rootDir;
                     if (!rootDir) return JSON.stringify({ error: 'root_dir 是必需的' });
                     const resolvedRoot = path.resolve(rootDir);
-                    if (!fs.existsSync(resolvedRoot)) return JSON.stringify({ error: `目录不存在: ${resolvedRoot}` });
-                    const result = await CodeIndexer.buildIndex(resolvedRoot);
-                    return JSON.stringify({ success: true, ...result, rootDir: resolvedRoot });
+                    const buildIndexPathCheck = validatePath(resolvedRoot);
+                    if (!buildIndexPathCheck.valid) return JSON.stringify({ error: buildIndexPathCheck.error });
+                    const buildIndexSafeRoot = buildIndexPathCheck.resolved;
+                    if (!fs.existsSync(buildIndexSafeRoot)) return JSON.stringify({ error: `目录不存在: ${buildIndexSafeRoot}` });
+                    const result = await CodeIndexer.buildIndex(buildIndexSafeRoot);
+                    return JSON.stringify({ success: true, ...result, rootDir: buildIndexSafeRoot });
                 }
                 case 'semantic_search': {
                     const query = args.query || '';
@@ -4883,8 +4942,11 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                     const rootDir = args.root;
                     if (!rootDir) return JSON.stringify({ error: 'root 目录路径是必需的' });
                     const resolvedRoot = path.resolve(rootDir);
-                    if (!fs.existsSync(resolvedRoot) || !fs.statSync(resolvedRoot).isDirectory()) {
-                        return JSON.stringify({ error: `目录不存在: ${resolvedRoot}` });
+                    const previewPathCheck = validatePath(resolvedRoot);
+                    if (!previewPathCheck.valid) return JSON.stringify({ error: previewPathCheck.error });
+                    const previewSafeRoot = previewPathCheck.resolved;
+                    if (!fs.existsSync(previewSafeRoot) || !fs.statSync(previewSafeRoot).isDirectory()) {
+                        return JSON.stringify({ error: `目录不存在: ${previewSafeRoot}` });
                     }
                     if (global._previewServer) {
                         global._previewServer.close();
@@ -4941,7 +5003,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                                 });
                             }
                         });
-                        return JSON.stringify({ success: true, message: `预览服务器启动中... 端口 ${port}`, root: resolvedRoot, port });
+                        return JSON.stringify({ success: true, message: `预览服务器启动中... 端口 ${port}`, root: previewSafeRoot, port });
                     } catch (e) {
                         return JSON.stringify({ error: `启动预览服务器失败: ${e.message}` });
                     }
@@ -4953,15 +5015,18 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                     const filePath = args.path;
                     if (!cmd || !filePath) return JSON.stringify({ error: 'command and path are required' });
                     const resolvedPath = filePath.replace(/^~/, os.homedir());
+                    const pathCheck = validatePath(resolvedPath);
+                    if (!pathCheck.valid) return JSON.stringify({ error: pathCheck.error });
+                    const safePath = pathCheck.resolved;
                     if (cmd === 'view') {
-                        if (!fs.existsSync(resolvedPath)) return JSON.stringify({ error: `Path does not exist: ${resolvedPath}` });
-                        const stat = fs.statSync(resolvedPath);
+                        if (!fs.existsSync(safePath)) return JSON.stringify({ error: `Path does not exist: ${safePath}` });
+                        const stat = fs.statSync(safePath);
                         if (stat.isDirectory()) {
-                            const items = fs.readdirSync(resolvedPath, { withFileTypes: true }).slice(0, 50);
+                            const items = fs.readdirSync(safePath, { withFileTypes: true }).slice(0, 50);
                             const listing = items.map(d => `  ${d.isDirectory() ? '[DIR]' : '     '} ${d.name}`).join('\n');
-                            return JSON.stringify({ output: `Contents of ${resolvedPath}:\n${listing}` });
+                            return JSON.stringify({ output: `Contents of ${safePath}:\n${listing}` });
                         }
-                        let content = fs.readFileSync(resolvedPath, 'utf-8');
+                        let content = fs.readFileSync(safePath, 'utf-8');
                         const lines = content.split('\n');
                         const range = args.view_range;
                         let start = 0, end = lines.length;
@@ -4970,84 +5035,84 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                             end = range[1] === -1 ? lines.length : Math.min(lines.length, range[1]);
                         }
                         const numbered = lines.slice(start, end).map((l, i) => `${String(i + start + 1).padStart(6)}\t${l}`).join('\n');
-                        return JSON.stringify({ output: `文件内容：${resolvedPath}\n${numbered}\n` });
+                        return JSON.stringify({ output: `文件内容：${safePath}\n${numbered}\n` });
                     }
                     if (cmd === 'create') {
-                        if (fs.existsSync(resolvedPath)) return JSON.stringify({ error: `File already exists at: ${resolvedPath}. Cannot overwrite with create.` });
+                        if (fs.existsSync(safePath)) return JSON.stringify({ error: `File already exists at: ${safePath}. Cannot overwrite with create.` });
                         const fileText = args.file_text || '';
-                        const validation = CodeValidator.validate(fileText, resolvedPath);
+                        const validation = CodeValidator.validate(fileText, safePath);
                         if (!validation.valid) {
                             return JSON.stringify({ error: `代码验证失败: ${validation.error}${validation.line ? ' (行 ' + validation.line + ')' : ''}`, validation, suggestion: validation.suggestion || '请修复语法错误后重试' });
                         }
-                        fs.mkdirSync(pathMod.dirname(resolvedPath), { recursive: true });
-                        fs.writeFileSync(resolvedPath, fileText, 'utf-8');
+                        fs.mkdirSync(pathMod.dirname(safePath), { recursive: true });
+                        fs.writeFileSync(safePath, fileText, 'utf-8');
                         ChangeTracker.recordChange({
                             type: 'create',
                             toolName: 'str_replace_based_edit_tool',
-                            filePath: resolvedPath,
+                            filePath: safePath,
                             newContent: fileText.substring(0, 2000)
                         });
-                        return JSON.stringify({ output: `File created successfully at: ${resolvedPath}` });
+                        return JSON.stringify({ output: `File created successfully at: ${safePath}` });
                     }
-                    if (!fs.existsSync(resolvedPath)) return JSON.stringify({ error: `File does not exist: ${resolvedPath}` });
+                    if (!fs.existsSync(safePath)) return JSON.stringify({ error: `File does not exist: ${safePath}` });
                     if (cmd === 'str_replace') {
                         const oldStr = args.old_str;
                         const newStr = args.new_str || '';
                         if (!oldStr) return JSON.stringify({ error: 'old_str is required for str_replace' });
-                        let content = fs.readFileSync(resolvedPath, 'utf-8');
+                        let content = fs.readFileSync(safePath, 'utf-8');
                         const count = content.split(oldStr).length - 1;
-                        if (count === 0) return JSON.stringify({ error: `old_str not found in ${resolvedPath}` });
+                        if (count === 0) return JSON.stringify({ error: `old_str not found in ${safePath}` });
                         if (count > 1) return JSON.stringify({ error: `Multiple occurrences (${count}) of old_str. Please provide more context to make it unique.` });
                         const originalContent = content;
                         content = content.replace(oldStr, newStr);
-                        const validation = CodeValidator.validate(content, resolvedPath);
+                        const validation = CodeValidator.validate(content, safePath);
                         if (!validation.valid) {
                             return JSON.stringify({ error: `代码验证失败: ${validation.error}${validation.line ? ' (行 ' + validation.line + ')' : ''}`, validation, suggestion: validation.suggestion || '请修复语法错误后重试' });
                         }
-                        BackupManager.createBackup(resolvedPath, 'str_replace_based_edit_tool', { command: 'str_replace', old_str: oldStr.substring(0, 200), new_str: newStr.substring(0, 200) });
-                        fs.writeFileSync(resolvedPath, content, 'utf-8');
+                        BackupManager.createBackup(safePath, 'str_replace_based_edit_tool', { command: 'str_replace', old_str: oldStr.substring(0, 200), new_str: newStr.substring(0, 200) });
+                        fs.writeFileSync(safePath, content, 'utf-8');
                         ChangeTracker.recordChange({
                             type: 'modify',
                             toolName: 'str_replace_based_edit_tool',
-                            filePath: resolvedPath,
+                            filePath: safePath,
                             oldContent: originalContent.substring(0, 2000),
                             newContent: content.substring(0, 2000),
                             diff: { old: oldStr.substring(0, 200), new: newStr.substring(0, 200) }
                         });
                         try {
                             if (mainWindow && !mainWindow.isDestroyed()) {
-                                mainWindow.webContents.send('editor:show-diff', resolvedPath, originalContent, content);
+                                mainWindow.webContents.send('editor:show-diff', safePath, originalContent, content);
                             }
                         } catch (e) {}
-                        return JSON.stringify({ output: `File ${resolvedPath} edited successfully.` });
+                        return JSON.stringify({ output: `File ${safePath} edited successfully.` });
                     }
                     if (cmd === 'insert') {
                         const insertLine = args.insert_line;
                         const newStr = args.new_str || '';
                         if (insertLine == null) return JSON.stringify({ error: 'insert_line is required for insert' });
-                        let content = fs.readFileSync(resolvedPath, 'utf-8');
+                        let content = fs.readFileSync(safePath, 'utf-8');
                         let lines = content.split('\n');
                         const originalContent = content;
                         lines.splice(insertLine, 0, ...newStr.split('\n'));
                         const newContent = lines.join('\n');
-                        const validation = CodeValidator.validate(newContent, resolvedPath);
+                        const validation = CodeValidator.validate(newContent, safePath);
                         if (!validation.valid) {
                             return JSON.stringify({ error: `代码验证失败: ${validation.error}${validation.line ? ' (行 ' + validation.line + ')' : ''}`, validation, suggestion: validation.suggestion || '请修复语法错误后重试' });
                         }
-                        BackupManager.createBackup(resolvedPath, 'str_replace_based_edit_tool', { command: 'insert', line: insertLine });
-                        fs.writeFileSync(resolvedPath, newContent, 'utf-8');
+                        BackupManager.createBackup(safePath, 'str_replace_based_edit_tool', { command: 'insert', line: insertLine });
+                        fs.writeFileSync(safePath, newContent, 'utf-8');
                         ChangeTracker.recordChange({
                             type: 'modify',
                             toolName: 'str_replace_based_edit_tool',
-                            filePath: resolvedPath,
+                            filePath: safePath,
                             diff: { insertedAfter: insertLine, content: newStr.substring(0, 200) }
                         });
                         try {
                             if (mainWindow && !mainWindow.isDestroyed()) {
-                                mainWindow.webContents.send('editor:show-diff', resolvedPath, originalContent, newContent);
+                                mainWindow.webContents.send('editor:show-diff', safePath, originalContent, newContent);
                             }
                         } catch (e) {}
-                        return JSON.stringify({ output: `File ${resolvedPath} edited successfully at line ${insertLine}.` });
+                        return JSON.stringify({ output: `File ${safePath} edited successfully at line ${insertLine}.` });
                     }
                     return JSON.stringify({ error: `Unknown command: ${cmd}` });
                 }
@@ -5057,7 +5122,10 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                     const operation = args.operation;
                     const filePath = (args.file_path || '').replace(/^~/, os.homedir());
                     if (!operation || !filePath) return JSON.stringify({ error: '需要 operation 和 file_path 参数' });
-                    if (!fs.existsSync(filePath)) return JSON.stringify({ error: `文件不存在：${filePath}` });
+                    const jsonPathCheck = validatePath(filePath);
+                    if (!jsonPathCheck.valid) return JSON.stringify({ error: jsonPathCheck.error });
+                    const jsonSafePath = jsonPathCheck.resolved;
+                    if (!fs.existsSync(jsonSafePath)) return JSON.stringify({ error: `文件不存在：${jsonSafePath}` });
                     let data;
                     try { data = JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch (e) { return JSON.stringify({ error: `无效的 JSON：${e.message}` }); }
                     const jp = args.json_path;
@@ -5102,7 +5170,7 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                         for (let i = 0; i < parts.length - 1; i++) cur = cur[parts[i]];
                         const key = parts[parts.length - 1];
                         if (Array.isArray(cur)) cur.splice(Number(key), 0, args.value); else cur[key] = args.value;
-                        fs.writeFileSync(filePath, pp ? JSON.stringify(data, null, 2) : JSON.stringify(data), 'utf-8');
+                        fs.writeFileSync(jsonSafePath, pp ? JSON.stringify(data, null, 2) : JSON.stringify(data), 'utf-8');
                         return JSON.stringify({ output: `Added value at ${jp}` });
                     }
                     return JSON.stringify({ error: `Unknown operation: ${operation}` });
@@ -5112,9 +5180,12 @@ ${JSON.stringify(toTranslate, null, 2)}`;
                     const os = require('os');
                     const cmd = args.command;
                     const dirPath = (args.path || '').replace(/^~/, os.homedir());
+                    const ckgPathCheck = validatePath(dirPath);
+                    if (!ckgPathCheck.valid) return JSON.stringify({ error: ckgPathCheck.error });
+                    const ckgSafeDir = ckgPathCheck.resolved;
                     const identifier = args.identifier;
-                    if (!cmd || !dirPath || !identifier) return JSON.stringify({ error: 'command, path, and identifier are required' });
-                    if (!fs.existsSync(dirPath)) return JSON.stringify({ error: `Path does not exist: ${dirPath}` });
+                    if (!cmd || !ckgSafeDir || !identifier) return JSON.stringify({ error: 'command, path, and identifier are required' });
+                    if (!fs.existsSync(ckgSafeDir)) return JSON.stringify({ error: `Path does not exist: ${ckgSafeDir}` });
                     const results = [];
                     const searchDir = (dir, maxDepth = 3) => {
                         if (maxDepth <= 0) return;
@@ -5503,7 +5574,8 @@ ${toolDescriptions}
                 activeWorker = null;
             }
 
-            activeWorker = new Worker(path.join(__dirname, 'agent-worker.js'));
+            const _currentWorker = new Worker(path.join(__dirname, 'agent-worker.js'));
+            activeWorker = _currentWorker;
 
             let _lastReasoningForward = 0;
             let _pendingReasoningChunk = null;
@@ -5522,7 +5594,7 @@ ${toolDescriptions}
                 _lastTextForward = Date.now();
             }
 
-            activeWorker.on('message', (msg) => {
+            _currentWorker.on('message', (msg) => {
                 try {
                     switch (msg.type) {
                         case 'chunk': {
@@ -5708,22 +5780,26 @@ ${toolDescriptions}
                 }
             });
 
-            activeWorker.on('error', (err) => {
+            _currentWorker.on('error', (err) => {
                 diagLog('worker error: ' + err.message);
                 try {
                     event.sender.send('ai:chat-chunk', { error: err.message });
                 } catch (e) {}
-                activeWorker = null;
+                if (activeWorker === _currentWorker) {
+                    activeWorker = null;
+                }
             });
 
-            activeWorker.on('exit', (code) => {
+            _currentWorker.on('exit', (code) => {
                 diagLog('worker exit: ' + code);
                 if (code !== 0) {
                     try {
                         event.sender.send('ai:chat-chunk', { error: 'AI 处理异常退出 (code=' + code + ')' });
                     } catch (e) {}
                 }
-                activeWorker = null;
+                if (activeWorker === _currentWorker) {
+                    activeWorker = null;
+                }
             });
 
             activeWorker.postMessage({ type: 'start', params });

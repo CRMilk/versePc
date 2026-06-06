@@ -55,7 +55,12 @@ async function execute(name, args, ctx) {
         const params = new URLSearchParams({ query, limit: String(limit) });
         if (facets.length > 0) params.set('facets', `[${facets.join(',')}]`);
 
-        const data = await httpGet(`${MODRINTH_API}/search?${params}`);
+        let data;
+        try {
+            data = await httpGet(`${MODRINTH_API}/search?${params}`);
+        } catch (e) {
+            return JSON.stringify({ status: 'error', error: e.message });
+        }
         if (!data || !data.hits) return JSON.stringify({ status: 'error', error: 'No results or API error' });
 
         const results = data.hits.map(hit => ({
@@ -75,7 +80,12 @@ async function execute(name, args, ctx) {
 
     if (name === 'get_modrinth_info') {
         const idOrSlug = args.project_id_or_slug || '';
-        const data = await httpGet(`${MODRINTH_API}/project/${encodeURIComponent(idOrSlug)}`);
+        let data;
+        try {
+            data = await httpGet(`${MODRINTH_API}/project/${encodeURIComponent(idOrSlug)}`);
+        } catch (e) {
+            return JSON.stringify({ status: 'error', error: e.message });
+        }
         if (!data || data.error) return JSON.stringify({ status: 'error', error: data?.error || 'Project not found' });
 
         const project = {
@@ -104,7 +114,12 @@ async function execute(name, args, ctx) {
         if (args.loader) params.set('loaders', `["${args.loader}"]`);
         params.set('limit', '10');
 
-        const data = await httpGet(`${MODRINTH_API}/project/${encodeURIComponent(idOrSlug)}/version?${params}`);
+        let data;
+        try {
+            data = await httpGet(`${MODRINTH_API}/project/${encodeURIComponent(idOrSlug)}/version?${params}`);
+        } catch (e) {
+            return JSON.stringify({ status: 'error', error: e.message });
+        }
         if (!Array.isArray(data)) return JSON.stringify({ status: 'error', error: 'Failed to fetch versions' });
 
         const versions = data.map(v => ({

@@ -99,15 +99,21 @@ ipcMain.handle('check-installed', async (event, folderPath) => {
     return { installed: false };
 });
 
-function getFolderSize(dirPath) {
+function getFolderSize(dirPath, depth = 0) {
+    if (depth > 20) return 0;
     let size = 0;
     try {
         for (const item of fs.readdirSync(dirPath)) {
             if (item === 'node_modules' || item === '.git') continue;
             const p = path.join(dirPath, item);
             try {
-                const s = fs.statSync(p);
-                size += s.isFile() ? s.size : getFolderSize(p);
+                const s = fs.lstatSync(p);
+                if (s.isSymbolicLink()) continue;
+                if (s.isDirectory()) {
+                    size += getFolderSize(p, depth + 1);
+                } else {
+                    size += s.size;
+                }
             } catch (e) {}
         }
     } catch (e) {}
@@ -250,7 +256,8 @@ ipcMain.handle('install-files', async (event, installPath) => {
         } catch (e) {}
 
         try {
-            fs.writeFileSync(path.join(installPath, 'uninstall.bat'), '@echo off\necho 正在卸载 VersePC...\ntaskkill /f /im VersePC.exe 2>nul\ntimeout /t 2 /nobreak >nul\nrd /s /q "' + installPath.replace(/\//g, '\\') + '"\ndel "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\VersePC.lnk" 2>nul\ndel "%USERPROFILE%\\Desktop\\VersePC.lnk" 2>nul\necho 卸载完成!\npause\ndel "%~f0"\n', 'utf8');
+            const safePath = installPath.replace(/"/g, '""').replace(/\//g, '\\');
+            fs.writeFileSync(path.join(installPath, 'uninstall.bat'), '@echo off\necho 正在卸载 VersePC...\ntaskkill /f /im VersePC.exe 2>nul\ntimeout /t 2 /nobreak >nul\nrd /s /q "' + safePath + '"\ndel "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\VersePC.lnk" 2>nul\ndel "%USERPROFILE%\\Desktop\\VersePC.lnk" 2>nul\necho 卸载完成!\npause\ndel "%~f0"\n', 'utf8');
         } catch (e) {}
 
         mainWindow.webContents.send('install-progress', {

@@ -449,7 +449,7 @@
         resultEl.style.background    = success ? 'rgba(34,197,94,0.1)'  : 'rgba(239,68,68,0.1)';
         resultEl.style.border        = success ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(239,68,68,0.3)';
         resultEl.style.color         = success ? 'var(--green, #22c55e)' : 'var(--red, #ef4444)';
-        resultEl.innerHTML = (success ? '\u2705 ' : '\u274C ') + message;
+        resultEl.innerHTML = (success ? '\u2705 ' : '\u274C ') + escapeHtml(message);
 
         // 成功时显示右下角 toast 通知
         if (success && window.showToast) {

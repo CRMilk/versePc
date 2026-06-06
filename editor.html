@@ -425,6 +425,11 @@ async function saveCurrentFile() {
     updateTabUI();
 }
 
+function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function updateTabUI() {
     const bar = document.getElementById('tabsBar');
     bar.innerHTML = '';
@@ -758,7 +763,7 @@ function renderQuickOpenList(query) {
     if (!filtered.length) { list.innerHTML = '<div class="quickopen-empty">未找到匹配的文件</div>'; return; }
     list.innerHTML = filtered.slice(0, 50).map((f, i) => {
         const icon = getFileIcon(f.name);
-        return `<div class="quickopen-item${i === 0 ? ' selected' : ''}" data-path="${f.path}"><span class="qo-icon">${icon}</span><span>${f.name}</span><span class="qo-path">${f.rel}</span></div>`;
+        return `<div class="quickopen-item${i === 0 ? ' selected' : ''}" data-path="${escapeHtml(f.path)}"><span class="qo-icon">${icon}</span><span>${escapeHtml(f.name)}</span><span class="qo-path">${escapeHtml(f.rel)}</span></div>`;
     }).join('');
     _quickOpenSelected = 0;
     list.querySelectorAll('.quickopen-item').forEach(el => {

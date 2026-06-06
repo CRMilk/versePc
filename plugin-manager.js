@@ -35,10 +35,15 @@ class PluginManager {
             try {
                 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
                 if (!manifest.id || !manifest.tools) continue;
-                const entryPath = path.join(pluginDir, manifest.entry || 'index.js');
+                const rawEntry = manifest.entry || 'index.js';
+                const resolvedEntry = path.resolve(pluginDir, rawEntry);
+                if (!resolvedEntry.startsWith(path.resolve(pluginDir) + path.sep) && resolvedEntry !== path.resolve(pluginDir)) {
+                    console.error('[PluginManager] Plugin entry path traversal blocked:', rawEntry);
+                    continue;
+                }
                 let pluginImpl = {};
-                if (fs.existsSync(entryPath)) {
-                    pluginImpl = require(entryPath);
+                if (fs.existsSync(resolvedEntry)) {
+                    pluginImpl = require(resolvedEntry);
                 }
                 this.plugins.set(manifest.id, { manifest, impl: pluginImpl, dir: pluginDir });
             } catch (e) {

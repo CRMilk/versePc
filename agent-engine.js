@@ -59,7 +59,8 @@ const SayType = {
     PLAN_DONE: 'plan_done',
     THINKING_STEP: 'thinking_step',
     REFLECTION: 'reflection',
-    PROGRESS: 'progress'
+    PROGRESS: 'progress',
+    HEARTBEAT: 'heartbeat'
 };
 
 const AskType = {
@@ -423,7 +424,7 @@ function buildApiHeaders(platform, apiKey) {
             headers['Authorization'] = `Bearer ${apiKey}`;
             break;
     }
-    if (platform.apiFormat === 'openrouter') {
+    if (platform.name === 'OpenRouter') {
         headers['HTTP-Referer'] = 'https://versepc.app';
         headers['X-Title'] = 'VersePC';
     }
@@ -634,7 +635,7 @@ const toolDescriptions = AI_TOOLS.map(t => `- ${t.function.name}: ${t.function.d
 const TOOL_RISK = {
     str_replace_based_edit_tool: 'safe', json_edit_tool: 'safe', ckg: 'safe',
     sequential_thinking: 'safe', attempt_completion: 'safe',
-    bash: 'safe', update_todo_list: 'safe',
+    bash: 'moderate', update_todo_list: 'safe',
     sub_agent_dispatch: 'safe', start_preview: 'safe', manage_processes: 'safe',
     ask_user: 'safe',
     undo_edit: 'safe',
@@ -936,6 +937,7 @@ class AgentEngine {
     }
 
     _send(msg) {
+        if (!msg) return;
         const passthroughTypes = ['subagent_start', 'subagent_chunk', 'subagent_end'];
         if (passthroughTypes.includes(msg.type)) {
             this.onChunk(msg);
@@ -1419,10 +1421,6 @@ Take action now. Do not explain your limitations.`
                 conversation.push(finalAssistantMsg);
             }
 
-            if (roundData.fullContent) {
-                conversation.push({ role: 'assistant', content: roundData.fullContent });
-            }
-
             const completionFromTool = toolResults.find(r => r.isCompletion);
             const completionText = completionFromTool ? completionFromTool.completionText : '';
             this._send({ type: 'say', say: SayType.COMPLETION, text: roundData.fullContent || completionText || '' });
@@ -1471,7 +1469,7 @@ Take action now. Do not explain your limitations.`
         const lower = userMessage.toLowerCase();
         const greetingOnly = /^(你好|hi|hello|hey|谢谢|感谢|ok|好的|知道了|你是谁|你叫什么|你是|说说|聊聊|讲讲)\s*[!！?？。.]*$/i;
         if (greetingOnly.test(lower.trim())) return { intent: 'simple', reason: 'greeting', steps_needed: 0 };
-        if (userMessage.trim().length <= 6 && !/[安装|创建|修改|删除|修复|配置|写|做|运行|执行|添加|更新]/.test(lower)) return { intent: 'simple', reason: 'short', steps_needed: 0 };
+        if (userMessage.trim().length <= 6 && !/(?:安装|创建|修改|删除|修复|配置|写|做|运行|执行|添加|更新)/.test(lower)) return { intent: 'simple', reason: 'short', steps_needed: 0 };
 
         const explicitMultiStep = /然后|接着|之后再|先.*再|先.*然后|第一步.*第二步|首先.*然后.*最后/;
         if (explicitMultiStep.test(lower)) {
@@ -1568,7 +1566,7 @@ Take action now. Do not explain your limitations.`
                                         toolCalls[idx] = { id: tc.id || '', name: '', argsStr: '' };
                                     }
                                     if (tc.id) toolCalls[idx].id = tc.id;
-                                    if (tc.function?.name) toolCalls[idx].name += tc.function.name;
+                                    if (tc.function?.name && !toolCalls[idx].name) toolCalls[idx].name = tc.function.name;
                                     if (tc.function?.arguments) toolCalls[idx].argsStr += tc.function.arguments;
                                 }
                             }
@@ -1887,7 +1885,7 @@ Take action now. Do not explain your limitations.`
                     type: 'say', say: SayType.TOOL_RESULT,
                     text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name] || tc.name, result: `JSON 解析失败: ${args._error}\n原始参数: ${args._raw}`, elapsed: 0 })
                 });
-                return { tc, result: { status: 'error', error: `JSON 解析失败: ${args._error}` }, elapsed: 0 };
+                return { id: tc.id, name: tc.name, result: JSON.stringify({ status: 'error', error: `JSON 解析失败: ${args._error}` }) };
             }
             if (this._aborted) {
                 this._send({
@@ -2004,11 +2002,11 @@ Take action now. Do not explain your limitations.`
 
                     this._send({ type: 'say', say: SayType.TOOL_RESULT, text: JSON.stringify({ id: tc.id, name: tc.name, displayName: TOOL_DISPLAY_NAMES[tc.name], result: subResult, elapsed: subElapsed }) });
 
-                    return { tc, result: subResult, elapsed: subElapsed };
+                    return { id: tc.id, name: tc.name, result: subResult };
                 } catch (e) {
                     const subElapsed = ((Date.now() - subStartTime) / 1000).toFixed(1);
                     this._send({ type: 'say', say: SayType.ERROR, text: `子代理执行失败: ${e.message}` });
-                    return { tc, result: JSON.stringify({ status: 'error', error: e.message }), elapsed: subElapsed };
+                    return { id: tc.id, name: tc.name, result: JSON.stringify({ status: 'error', error: e.message }) };
                 }
             }
 
@@ -2062,14 +2060,18 @@ Take action now. Do not explain your limitations.`
                         const importMatch = errText.match(/ModuleNotFoundError.*?No module named ['"]([^'"]+)['"]/);
                         if (nodeMatch) {
                             const moduleName = nodeMatch[1].split('/')[0];
-                            this._send({ type: 'say', say: SayType.TOOL_START, text: JSON.stringify([{ id: 'auto_install', name: 'bash', displayName: '自动安装依赖', args: `npm install ${moduleName}` }]) });
-                            const installResult = await this.executeTool('bash', JSON.stringify({ command: `npm install ${moduleName}` }));
-                            this._send({ type: 'say', say: SayType.TOOL_RESULT, text: JSON.stringify({ id: 'auto_install', name: 'bash', result: installResult.substring(0, 500), elapsed: 0 }) });
+                            if (/^[@a-z0-9._/-]+$/i.test(moduleName)) {
+                                this._send({ type: 'say', say: SayType.TOOL_START, text: JSON.stringify([{ id: 'auto_install', name: 'bash', displayName: '自动安装依赖', args: `npm install ${moduleName}` }]) });
+                                const installResult = await this.executeTool('bash', JSON.stringify({ command: `npm install ${moduleName}` }));
+                                this._send({ type: 'say', say: SayType.TOOL_RESULT, text: JSON.stringify({ id: 'auto_install', name: 'bash', result: installResult.substring(0, 500), elapsed: 0 }) });
+                            }
                         } else if (pyMatch || importMatch) {
                             const moduleName = (pyMatch || importMatch)[1];
-                            this._send({ type: 'say', say: SayType.TOOL_START, text: JSON.stringify([{ id: 'auto_install', name: 'bash', displayName: '自动安装依赖', args: `pip install ${moduleName}` }]) });
-                            const installResult = await this.executeTool('bash', JSON.stringify({ command: `pip install ${moduleName}` }));
-                            this._send({ type: 'say', say: SayType.TOOL_RESULT, text: JSON.stringify({ id: 'auto_install', name: 'bash', result: installResult.substring(0, 500), elapsed: 0 }) });
+                            if (/^[a-z0-9._-]+$/i.test(moduleName)) {
+                                this._send({ type: 'say', say: SayType.TOOL_START, text: JSON.stringify([{ id: 'auto_install', name: 'bash', displayName: '自动安装依赖', args: `pip install ${moduleName}` }]) });
+                                const installResult = await this.executeTool('bash', JSON.stringify({ command: `pip install ${moduleName}` }));
+                                this._send({ type: 'say', say: SayType.TOOL_RESULT, text: JSON.stringify({ id: 'auto_install', name: 'bash', result: installResult.substring(0, 500), elapsed: 0 }) });
+                            }
                         }
                     } catch (e) {}
                 }
@@ -2362,7 +2364,7 @@ Take action now. Do not explain your limitations.`
             });
             if (failedResult) {
                 try {
-                    const goal = typeof lastUserMsg === 'string' ? lastUserMsg : (lastUserMsg?.content || '');
+                    const goal = typeof lastUserMsg === 'string' ? lastUserMsg : (typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '');
                     const reflection = await this._reflectOnResult(failedResult.name, failedResult.result, goal);
                     if (reflection && reflection.next_action !== 'continue') {
                         let reflGuidance = `[自动反思] 工具 ${failedResult.name} 连续失败。`;
@@ -2562,7 +2564,7 @@ Take action now. Do not explain your limitations.`
                 temperature: 0.2,
                 stream: false
             }), this._apiHeaders);
-            const match = resp.match(/\{[\s\S]*\}/);
+            const match = resp.match(/\{[^{}]*\{[\s\S]*?\}[\s\S]*?\}/) || resp.match(/\{[\s\S]*?\}/);
             if (match) return JSON.parse(match[0]);
         } catch (e) {}
         return { assessment: 'success', next_action: 'continue', reasoning: '' };
@@ -2609,7 +2611,7 @@ Take action now. Do not explain your limitations.`
     _getContextBudget(conversation) {
         let modelTokens = 128000;
         try {
-            const model = this.model || '';
+            const model = this._model || '';
             if (model.includes('gpt-4o')) modelTokens = 128000;
             else if (model.includes('gpt-4-turbo') || model.includes('gpt-4-1106')) modelTokens = 128000;
             else if (model.includes('gpt-4-32k')) modelTokens = 32000;

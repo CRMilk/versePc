@@ -1728,7 +1728,7 @@
                                 <div class="onboard-provider">
                                     <div class="onboard-msg">
                                         <div class="onboard-msg-avatar">
-                                            <img src="img/steve_head.png" alt="" onerror="this.style.display='none'">
+                                            <img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7&offline=1" alt="" onerror="this.src='img/icon.png'">
                                         </div>
                                         <div class="onboard-msg-bubble">由于 API 功能需要大量经费，只能由小伙伴们自行接入。请选择你的 API 接入商：</div>
                                     </div>
@@ -1739,7 +1739,7 @@
                                 <div class="onboard-tutorial">
                                     <div class="onboard-msg">
                                         <div class="onboard-msg-avatar">
-                                            <img src="img/steve_head.png" alt="" onerror="this.style.display='none'">
+                                            <img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7&offline=1" alt="" onerror="this.src='img/icon.png'">
                                         </div>
                                         <div class="onboard-msg-bubble" id="onboard-tutorial-text">注册与接入教程：</div>
                                     </div>
@@ -1756,13 +1756,26 @@
                                 <div class="onboard-apikey">
                                     <div class="onboard-msg">
                                         <div class="onboard-msg-avatar">
-                                            <img src="img/steve_head.png" alt="" onerror="this.style.display='none'">
+                                            <img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7&offline=1" alt="" onerror="this.src='img/icon.png'">
                                         </div>
                                         <div class="onboard-msg-bubble" id="onboard-apikey-msg">请输入你的 API Key 与模型：</div>
                                     </div>
                                     <div class="onboard-apikey-form">
                                         <label class="onboard-apikey-label">API Key</label>
                                         <input type="password" id="onboard-apikey-input" class="onboard-apikey-input" placeholder="sk-...">
+                                        <div id="onboard-custom-fields" style="display:none">
+                                            <label class="onboard-apikey-label">Base URL</label>
+                                            <input type="url" id="onboard-base-url" class="onboard-apikey-input" placeholder="https://api.example.com/v1">
+                                            <label class="onboard-apikey-label">API 格式</label>
+                                            <select id="onboard-api-format" class="onboard-apikey-input" style="appearance:auto;padding:0 12px;">
+                                                <option value="openai">OpenAI</option>
+                                                <option value="anthropic">Anthropic</option>
+                                            </select>
+                                            <label class="onboard-apikey-label">显示名称（可选）</label>
+                                            <input type="text" id="onboard-custom-name" class="onboard-apikey-input" placeholder="My Model">
+                                            <label class="onboard-apikey-label">最大 Token</label>
+                                            <input type="number" id="onboard-max-tokens" class="onboard-apikey-input" placeholder="4096" value="4096">
+                                        </div>
                                         <label class="onboard-apikey-label">模型 ID</label>
                                         <input type="text" id="onboard-model-input" class="onboard-apikey-input" placeholder="例如：gpt-4o、glm-4-flash">
                                         <div class="onboard-apikey-status" id="onboard-apikey-status"></div>
@@ -3257,6 +3270,11 @@
             }
         }
 
+        function escapeHtml(str) {
+            if (str == null) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
         api.updater.onStatusChanged(({ channel, data }) => {
             const statusArea = document.getElementById('updater-status-area');
             const checkBtn = document.getElementById('updater-check-btn');
@@ -3290,7 +3308,7 @@
                     break;
 
                 case 'update-skipped':
-                    statusArea.innerHTML = '<div style="display:flex;align-items:center;gap:6px;color:var(--text-muted);"><span>⏭️</span>已跳过 v' + data.version + '</div>';
+                    statusArea.innerHTML = '<div style="display:flex;align-items:center;gap:6px;color:var(--text-muted);"><span>⏭️</span>已跳过 v' + escapeHtml(data.version) + '</div>';
                     checkBtn.disabled = false;
                     break;
 
@@ -3317,7 +3335,7 @@
                         '<div style="display:flex;align-items:flex-start;gap:6px;color:#ef4444;padding:10px;background:rgba(239,68,68,0.06);border-radius:8px;border:1px solid rgba(239,68,68,0.15);">' +
                         '<span style="font-size:16px;margin-top:2px;">❌</span>' +
                         '<div><div style="font-weight:500;">检查更新失败</div>' +
-                        '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;word-break:break-word;">' + (data.message || '未知错误') + '</div>' +
+                        '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;word-break:break-word;">' + escapeHtml(data.message || '未知错误') + '</div>' +
                         hintHtml + mirrorBar + '</div>';
                     checkBtn.disabled = false;
                     break;

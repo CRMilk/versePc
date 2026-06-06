@@ -452,8 +452,8 @@ class FileBrowser {
 
         return `
             <div class="fb-file-item" 
-                 data-path="${item.path}" 
-                 data-name="${item.name}"
+                 data-path="${this.escapeHtml(item.path)}" 
+                 data-name="${this.escapeHtml(item.name)}"
                  data-is-folder="${isFolder}"
                  data-extension="${item.extension || ''}">
                 <div class="fb-file-icon">${icon}</div>

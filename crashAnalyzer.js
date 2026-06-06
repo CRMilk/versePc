@@ -245,8 +245,23 @@ class CrashAnalyzer {
             fs.mkdirSync(extractPath, { recursive: true });
         }
         
-        zip.extractAllTo(extractPath, true);
-        
+        const entries = zip.getEntries();
+        for (const entry of entries) {
+            if (entry.isDirectory) continue;
+            const entryPath = entry.entryName;
+            const destPath = path.join(extractPath, entryPath);
+            const resolvedDest = path.resolve(destPath);
+            const resolvedTarget = path.resolve(extractPath);
+            if (!resolvedDest.startsWith(resolvedTarget + path.sep) && resolvedDest !== resolvedTarget) {
+                continue;
+            }
+            const dir = path.dirname(destPath);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+            fs.writeFileSync(destPath, entry.getData());
+        }
+
         const files = fs.readdirSync(extractPath);
         for (const file of files) {
             const fullPath = path.join(extractPath, file);
@@ -706,7 +721,7 @@ class CrashAnalyzer {
                 return true;
             }
             
-            for (const jsonName of this.regexSeek(logText, '(?<=^[^\\t]+[ \\[{(][^ \\[{(]+\\.json)', 'gm')) {
+            for (const jsonName of (logText.match(/(?<=^[^\t]+[ \[{(][^ \[{(]+\.json)/gm) || [])) {
                 this.appendReason(CrashReason.ModMixinError,
                     this.tryAnalyzeModName(jsonName.replace('mixins', 'mixin').replace('.mixin', '').replace('mixin.', '')));
                 return true;

@@ -148,13 +148,15 @@
                                "createStartMenuShortcut":  true,
                                "shortcutName":  "VersePC",
                                "include":  "installer/customInstall.nsh",
+                               "license":  "installer/license.txt",
                                "unicode":  true,
                                "differentialPackage":  true,
                                "warningsAsErrors":  false,
                                "menuCategory":  "VersePC",
                                "createDesktopShortcut":  "always",
                                "displayLanguageSelector":  false,
-                               "packElevateHelper":  true
+                               "packElevateHelper":  true,
+                               "perMachine":  false
                            },
                   "asar":  false,
                   "releaseInfo":  {

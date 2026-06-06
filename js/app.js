@@ -810,7 +810,7 @@ function showConfirmDialog(title, message, confirmText, cancelText) {
         overlay.innerHTML = `
             <div class="modal-content" style="width:440px;min-height:auto;">
                 <div class="modal-header">
-                    <h3 id="confirm-dialog-title">${title || '确认'}</h3>
+                    <h3 id="confirm-dialog-title">${escapeHtml(title || '确认')}</h3>
                     <button class="modal-close confirm-cancel" aria-label="关闭对话框">&times;</button>
                 </div>
                 <div class="modal-body">
@@ -2150,13 +2150,16 @@ function openVersionDetail(versionId, versionUrl, versionType) {
     const typeLabels = { release: '正式版', snapshot: '快照版', old_beta: '旧测试版', old_alpha: '旧内测版' };
     document.getElementById('verdetail-meta').textContent = typeLabels[versionType] || versionType || '正式版';
     
-    document.querySelector('input[name="download-source"][value="mojang"]').checked = true;
+    const mojangRadio = document.querySelector('input[name="download-source"][value="mojang"]');
+    if (mojangRadio) mojangRadio.checked = true;
     
     selectedLoaderType = '';
     selectedLoaderVersion = '';
     document.querySelectorAll('.loader-card').forEach(item => item.classList.remove('selected'));
-    document.querySelector('.loader-card[data-loader=""]').classList.add('selected');
-    document.getElementById('loader-version-section').style.display = 'none';
+    const emptyLoaderCard = document.querySelector('.loader-card[data-loader=""]');
+    if (emptyLoaderCard) emptyLoaderCard.classList.add('selected');
+    const loaderVersionSection = document.getElementById('loader-version-section');
+    if (loaderVersionSection) loaderVersionSection.style.display = 'none';
     document.getElementById('loader-version-list').innerHTML = '';
     
     loadLoaderVersions(versionId);
@@ -2616,7 +2619,7 @@ async function loadInstalledMods() {
             }
             container.innerHTML = warningHtml + mods.map(function (mod) {
                 return '<div class="mod-item">' +
-                    '<div class="mod-icon"><img src="' + (mod.icon || '') + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.parentElement.classList.add(\'mod-icon--fallback\')"></div>' +
+                    '<div class="mod-icon"><img src="' + escapeHtml(mod.icon || '') + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.parentElement.classList.add(\'mod-icon--fallback\')"></div>' +
                     '<div class="mod-info">' +
                         '<div class="mod-name">' + escapeHtml(formatModNameWithChinese(mod.id || mod.fileName, mod.name)) + '</div>' +
                         '<div class="mod-desc">' + escapeHtml(mod.description) + '</div>' +
@@ -2717,7 +2720,7 @@ async function loadMods() {
                 var isSelected = modSelectedIds.has(mod.id);
                 return '<div class="mod-item mod-item-clickable' + (modMultiSelectMode ? ' mod-multiselect-active' : '') + '" onclick="openModDetail(\'' + mod.id + '\', \'' + mod.source + '\')">' +
                     (modMultiSelectMode ? '<div class="mod-checkbox' + (isSelected ? ' checked' : '') + '" data-mod-id="' + mod.id + '" onclick="event.stopPropagation();toggleModSelect(\'' + mod.id + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : '') +
-                    '<div class="mod-icon"><img src="' + (mod.icon || '') + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.parentElement.classList.add(\'mod-icon--fallback\')"></div>' +
+                    '<div class="mod-icon"><img src="' + escapeHtml(mod.icon || '') + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.parentElement.classList.add(\'mod-icon--fallback\')"></div>' +
                     '<div class="mod-info">' +
                         '<div class="mod-name">' + escapeHtml(formatModNameWithChinese(mod.id || mod.slug, mod.title)) + '</div>' +
                         '<div class="mod-desc">' + escapeHtml(mod.description) + '</div>' +
@@ -2880,7 +2883,7 @@ async function openModDetail(projectId, source) {
         if (mySeq !== _modDetailSeq) return;
         console.error('[ModDetail] Error:', e);
         mdName.textContent = '加载失败';
-        mdVersionList.innerHTML = `<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">无法加载模组详情: ${e.message || e}</p>`;
+        mdVersionList.innerHTML = `<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">无法加载模组详情: ${escapeHtml(e.message || String(e))}</p>`;
     }
 }
 
@@ -3020,7 +3023,7 @@ async function loadModDependencies() {
         const depType = d.dependencyType || 'optional';
         const typeLabel = depType === 'required' ? '必选' : (depType === 'incompatible' ? '冲突' : '可选');
         const badgeClass = depType === 'required' ? 'required' : (depType === 'incompatible' ? 'incompatible' : 'optional');
-        return `<div class="md-dep-item" id="md-dep-${d.projectId}" onclick="openModDetail('${d.projectId}', 'modrinth')">
+        return `<div class="md-dep-item" id="md-dep-${escapeOnclick(d.projectId)}" onclick="openModDetail('${escapeOnclick(d.projectId)}', 'modrinth')">
             <div class="md-dep-icon"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div></div>
             <div class="md-dep-info">
                 <div class="md-dep-name" style="color:var(--text-muted)">加载中...</div>
@@ -3083,7 +3086,7 @@ async function loadModDependencies() {
             const depType = d.dependencyType || 'optional';
             const typeLabel = depType === 'required' ? '必选' : (depType === 'incompatible' ? '冲突' : '可选');
             const badgeClass = depType === 'required' ? 'required' : (depType === 'incompatible' ? 'incompatible' : 'optional');
-            return `<div class="md-dep-item" onclick="openModDetail('${d.projectId}', 'modrinth')">
+            return `<div class="md-dep-item" onclick="openModDetail('${escapeOnclick(d.projectId)}', 'modrinth')">
                 <div class="md-dep-info">
                     <div class="md-dep-name">${escapeHtml(d.projectId)}</div>
                 </div>
@@ -3146,7 +3149,7 @@ function renderDepsList(depArray, resolved, versionInfo, hasVersionFilter, curre
             }
         }
 
-        return `<div class="md-dep-item" onclick="openModDetail('${d.projectId}', 'modrinth')">
+        return `<div class="md-dep-item" onclick="openModDetail('${escapeOnclick(d.projectId)}', 'modrinth')">
             ${icon ? `<div class="md-dep-icon"><img src="${icon}" alt="" onerror="this.parentElement.remove()"></div>` : ''}
             <div class="md-dep-info">
                 <div class="md-dep-name">${escapeHtml(formatModNameWithChinese(d.projectId, title))}</div>
@@ -3460,8 +3463,8 @@ function showDependencyDialog(projectId, source, versionId, fileId, savePath, de
         return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
             ${iconHtml}
             <div style="flex:1;min-width:0;">
-                <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${dep.title}</div>
-                <div style="font-size:11px;color:var(--text-secondary);">${verInfo}</div>
+                <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(dep.title)}</div>
+                <div style="font-size:11px;color:var(--text-secondary);">${escapeHtml(verInfo)}</div>
             </div>
             ${ver ? '<span style="font-size:11px;color:#22c55e;">✓ 可下载</span>' : '<span style="font-size:11px;color:#ef4444;">✗ 无兼容版本</span>'}
         </div>`;
@@ -4123,12 +4126,13 @@ let accDlPollTimer = null;
 
 function accUpdateHeroBadge(statusType, text) {
     const badge = document.getElementById('acc-hero-badge');
+    if (!badge) return;
     const dot = badge.querySelector('.acc-badge-dot');
     const textEl = document.getElementById('acc-badge-text');
     badge.className = 'acc-hero-status-badge';
     if (statusType === 'running') badge.classList.add('running');
     if (statusType === 'installed') badge.classList.add('installed');
-    textEl.textContent = text;
+    if (textEl) textEl.textContent = text;
 }
 
 async function accLoadStatus() {
@@ -5449,15 +5453,15 @@ function showCrashAnalysisDialog(result) {
         <div style="padding:24px">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
                 <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${severityColor}"></span>
-                <span style="font-size:14px;font-weight:600;color:var(--text-primary)">${result.reason}</span>
-                <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${severityColor}20;color:${severityColor}">${severityLabel}</span>
+                <span style="font-size:14px;font-weight:600;color:var(--text-primary)">${escapeHtml(result.reason)}</span>
+                <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${severityColor}20;color:${severityColor}">${escapeHtml(severityLabel)}</span>
             </div>
-            ${result.modName ? `<div style="padding:10px 14px;background:var(--bg-primary);border-radius:8px;margin-bottom:12px;font-size:13px;color:var(--text-secondary)">相关Mod: <strong style="color:var(--accent)">${result.modName}</strong></div>` : ''}
+            ${result.modName ? `<div style="padding:10px 14px;background:var(--bg-primary);border-radius:8px;margin-bottom:12px;font-size:13px;color:var(--text-secondary)">相关Mod: <strong style="color:var(--accent)">${escapeHtml(result.modName)}</strong></div>` : ''}
             <div style="padding:14px;background:var(--bg-primary);border-radius:8px;border-left:4px solid var(--accent);margin-bottom:16px">
                 <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px">解决方案</div>
-                <div style="font-size:13px;color:var(--text-primary);line-height:1.6">${result.solution}</div>
+                <div style="font-size:13px;color:var(--text-primary);line-height:1.6">${escapeHtml(result.solution)}</div>
             </div>
-            ${result.logFile ? `<div style="font-size:12px;color:var(--text-muted)">日志文件: ${result.logFile}</div>` : ''}
+            ${result.logFile ? `<div style="font-size:12px;color:var(--text-muted)">日志文件: ${escapeHtml(result.logFile)}</div>` : ''}
         </div>
         <div style="padding:16px 24px;border-top:1px solid var(--border-color);display:flex;justify-content:flex-end;gap:8px">
             <button id="crash-dialog-view-log" style="padding:8px 16px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);border-radius:6px;font-size:13px;cursor:pointer">查看日志</button>

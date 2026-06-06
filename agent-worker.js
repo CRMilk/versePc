@@ -292,7 +292,7 @@ parentPort.on('message', (msg) => {
                 engine.abort();
                 for (const [, pending] of pendingApprovals) {
                     clearTimeout(pending.timer);
-                    pending.resolve(false);
+                    pending.resolve({ approved: false });
                 }
                 pendingApprovals.clear();
                 for (const [, pending] of pendingExecs) {
@@ -313,7 +313,7 @@ parentPort.on('message', (msg) => {
                     if (pending) {
                         clearTimeout(pending.timer);
                         pendingApprovals.delete(msg.approvalId);
-                        pending.resolve(msg.approved);
+                        pending.resolve({ approved: msg.approved });
                     }
                 }
                 break;

@@ -706,15 +706,25 @@ async function getSteveSkinFull() {
 // 定期清理过期的头像缓存
 function cleanAvatarCache() {
     const now = Date.now();
+    const MAX_AVATAR_CACHE = 500;
+    const MAX_ICON_CACHE = 500;
     for (const [key, value] of AVATAR_CACHE.entries()) {
         if (now - value.time > AVATAR_CACHE_DURATION) {
             AVATAR_CACHE.delete(key);
         }
     }
+    if (AVATAR_CACHE.size > MAX_AVATAR_CACHE) {
+        const oldestKey = AVATAR_CACHE.keys().next().value;
+        AVATAR_CACHE.delete(oldestKey);
+    }
     for (const [key, value] of VERSION_ICON_CACHE.entries()) {
         if (now - value.time > VERSION_ICON_CACHE_DURATION) {
             VERSION_ICON_CACHE.delete(key);
         }
+    }
+    if (VERSION_ICON_CACHE.size > MAX_ICON_CACHE) {
+        const oldestKey = VERSION_ICON_CACHE.keys().next().value;
+        VERSION_ICON_CACHE.delete(oldestKey);
     }
 }
 
@@ -3367,12 +3377,17 @@ async function downloadFileChunked(url, destPath, options = {}) {
                         });
                     } finally { DownloadManager.releaseConnection(); }
                 };
+                try {
                 await Promise.all(chunks.map(c => dlChunk(c)));
                 const ws = fs.createWriteStream(destPath);
                 for (const c of chunks) ws.write(fs.readFileSync(c.tmp));
                 ws.end();
                 await new Promise((r, j) => { ws.on('finish', () => { ws.close(); r(); }); ws.on('error', j); });
                 for (const c of chunks) { try { fs.unlinkSync(c.tmp); } catch (e) {} }
+            } catch (e) {
+                for (const c of chunks) { try { fs.unlinkSync(c.tmp); } catch (e) {} }
+                throw e;
+            }
                 if (sha1) {
                     const actual = await calculateSHA1(destPath);
                     if (actual !== sha1) {
@@ -3548,7 +3563,9 @@ function isJarIntact(filePath) {
         if (eocdBase === 0x06054B50) return true;
         const buf = Buffer.alloc(Math.min(65557, stat.size));
         const searchStart = Math.max(0, stat.size - buf.length);
-        fs.readSync(fs.openSync(filePath, 'r'), buf, 0, buf.length, searchStart);
+        const fd2 = fs.openSync(filePath, 'r');
+        fs.readSync(fd2, buf, 0, buf.length, searchStart);
+        fs.closeSync(fd2);
         for (let i = buf.length - 22; i >= 0; i--) {
             if (buf.readUInt32LE(i) === 0x06054B50) return true;
         }
@@ -3562,7 +3579,7 @@ function downloadFileSync(urlStr, destPath) {
     const dir = path.dirname(destPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     try {
-        execSync('curl', ['--silent', '--location', '--output', destPath, urlStr], { timeout: 30000, windowsHide: true, stdio: 'ignore' });
+        execSync(`curl --silent --location --output "${destPath}" "${urlStr}"`, { timeout: 30000, windowsHide: true, stdio: 'ignore' });
     } catch (e) {
         if (process.platform === 'win32') {
             execSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
@@ -8615,6 +8632,71 @@ async function doLaunch(versionId, versionJson, settings, account, externalVersi
 
                 gameProcess.unref();
 
+                gameProcess.on('close', (code) => {
+                    const recentLogs = instanceInfo.logBuffer.slice(-100).join('\n');
+                    let analysis = analyzeExitCode(code, launchVersionId || versionId);
+                    if (!analysis.isCrash && code !== 0 && recentLogs.includes('Invalid paths argument')) {
+                        analysis = {
+                            code,
+                            isCrash: true,
+                            reason: 'Forge核心库文件缺失（Invalid paths argument）',
+                            suggestion: 'Forge安装不完整，请前往版本设置使用"文件修复"功能，或重新安装该Forge版本'
+                        };
+                    }
+                    if (analysis.isCrash && recentLogs.includes('Invalid paths argument')) {
+                        analysis.reason = 'Forge核心库文件缺失（Invalid paths argument）';
+                        analysis.suggestion = 'Forge安装不完整，请前往版本设置使用"文件修复"功能，或重新安装该Forge版本';
+                    }
+                    instanceInfo.logBuffer.push(`[VersePC] 游戏进程退出(session:${sessionId}),代码:${code}`);
+                    gameLogBuffer.push(`[VersePC] 游戏进程退出 (session: ${sessionId})，代码: ${code}`);
+                    if (analysis.isCrash) {
+                        instanceInfo.logBuffer.push(`[VersePC] 崩溃分析: ${analysis.reason}`);
+                        instanceInfo.logBuffer.push(`[VersePC] 建议: ${analysis.suggestion}`);
+                        gameLogBuffer.push(`[VersePC] 崩溃分析: ${analysis.reason}`);
+                    } else {
+                        instanceInfo.logBuffer.push(`[VersePC] ${analysis.reason}`);
+                        gameLogBuffer.push(`[VersePC] ${analysis.reason}`);
+                    }
+                    lastGameExitAnalysis = { 
+                        ...analysis, 
+                        launchInfo: instanceInfo.launchInfo,
+                        logBuffer: instanceInfo.logBuffer.slice(-50)
+                    };
+                    try {
+                        const playTimePath = path.join(DATA_DIR, 'play-time.json');
+                        if (fs.existsSync(playTimePath)) {
+                            if (!global._playTimeWriteQueue) global._playTimeWriteQueue = Promise.resolve();
+                            global._playTimeWriteQueue = global._playTimeWriteQueue.then(() => {
+                                let ptData = JSON.parse(fs.readFileSync(playTimePath, 'utf8'));
+                                const vData = ptData[launchVersionId || versionId];
+                                if (vData && vData._launchTime) {
+                                    const elapsed = (Date.now() - vData._launchTime) / 1000;
+                                    vData.totalSeconds = (vData.totalSeconds || 0) + elapsed;
+                                    delete vData._launchTime;
+                                    fs.writeFileSync(playTimePath, JSON.stringify(ptData, null, 2), 'utf8');
+                                }
+                            });
+                        }
+                    } catch (e) {}
+                    gameInstances.delete(sessionId);
+                    if (gameInstances.size === 0) {
+                        gameLogBuffer = [];
+                    }
+                });
+
+                gameProcess.on('error', (err) => {
+                    instanceInfo.logBuffer.push(`[VersePC] 启动错误: ${err.message}`);
+                    gameLogBuffer.push(`[VersePC] 启动错误 (session: ${sessionId}): ${err.message}`);
+                    lastGameExitAnalysis = { 
+                        code: -1, 
+                        reason: `启动错误: ${err.message}`, 
+                        suggestion: '请检查Java路径是否正确', 
+                        isCrash: true,
+                        launchInfo: instanceInfo.launchInfo
+                    };
+                    gameInstances.delete(sessionId);
+                });
+
                 return {
                     success: true,
                     sessionId,
@@ -12820,7 +12902,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
 
                     libraries.forEach(lib => {
                         if (lib.downloads && lib.downloads.artifact) {
-                            const libPath = path.join(DATA_DIR, lib.downloads.artifact.path || '');
+                            const libPath = path.join(LIBRARIES_DIR, lib.downloads.artifact.path || '');
                             classPathParts.push(libPath);
                         } else if (lib.name) {
                             const parts = lib.name.split(':');
@@ -13793,7 +13875,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 if (stopData.sessionId) {
                     const inst = gameInstances.get(stopData.sessionId);
                     if (inst) {
-                        inst.process.kill();
+                        try { inst.process.kill(); } catch (e) {}
                         gameInstances.delete(stopData.sessionId);
                         sendJSON({ success: true, message: '游戏实例已停止', sessionId: stopData.sessionId });
                     } else {
@@ -13801,7 +13883,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     }
                 } else if (gameInstances.size > 0) {
                     for (const [sid, inst] of gameInstances) {
-                        inst.process.kill();
+                        try { inst.process.kill(); } catch (e) {}
                     }
                     gameInstances.clear();
                     sendJSON({ success: true, message: '所有游戏实例已停止' });
@@ -13996,7 +14078,15 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     sendError('Missing path parameter', 400);
                     break;
                 }
-                
+
+                const resolvedLogPath = path.resolve(logPath);
+                const allowedLogBases = [DATA_DIR, path.join(os.homedir(), '.minecraft'), ...Object.values(VERSIONS_DIR)].map(d => path.resolve(d));
+                const isLogPathAllowed = allowedLogBases.some(base => resolvedLogPath.toLowerCase().startsWith(base.toLowerCase()));
+                if (!isLogPathAllowed) {
+                    sendError('Forbidden', 403);
+                    break;
+                }
+
                 try {
                     if (!fs.existsSync(logPath)) {
                         sendError('Log file not found', 404);
@@ -14042,8 +14132,11 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         }
                         
                         if (files && files.length > 0) {
+                            const allowedExportBases = [DATA_DIR, ...Object.values(VERSIONS_DIR)].map(d => path.resolve(d));
                             exportContent += '=== 相关日志文件 ===\n';
                             for (const file of files) {
+                                const resolvedFile = path.resolve(file);
+                                if (!allowedExportBases.some(base => resolvedFile.toLowerCase().startsWith(base.toLowerCase()))) continue;
                                 if (fs.existsSync(file)) {
                                     exportContent += `\n--- ${path.basename(file)} ---\n`;
                                     exportContent += fs.readFileSync(file, 'utf8') + '\n';
@@ -14575,7 +14668,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         modsDisabled: ctxModsDisabled
                     });
                 } catch (e) {
-                    sendError(500, 'Failed to load current context: ' + e.message);
+                    sendError('Failed to load current context: ' + e.message, 500);
                 }
                 break;
             }
@@ -14972,7 +15065,10 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 const data = await readBody();
                 const versionId = data.versionId;
                 if (!versionId) { sendError('Missing versionId', 400); break; }
+                if (!versionId || /[\\/]|^\./.test(versionId)) { sendError('Invalid versionId', 400); break; }
                 const versionDir = path.join(VERSIONS_DIR, versionId);
+                const resolvedVersionDir = path.resolve(versionDir);
+                if (!resolvedVersionDir.startsWith(path.resolve(VERSIONS_DIR))) { sendError('Invalid versionId path', 400); break; }
                 if (fs.existsSync(versionDir)) {
                     fs.rmSync(versionDir, { recursive: true, force: true });
                     sendJSON({ success: true, message: `Version ${versionId} deleted` });
@@ -15896,13 +15992,12 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 if (!fs.existsSync(targetPath)) fs.mkdirSync(targetPath, { recursive: true });
                 try {
                     if (process.platform === 'win32') {
-                        require('child_process').exec(`explorer "${targetPath}"`, (err) => {
-                            if (err) console.warn('explorer exec warning:', err.message);
-                        });
+                        const { shell } = require('electron');
+                        shell.openPath(targetPath);
                     } else if (process.platform === 'darwin') {
-                        require('child_process').exec(`open "${targetPath}"`);
+                        require('child_process').execFile('open', [targetPath]);
                     } else {
-                        require('child_process').exec(`xdg-open "${targetPath}"`);
+                        require('child_process').execFile('xdg-open', [targetPath]);
                     }
                     sendJSON({ success: true, path: targetPath });
                 } catch (e) {
@@ -18062,6 +18157,14 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     sendError('Missing path parameter', 400);
                     break;
                 }
+
+                const resolvedBrowse = path.resolve(browsePath);
+                const allowedBrowseBases = [DATA_DIR, ...Object.values(VERSIONS_DIR), os.homedir()].map(d => path.resolve(d));
+                const isBrowseAllowed = allowedBrowseBases.some(base => resolvedBrowse.toLowerCase().startsWith(base.toLowerCase()));
+                if (!isBrowseAllowed) {
+                    sendError('Forbidden: 不允许访问此路径', 403);
+                    break;
+                }
                 
                 try {
                     if (!fs.existsSync(browsePath)) {
@@ -18279,13 +18382,13 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     shortcutDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs');
                 }
 
-                const shortcutPath = path.join(shortcutDir, `${shortcutName}.lnk`);
+                const shortcutPath = path.join(shortcutDir, `${shortcutName.replace(/["$`]/g, '')}.lnk`);
 
                 const psScript = `
 $ws = New-Object -ComObject WScript.Shell
-$sc = $ws.CreateShortcut("${shortcutPath}")
-$sc.TargetPath = "${exePath}"
-$sc.WorkingDirectory = "${path.dirname(exePath)}"
+$sc = $ws.CreateShortcut("${shortcutPath.replace(/"/g, '`"')}")
+$sc.TargetPath = "${exePath.replace(/"/g, '`"')}"
+$sc.WorkingDirectory = "${path.dirname(exePath).replace(/"/g, '`"')}"
 $sc.Description = "VersePC Minecraft Launcher"
 $sc.Save()
 `.trim();
@@ -18331,9 +18434,15 @@ $sc.Save()
             }
 
             case '/api/screenshot': {
+                const SCREENSHOT_ALLOWED_BASES = [DATA_DIR, ...Object.values(VERSIONS_DIR)].map(d => path.resolve(d));
+                function isScreenshotPathAllowed(p) {
+                    const resolved = path.resolve(p);
+                    return SCREENSHOT_ALLOWED_BASES.some(base => resolved.toLowerCase().startsWith(base.toLowerCase()));
+                }
                 if (method === 'DELETE') {
                     const delPath = decodeURIComponent(parsedUrl.query.path || '');
                     if (!delPath) { sendError('Missing path', 400); break; }
+                    if (!isScreenshotPathAllowed(delPath)) { sendError('Forbidden', 403); break; }
                     try {
                         fs.unlinkSync(delPath);
                         sendJSON({ success: true });
@@ -18348,6 +18457,7 @@ $sc.Save()
                     sendError('Not found', 404);
                     break;
                 }
+                if (!isScreenshotPathAllowed(ssPath)) { sendError('Forbidden', 403); break; }
                 const ssExt = path.extname(ssPath).toLowerCase();
                 const ssMime = ssExt === '.png' ? 'image/png' : ssExt === '.jpg' || ssExt === '.jpeg' ? 'image/jpeg' : 'image/bmp';
                 const ssData = fs.readFileSync(ssPath);
@@ -18392,6 +18502,7 @@ function fetchJSONWithMethod(urlStr, method, body, headers) {
             });
         });
         req.on('error', reject);
+        req.setTimeout(15000, () => { req.destroy(); reject(new Error('Request timeout')); });
         if (body) req.write(body);
         req.end();
     });
@@ -18399,7 +18510,7 @@ function fetchJSONWithMethod(urlStr, method, body, headers) {
 
 function fetchJSONWithAuth(urlStr, token) {
     return new Promise((resolve, reject) => {
-        https.get(urlStr, {
+        const req = https.get(urlStr, {
             headers: { 'Authorization': `Bearer ${token}`, 'User-Agent': 'VersePC/1.0' }
         }, (res) => {
             let data = '';
@@ -18408,17 +18519,20 @@ function fetchJSONWithAuth(urlStr, token) {
                 try { resolve(JSON.parse(data)); }
                 catch (e) { reject(e); }
             });
-        }).on('error', reject);
+        });
+        req.on('error', reject);
+        req.setTimeout(15000, () => { req.destroy(); reject(new Error('Request timeout')); });
     });
 }
 
-function getDirSize(dirPath) {
+function getDirSize(dirPath, depth = 0) {
+    if (depth > 20) return 0;
     let size = 0;
     try {
         fs.readdirSync(dirPath).forEach(file => {
             const filePath = path.join(dirPath, file);
             const stat = fs.statSync(filePath);
-            if (stat.isDirectory()) size += getDirSize(filePath);
+            if (stat.isDirectory()) size += getDirSize(filePath, depth + 1);
             else size += stat.size;
         });
     } catch (e) {}

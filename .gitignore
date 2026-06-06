@@ -66,7 +66,6 @@ SPLASH_ANIMATION_DESIGN.md
 modal-demo.html
 splash-preview.html
 support-preview.html
-file-browser.html
 content-area-part.html
 test-launch.js
 fix_backticks.ps1
@@ -77,3 +76,6 @@ package-lock.json
 # ─── 安装器冗余数据 ───
 installer-app/data/
 installer-app/package-lock.json
+
+# ─── ffmpeg ───
+ffmpeg/

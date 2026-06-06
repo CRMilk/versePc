@@ -81,6 +81,10 @@ class WallpaperEngine {
             cancelAnimationFrame(this.animationId);
             this.animationId = null;
         }
+        if (this.renderer && this.renderer.destroy) {
+            this.renderer.destroy();
+        }
+        this.renderer = null;
         window.removeEventListener('resize', this._onResize);
         window.removeEventListener('mousemove', this._onMouseMove);
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);

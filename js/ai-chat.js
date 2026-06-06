@@ -1357,7 +1357,7 @@ const AIChat = {
                         } catch (e) {}
                     } else if (name === 'semantic_search') {
                         try {
-                            const parsed = JSON.parse(resultText);
+                            const parsed = JSON.parse(result);
                             if (parsed.results && parsed.results.length > 0) {
                                 resultEl.innerHTML = this._renderSearchResults(parsed);
                             } else if (parsed.results) {
@@ -1366,7 +1366,7 @@ const AIChat = {
                         } catch (e) {}
                     } else if (name === 'build_index') {
                         try {
-                            const parsed = JSON.parse(resultText);
+                            const parsed = JSON.parse(result);
                             if (parsed.success) {
                                 resultEl.innerHTML = `<div class="ai-tool-success">✅ 索引构建完成：${parsed.files} 个文件，${parsed.tokens} 个词元，耗时 ${parsed.elapsed}ms</div>`;
                             }
@@ -5168,7 +5168,7 @@ Call attempt_completion when all operations are done and verified.
         const models = provider.models || [];
         const modelSel = document.getElementById('ai-add-model-select');
         if (modelSel) {
-            modelSel.innerHTML = models.map(m => `<option value="${m.id}">${m.name || m.id}</option>`).join('');
+            modelSel.innerHTML = models.map(m => `<option value="${this.escapeHtml(m.id)}">${this.escapeHtml(m.name || m.id)}</option>`).join('');
             if (models.length > 0) { modelSel.style.display = ''; if (addBtn) addBtn.style.display = ''; }
         }
     },
@@ -6947,7 +6947,7 @@ Call attempt_completion when all operations are done and verified.
         else if (/etimedout/i.test(friendlyMsg)) friendlyMsg = '连接超时，服务器响应时间过长。';
         else if (/socket hang up/i.test(friendlyMsg)) friendlyMsg = '连接被中断，可能是网络不稳定导致。';
         const escapedError = this.escapeHtml(friendlyMsg);
-        const clipboardText = this.escapeHtml(errorMsg || '').replace(/'/g, "\\'");
+        const clipboardText = this.escapeHtml(errorMsg || '').replace(/'/g, "&#39;");
         container.innerHTML = `<div class="ai-error-block" style="animation:aiMsgIn 0.3s var(--ease-out-expo)"><div class="ai-error-block-header" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.ai-error-block-chevron').classList.toggle('open')"><span class="ai-error-block-icon">${warningSvg}</span><span class="ai-error-block-title">${errInfo.title}</span><span class="ai-error-block-chevron">${chevronSvg}</span></div><div class="ai-error-block-body open"><div class="ai-error-block-text">${escapedError}</div><div class="ai-error-actions" style="display:flex;gap:8px;margin-top:10px"><button class="ai-error-btn" onclick="${btnAction}" style="padding:5px 14px;border-radius:6px;border:none;background:rgba(239,68,68,0.15);color:#fca5a5;font-size:12px;cursor:pointer;transition:background 0.15s">${errInfo.retryLabel}</button><button class="ai-error-copy-btn" onclick="navigator.clipboard.writeText('${clipboardText}').then(()=>{this.textContent='已复制';setTimeout(()=>this.textContent='复制',1500)})" style="padding:5px 14px;border-radius:6px;border:1px solid rgba(239,68,68,0.2);background:transparent;color:#fca5a5;font-size:12px;cursor:pointer;transition:background 0.15s">复制</button></div></div></div>`;
     },
 
@@ -8504,6 +8504,15 @@ const Onboarding = {
         } else if (step === 'tutorial') {
             this._renderTutorial();
         } else if (step === 'apikey') {
+            const customFields = document.getElementById('onboard-custom-fields');
+            const apikeyMsg = document.getElementById('onboard-apikey-msg');
+            if (this.provider === 'custom') {
+                if (customFields) customFields.style.display = '';
+                if (apikeyMsg) apikeyMsg.textContent = '请输入你的接入信息：';
+            } else {
+                if (customFields) customFields.style.display = 'none';
+                if (apikeyMsg) apikeyMsg.textContent = `请输入你的 ${this._providerName(this.provider)} API Key 与模型：`;
+            }
             this._focusApiKey();
         }
     },
@@ -8561,6 +8570,15 @@ const Onboarding = {
         list.querySelectorAll('.onboard-provider-item').forEach(item => {
             item.addEventListener('click', () => {
                 this.provider = item.dataset.provider;
+                const customFields = document.getElementById('onboard-custom-fields');
+                const apikeyMsg = document.getElementById('onboard-apikey-msg');
+                if (this.provider === 'custom') {
+                    if (customFields) customFields.style.display = '';
+                    if (apikeyMsg) apikeyMsg.textContent = '请输入你的接入信息：';
+                } else {
+                    if (customFields) customFields.style.display = 'none';
+                    if (apikeyMsg) apikeyMsg.textContent = `请输入你的 ${this._providerName(this.provider)} API Key 与模型：`;
+                }
                 this._goTo('tutorial');
             });
         });
@@ -8686,7 +8704,15 @@ const Onboarding = {
         }
         try {
             if (this.provider === 'custom') {
-                AIChat._customProvider = { baseUrl: '', apiKey: key, modelId: model, modelName: model, apiFormat: 'openai' };
+                const baseUrl = document.getElementById('onboard-base-url')?.value.trim();
+                const apiFormat = document.getElementById('onboard-api-format')?.value || 'openai';
+                const displayName = document.getElementById('onboard-custom-name')?.value.trim() || model;
+                const maxTokens = parseInt(document.getElementById('onboard-max-tokens')?.value, 10) || 4096;
+                if (!baseUrl) {
+                    if (status) { status.textContent = '请输入 Base URL'; status.className = 'onboard-apikey-status error'; }
+                    return;
+                }
+                AIChat._customProvider = { baseUrl, apiKey: key, modelId: model, modelName: displayName, apiFormat, maxTokens };
                 await window.electronAPI.store.set('versepc_ai_custom_provider', JSON.stringify(AIChat._customProvider));
             } else {
                 await window.electronAPI.store.set('versepc_ai_api_key', key);
