@@ -2,6 +2,10 @@
 ; VersePC Installer - Modern MUI2 Customization
 ; ============================================================
 
+; Show file extraction details during install/uninstall
+ShowInstDetails show
+ShowUninstDetails show
+
 ; --- Modern UI Settings (use /ifndef to avoid conflicts) ---
 !define /ifndef MUI_WELCOMEPAGE_TITLE "欢迎安装 VersePC"
 !define /ifndef MUI_WELCOMEPAGE_TEXT "VersePC 是一款新一代 Minecraft 启动器，集成 AI 助手、版本管理、模组下载等功能。$\r$\n$\r$\n点击 [下一步] 开始安装。"
