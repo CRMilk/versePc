@@ -8249,9 +8249,9 @@ async function selectTheme(element) {
         app.classList.remove('wp-light', 'wp-dark');
     }
 
-    document.documentElement.style.setProperty('--accent', '#ffffff');
-    document.documentElement.style.setProperty('--accent-hover', '#e0e0e0');
-    document.documentElement.style.setProperty('--accent-rgb', '255, 255, 255');
+    document.documentElement.style.setProperty('--accent', theme === 'dark' ? '#ffffff' : '#1a1a1a');
+    document.documentElement.style.setProperty('--accent-hover', theme === 'dark' ? '#d0d0d0' : '#333333');
+    document.documentElement.style.setProperty('--accent-rgb', theme === 'dark' ? '255, 255, 255' : '26, 26, 26');
 
     if (typeof updateWallpaperTheme === 'function') {
         updateWallpaperTheme(theme === 'dark');
@@ -8468,14 +8468,26 @@ function aiToggleApiKeyVisibility() {
 }
 
 function applyThemeColors(themeName) {
-    document.documentElement.style.setProperty('--accent', '#ffffff');
-    document.documentElement.style.setProperty('--accent-hover', '#e0e0e0');
+    if (themeName === 'dark') {
+        document.documentElement.style.setProperty('--accent', '#ffffff');
+        document.documentElement.style.setProperty('--accent-hover', '#d0d0d0');
+    } else {
+        document.documentElement.style.setProperty('--accent', '#1a1a1a');
+        document.documentElement.style.setProperty('--accent-hover', '#333333');
+    }
 }
 
 async function updateCustomAccentColor(color) {
-    document.documentElement.style.setProperty('--accent', '#ffffff');
-    document.documentElement.style.setProperty('--accent-hover', '#e0e0e0');
-    document.documentElement.style.setProperty('--accent-rgb', '255, 255, 255');
+    const theme = document.documentElement.getAttribute('data-theme') || 'light';
+    if (theme === 'dark') {
+        document.documentElement.style.setProperty('--accent', '#ffffff');
+        document.documentElement.style.setProperty('--accent-hover', '#d0d0d0');
+        document.documentElement.style.setProperty('--accent-rgb', '255, 255, 255');
+    } else {
+        document.documentElement.style.setProperty('--accent', '#1a1a1a');
+        document.documentElement.style.setProperty('--accent-hover', '#333333');
+        document.documentElement.style.setProperty('--accent-rgb', '26, 26, 26');
+    }
 }
 
 async function savePersonalizeSettings() {

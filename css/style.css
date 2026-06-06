@@ -50,13 +50,13 @@
     --text-primary: #1a1a1a;
     --text-secondary: #4a4a4a;
     --text-muted: #8a8a8a;
-    --accent: #ffffff;
-    --accent-hover: #e0e0e0;
-    --accent-glow: rgba(255, 255, 255, 0.15);
-    --accent-text: #1a1a1a;
+    --accent: #1a1a1a;
+    --accent-hover: #333333;
+    --accent-glow: rgba(0, 0, 0, 0.1);
+    --accent-text: #ffffff;
     --bg-glass: rgba(245, 245, 247, 0.85);
     --bg-card-glass: rgba(250, 250, 250, 0.7);
-    --accent-rgb: 255, 255, 255;
+    --accent-rgb: 26, 26, 26;
     --green: #16a34a;
     --green-glow: rgba(22, 163, 74, 0.15);
     --red: #dc2626;
@@ -3433,7 +3433,8 @@ body.dark-theme .acct-btn-danger:hover {
 
 #page-java .progress-fill {
     height: 100%;
-    background: var(--primary);
+    width: 0%;
+    background: var(--accent);
     border-radius: 9999px;
     transition: width 0.3s ease-out;
 }
