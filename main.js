@@ -1512,6 +1512,27 @@ function registerModsIPC() {
             return { success: false, error: e.message };
         }
     });
+
+    // 获取版本下载文件夹
+    ipcMain.handle("getVersionsDir", async () => {
+        try {
+            const versionsDir = path.join(os.homedir(), '.versepc', 'versions');
+            return { success: true, path: versionsDir };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    });
+
+    // 获取所有外部版本文件夹路径
+    ipcMain.handle("getExternalVersionFolders", async () => {
+        try {
+            const store = loadStore();
+            const folders = store['externalVersionFolders'] || [];
+            return { success: true, folders };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    });
 }
 
 // ============================================================================

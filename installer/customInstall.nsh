@@ -50,6 +50,9 @@ ShowUninstDetails show
     ${If} $INSTDIR == ""
         StrCpy $INSTDIR "$PROGRAMFILES64\Verse"
     ${EndIf}
+    SetDetailsView show
+    SetDetailsPrint textonly
+    SetAutoClose false
 !macroend
 
 !macro customInstall

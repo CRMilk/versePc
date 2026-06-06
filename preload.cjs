@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onWindowModeChanged: (callback) => ipcRenderer.on('window-mode-changed', (event, data) => callback(data)),
     getDroppedFilePath: (file) => file.path || '',
     getDefaultModPath: () => ipcRenderer.invoke('getDefaultModPath'),
+    getVersionsDir: () => ipcRenderer.invoke('getVersionsDir'),
+    getExternalVersionFolders: () => ipcRenderer.invoke('getExternalVersionFolders'),
     selectSaveFolder: (defaultPath) => ipcRenderer.invoke('dialog:select-folder', { title: '选择模组保存文件夹', defaultPath }),
     selectFolder: (options) => ipcRenderer.invoke('dialog:select-folder', options || {}),
     selectFile: (options) => ipcRenderer.invoke('dialog:select-file', options),

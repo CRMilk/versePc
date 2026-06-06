@@ -11628,6 +11628,418 @@ body.dark-theme .rc-context-sep { background:#222; }
 .ai-file-ops-content pre { margin: 0; font-size: 12px; font-family: var(--ai-font-mono, monospace); color: var(--ai-text-secondary); white-space: pre-wrap; word-break: break-all; line-height: 1.5; }
 
 /* ============================================================
+   Onboarding flow (实验性首次使用引导)
+   ============================================================ */
+.onboard-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--ai-bg-primary, #1e1e1e);
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.onboard-stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+.onboard-step {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    opacity: 0;
+    transform: translateX(40px);
+    transition: opacity 0.32s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)),
+                transform 0.42s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+    pointer-events: none;
+}
+.onboard-step.onboard-step-active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+.onboard-step.onboard-step-leaving {
+    opacity: 0;
+    transform: translateX(-40px);
+    pointer-events: none;
+}
+.onboard-welcome,
+.onboard-role,
+.onboard-folder,
+.onboard-provider,
+.onboard-tutorial,
+.onboard-apikey {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    max-width: 560px;
+    width: 100%;
+}
+.onboard-avatar {
+    width: 96px;
+    height: 96px;
+    border-radius: 18px;
+    overflow: hidden;
+    background: var(--ai-bg-tertiary, #2a2a2a);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+.onboard-avatar-img {
+    width: 96px;
+    height: 96px;
+    display: block;
+    image-rendering: pixelated;
+}
+.onboard-typewriter {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--ai-text-primary, #e6e6e6);
+    min-height: 36px;
+    text-align: center;
+}
+.onboard-typewriter::after {
+    content: '|';
+    animation: ai-cursor-blink 0.8s step-end infinite;
+    color: var(--ai-accent, #4fc1ff);
+    font-weight: 300;
+    margin-left: 1px;
+}
+@keyframes ai-cursor-blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+.onboard-subtitle,
+.onboard-desc {
+    font-size: 13px;
+    color: var(--ai-text-muted, #9a9a9a);
+    margin: 0;
+    text-align: center;
+    line-height: 1.6;
+}
+.onboard-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--ai-text-primary, #e6e6e6);
+    margin: 0;
+    text-align: center;
+}
+.onboard-btn {
+    appearance: none;
+    border: 1px solid var(--ai-border, rgba(255, 255, 255, 0.12));
+    background: var(--ai-bg-secondary, #2a2a2a);
+    color: var(--ai-text-primary, #e6e6e6);
+    padding: 8px 22px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.18s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+    font-family: inherit;
+}
+.onboard-btn:hover {
+    border-color: var(--ai-accent, #4fc1ff);
+    color: var(--ai-accent, #4fc1ff);
+}
+.onboard-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.onboard-btn-primary {
+    background: var(--ai-accent, #4fc1ff);
+    border-color: var(--ai-accent, #4fc1ff);
+    color: #fff;
+}
+.onboard-btn-primary:hover:not(:disabled) {
+    filter: brightness(1.08);
+    color: #fff;
+}
+.onboard-btn-secondary {
+    background: transparent;
+}
+.onboard-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+    justify-content: center;
+}
+.onboard-role-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 420px;
+}
+.onboard-role-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    background: var(--ai-bg-secondary, #2a2a2a);
+    border: 1px solid var(--ai-border, rgba(255, 255, 255, 0.12));
+    border-radius: 12px;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    font-family: inherit;
+    transition: all 0.18s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+}
+.onboard-role-card:hover {
+    border-color: var(--ai-accent, #4fc1ff);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
+}
+.onboard-role-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    background: rgba(79, 193, 255, 0.1);
+    color: var(--ai-accent, #4fc1ff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.onboard-role-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+.onboard-role-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ai-text-primary, #e6e6e6);
+}
+.onboard-role-desc {
+    font-size: 12px;
+    color: var(--ai-text-muted, #9a9a9a);
+    line-height: 1.5;
+}
+.onboard-folder-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--ai-bg-secondary, #2a2a2a);
+    border: 1px dashed var(--ai-border, rgba(255, 255, 255, 0.12));
+    border-radius: 10px;
+    width: 100%;
+    max-width: 420px;
+    color: var(--ai-text-primary, #e6e6e6);
+    font-size: 13px;
+    min-height: 56px;
+}
+.onboard-folder-box #onboard-folder-path {
+    flex: 1;
+    word-break: break-all;
+    line-height: 1.4;
+}
+.onboard-msg {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    max-width: 560px;
+}
+.onboard-msg-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--ai-bg-tertiary, #2a2a2a);
+    flex-shrink: 0;
+}
+.onboard-msg-avatar img {
+    width: 40px;
+    height: 40px;
+    display: block;
+    image-rendering: pixelated;
+}
+.onboard-msg-bubble {
+    background: var(--ai-bg-secondary, #2a2a2a);
+    border: 1px solid var(--ai-border, rgba(255, 255, 255, 0.08));
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 13.5px;
+    color: var(--ai-text-primary, #e6e6e6);
+    line-height: 1.6;
+    flex: 1;
+}
+.onboard-provider-list,
+.onboard-tutorial-card {
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 50vh;
+    overflow-y: auto;
+    padding: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ai-border, rgba(255, 255, 255, 0.12)) transparent;
+}
+.onboard-provider-item,
+.onboard-tutorial-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--ai-bg-secondary, #2a2a2a);
+    border: 1px solid var(--ai-border, rgba(255, 255, 255, 0.08));
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    font-family: inherit;
+    transition: all 0.18s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+    width: 100%;
+}
+.onboard-provider-item:hover,
+.onboard-tutorial-step:hover {
+    border-color: var(--ai-accent, #4fc1ff);
+    transform: translateY(-1px);
+}
+.onboard-provider-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(79, 193, 255, 0.1);
+    color: var(--ai-accent, #4fc1ff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+.onboard-provider-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+.onboard-provider-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ai-text-primary, #e6e6e6);
+}
+.onboard-provider-desc {
+    font-size: 11.5px;
+    color: var(--ai-text-muted, #9a9a9a);
+    line-height: 1.4;
+}
+.onboard-tutorial-step {
+    cursor: default;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+.onboard-tutorial-step-num {
+    font-size: 11px;
+    color: var(--ai-accent, #4fc1ff);
+    font-weight: 600;
+}
+.onboard-tutorial-step-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ai-text-primary, #e6e6e6);
+}
+.onboard-tutorial-step-desc {
+    font-size: 12px;
+    color: var(--ai-text-muted, #9a9a9a);
+    line-height: 1.5;
+}
+.onboard-tutorial-loading {
+    padding: 24px;
+    text-align: center;
+    color: var(--ai-text-muted, #9a9a9a);
+    font-size: 13px;
+}
+.onboard-apikey-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-width: 420px;
+}
+.onboard-apikey-label {
+    font-size: 12px;
+    color: var(--ai-text-muted, #9a9a9a);
+    margin-top: 4px;
+}
+.onboard-apikey-input {
+    height: 36px;
+    padding: 0 12px;
+    background: var(--ai-bg-secondary, #2a2a2a);
+    border: 1px solid var(--ai-border, rgba(255, 255, 255, 0.12));
+    border-radius: 8px;
+    color: var(--ai-text-primary, #e6e6e6);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.18s;
+}
+.onboard-apikey-input:focus {
+    border-color: var(--ai-accent, #4fc1ff);
+}
+.onboard-apikey-status {
+    font-size: 12px;
+    min-height: 18px;
+    color: var(--ai-text-muted, #9a9a9a);
+}
+.onboard-apikey-status.error {
+    color: var(--ai-error, #ef4444);
+}
+.onboard-apikey-status.ok {
+    color: var(--ai-success, #22c55e);
+}
+
+/* Mode toggle (对话模式 / 开发者模式) */
+.rc-mode-toggle {
+    display: inline-flex;
+    background: var(--ai-bg-secondary, #2a2a2a);
+    border: 1px solid var(--ai-border, rgba(255, 255, 255, 0.08));
+    border-radius: 8px;
+    padding: 2px;
+    gap: 0;
+}
+.rc-mode-btn {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--ai-text-muted, #9a9a9a);
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.18s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+    font-family: inherit;
+}
+.rc-mode-btn:hover {
+    color: var(--ai-text-primary, #e6e6e6);
+}
+.rc-mode-btn.rc-mode-btn-active {
+    background: var(--ai-accent, #4fc1ff);
+    color: #fff;
+}
+.rc-mode-locked-hint {
+    font-size: 11px;
+    color: var(--ai-text-muted, #9a9a9a);
+    margin-left: 6px;
+}
+
+/* ============================================================
    3. 文件结果行 (.ai-tool-file-row)
    ============================================================ */
 .ai-tool-file-row {

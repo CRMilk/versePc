@@ -2122,6 +2122,15 @@ function navigateToPage(pageName) {
         }, 200);
     } else if (pageName === 'downloads') {
         dlManager.render();
+    } else if (pageName === 'explore') {
+        // 进入实验性页面：显示首次使用引导（测试中：每次都显示）
+        if (typeof Onboarding !== 'undefined') {
+            setTimeout(() => {
+                Onboarding.init();
+                OnboardingUI.init();
+                Onboarding.start(true);
+            }, 50);
+        }
     }
 }
 

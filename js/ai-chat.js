@@ -103,6 +103,7 @@ const AIChat = {
     _editingMcpIndex: null,
     _currentFolderPath: null,
     _currentFolderName: '未选择',
+    _role: null,
     _trustedFolders: [],
     _recentFolders: [],
     _todos: [],
@@ -2576,8 +2577,14 @@ const AIChat = {
             const _langName = _langMap[this._language] || '简体中文';
             const _langRule = this._language === 'en' ? '' : `\n\n## Language\nIMPORTANT: You MUST respond in ${_langName}. All your explanations, plan descriptions, todo items, and completion summaries MUST be written in ${_langName}. Technical terms, code, and file paths should remain as-is.`;
             const _customPrompt = this._promptSettings && this._promptSettings.systemPrompt ? `\n\n## Custom Instructions\n${this._promptSettings.systemPrompt}` : '';
+            const _modeRule = (() => {
+                const activeBtn = document.querySelector('.rc-mode-btn.rc-mode-btn-active');
+                const isChatMode = activeBtn ? activeBtn.dataset.mode === 'chat' : (this._role === 'gamer');
+                if (!isChatMode) return '';
+                return `\n\n## Mode: Conversation (对话模式)\n当前用户处于对话模式，你只能访问 VERsE 的版本下载文件夹（~/.versepc/versions/）以及用户已添加的外部版本文件夹。如果用户要求读取/写入/执行任何其他外部路径（例如：E:\\、D:\\、C:\\Users、桌面、文档等），你必须回复："我现在是对话模式，无法访问外部的文件夹，需要调整为开发者模式才可以。" 并提示用户点击上方的"开发者模式"按钮切换。`;
+            })();
             const sysPrompt = `You are VersePC Coder, a coding agent specialized in Minecraft launcher development.
-${_langRule}${_customPrompt}
+${_langRule}${_customPrompt}${_modeRule}
 
 ${this.userMemory ? `## User Preferences
 ${this.userMemory}
@@ -8342,6 +8349,436 @@ Call attempt_completion when all operations are done and verified.
 
 function aiNewChat() { AIChat.newChat(); }
 function aiToggleSettings() { AIChat.toggleSettings(); }
+
+/* ============================================================
+   VersePC Onboarding (实验性首次使用引导)
+   ============================================================ */
+const Onboarding = {
+    currentStep: 'welcome',
+    role: null,
+    folderPath: null,
+    folderName: null,
+    provider: null,
+    typewriterTimer: null,
+    typewriterEl: null,
+    typewriterText: '',
+    typewriterIdx: 0,
+    typewriterDone: false,
+    init() {
+        if (this._initialized) return;
+        this._initialized = true;
+        this._bindStepEvents();
+        this._bindModeToggle();
+    },
+    _bindStepEvents() {
+        document.getElementById('onboard-welcome-next')?.addEventListener('click', () => this._goTo('role'));
+        document.getElementById('onboard-role-back')?.addEventListener('click', () => this._goTo('welcome'));
+        document.getElementById('onboard-folder-back')?.addEventListener('click', () => this._goTo('role'));
+        document.getElementById('onboard-folder-pick')?.addEventListener('click', () => this._pickFolder());
+        document.getElementById('onboard-folder-next')?.addEventListener('click', () => this._goTo('provider'));
+        document.getElementById('onboard-tutorial-back')?.addEventListener('click', () => this._goTo('provider'));
+        document.getElementById('onboard-tutorial-ack')?.addEventListener('click', () => this._goTo('apikey'));
+        document.getElementById('onboard-apikey-back')?.addEventListener('click', () => this._goTo('tutorial'));
+        document.getElementById('onboard-apikey-submit')?.addEventListener('click', () => this._submitApiKey());
+        document.querySelectorAll('.onboard-role-card').forEach(card => {
+            card.addEventListener('click', () => {
+                this.role = card.dataset.role;
+                if (this.role === 'gamer') {
+                    this._setDefaultVerseFolder().then(() => this._goTo('provider'));
+                } else {
+                    this._goTo('folder');
+                }
+            });
+        });
+    },
+    _bindModeToggle() {
+        const toggle = document.getElementById('rc-mode-toggle');
+        if (!toggle) return;
+        toggle.addEventListener('click', (e) => {
+            const btn = e.target.closest('.rc-mode-btn');
+            if (!btn) return;
+            const mode = btn.dataset.mode;
+            // developer mode 始终显示文件夹；对话模式只有当用户不是 gamer 时显示
+            if (mode === 'dev') {
+                this._showFolderBar();
+                AIChat._role = 'developer';
+                if (AIChat._currentFolderPath) {
+                    AIChat._currentFolderPath = AIChat._currentFolderPath;
+                }
+            } else {
+                if (Onboarding.role === 'gamer') {
+                    this._hideFolderBar();
+                } else {
+                    this._showFolderBar();
+                }
+                AIChat._role = 'gamer';
+            }
+            this._setActiveMode(mode);
+            this._persist();
+        });
+    },
+    _setActiveMode(mode) {
+        document.querySelectorAll('.rc-mode-btn').forEach(b => b.classList.toggle('rc-mode-btn-active', b.dataset.mode === mode));
+    },
+    _showFolderBar() {
+        const sep = document.getElementById('rc-context-sep-folder');
+        const btn = document.getElementById('rc-folder-btn');
+        if (sep) sep.style.display = '';
+        if (btn) btn.style.display = '';
+    },
+    _hideFolderBar() {
+        const sep = document.getElementById('rc-context-sep-folder');
+        const btn = document.getElementById('rc-folder-btn');
+        if (sep) sep.style.display = 'none';
+        if (btn) btn.style.display = 'none';
+    },
+    async _setDefaultVerseFolder() {
+        try {
+            const result = await window.electronAPI.getVersionsDir();
+            if (result && result.path) {
+                this.folderPath = result.path;
+                this.folderName = this._basename(result.path);
+                AIChat._currentFolderPath = result.path;
+                AIChat._currentFolderName = this.folderName;
+                this._persist();
+                if (AIChat._updateFolderLabel) AIChat._updateFolderLabel();
+            }
+        } catch (e) { console.warn('[Onboarding] default folder failed', e); }
+    },
+    async _pickFolder() {
+        try {
+            const res = await window.electronAPI.selectFolder({ title: '选择项目文件夹', properties: ['openDirectory'] });
+            if (res && res.filePaths && res.filePaths[0]) {
+                this.folderPath = res.filePaths[0];
+                this.folderName = this._basename(this.folderPath);
+                const pathEl = document.getElementById('onboard-folder-path');
+                if (pathEl) pathEl.textContent = this.folderPath;
+                const next = document.getElementById('onboard-folder-next');
+                if (next) next.disabled = false;
+            }
+        } catch (e) { console.warn('[Onboarding] pick folder failed', e); }
+    },
+    _basename(p) {
+        if (!p) return '';
+        return p.split(/[\\/]/).filter(Boolean).pop() || p;
+    },
+    _goTo(step) {
+        if (this._transLock) return;
+        this._transLock = true;
+        const overlay = document.getElementById('onboard-overlay');
+        const stages = overlay?.querySelectorAll('.onboard-step');
+        if (!stages) { this._transLock = false; return; }
+        const current = overlay.querySelector('.onboard-step.onboard-step-active');
+        const target = overlay.querySelector(`.onboard-step[data-step="${step}"]`);
+        if (!target) { this._transLock = false; return; }
+        if (current === target) { this._transLock = false; this._onEnterStep(step); return; }
+        if (current) {
+            current.classList.remove('onboard-step-active');
+            current.classList.add('onboard-step-leaving');
+            setTimeout(() => {
+                current.classList.remove('onboard-step-leaving');
+                target.classList.add('onboard-step-active');
+                this._transLock = false;
+                this._onEnterStep(step);
+            }, 320);
+        } else {
+            target.classList.add('onboard-step-active');
+            this._transLock = false;
+            this._onEnterStep(step);
+        }
+    },
+    _onEnterStep(step) {
+        this.currentStep = step;
+        this._stopTypewriter();
+        if (step === 'welcome') {
+            this._startWelcomeTypewriter();
+        } else if (step === 'role') {
+            this._setActiveMode('chat');
+        } else if (step === 'folder') {
+            const pathEl = document.getElementById('onboard-folder-path');
+            if (pathEl) pathEl.textContent = this.folderPath || '未选择文件夹';
+            const next = document.getElementById('onboard-folder-next');
+            if (next) next.disabled = !this.folderPath;
+        } else if (step === 'provider') {
+            this._renderProviders();
+        } else if (step === 'tutorial') {
+            this._renderTutorial();
+        } else if (step === 'apikey') {
+            this._focusApiKey();
+        }
+    },
+    _startWelcomeTypewriter() {
+        this.typewriterEl = document.getElementById('onboard-typewriter');
+        if (!this.typewriterEl) return;
+        this.typewriterText = '你好，欢迎来到 VersePC';
+        this.typewriterIdx = 0;
+        this.typewriterDone = false;
+        this.typewriterEl.textContent = '';
+        this._typewriterTick();
+    },
+    _typewriterTick() {
+        if (!this.typewriterEl) return;
+        if (this.typewriterIdx < this.typewriterText.length) {
+            this.typewriterIdx++;
+            this.typewriterEl.textContent = this.typewriterText.substring(0, this.typewriterIdx);
+            this.typewriterTimer = setTimeout(() => this._typewriterTick(), 80);
+        } else {
+            this.typewriterDone = true;
+        }
+    },
+    _stopTypewriter() {
+        if (this.typewriterTimer) {
+            clearTimeout(this.typewriterTimer);
+            this.typewriterTimer = null;
+        }
+    },
+    _renderProviders() {
+        const list = document.getElementById('onboard-provider-list');
+        if (!list) return;
+        const providers = [
+            { key: 'openai', name: 'OpenAI', desc: 'GPT-4o / GPT-4 / o1 等' },
+            { key: 'anthropic', name: 'Anthropic', desc: 'Claude 3.5 / Claude 3.7' },
+            { key: 'gemini', name: 'Google Gemini', desc: 'Gemini 1.5 / 2.0' },
+            { key: 'deepseek', name: 'DeepSeek', desc: 'DeepSeek-V3 / R1' },
+            { key: 'zhipu', name: '智谱 AI', desc: 'GLM-4-Flash / GLM-4-Plus' },
+            { key: 'moonshot', name: 'Moonshot', desc: 'Kimi / Moonshot-v1' },
+            { key: 'qwen', name: '阿里通义千问', desc: 'Qwen-Long / Qwen-Plus' },
+            { key: 'doubao', name: '字节豆包', desc: 'Doubao-Pro / Lite' },
+            { key: 'spark', name: '讯飞星火', desc: 'Spark v3.5 / v4.0' },
+            { key: 'hunyuan', name: '腾讯混元', desc: 'Hunyuan-Pro / Standard' },
+            { key: 'wenxin', name: '百度文心', desc: 'ERNIE 4.0 / 3.5' },
+            { key: 'custom', name: '自定义 / 第三方代理', desc: 'OpenAI 兼容协议（OneAPI 等）' }
+        ];
+        list.innerHTML = providers.map(p => `
+            <button class="onboard-provider-item" data-provider="${p.key}">
+                <div class="onboard-provider-icon">${p.name.charAt(0)}</div>
+                <div class="onboard-provider-text">
+                    <span class="onboard-provider-name">${p.name}</span>
+                    <span class="onboard-provider-desc">${p.desc}</span>
+                </div>
+            </button>
+        `).join('');
+        list.querySelectorAll('.onboard-provider-item').forEach(item => {
+            item.addEventListener('click', () => {
+                this.provider = item.dataset.provider;
+                this._goTo('tutorial');
+            });
+        });
+    },
+    async _renderTutorial() {
+        const card = document.getElementById('onboard-tutorial-card');
+        const textEl = document.getElementById('onboard-tutorial-text');
+        if (!card) return;
+        if (textEl) textEl.textContent = `注册与接入教程：${this._providerName(this.provider)}`;
+        card.innerHTML = '<div class="onboard-tutorial-loading">正在搜索接入教程...</div>';
+        const steps = await this._searchTutorial(this.provider);
+        card.innerHTML = steps.map(s => `
+            <div class="onboard-tutorial-step">
+                <span class="onboard-tutorial-step-num">步骤 ${s.num}</span>
+                <span class="onboard-tutorial-step-title">${s.title}</span>
+                <span class="onboard-tutorial-step-desc">${s.desc}</span>
+            </div>
+        `).join('');
+    },
+    _providerName(key) {
+        const map = {
+            openai: 'OpenAI', anthropic: 'Anthropic', gemini: 'Google Gemini',
+            deepseek: 'DeepSeek', zhipu: '智谱 AI', moonshot: 'Moonshot',
+            qwen: '阿里通义千问', doubao: '字节豆包', spark: '讯飞星火',
+            hunyuan: '腾讯混元', wenxin: '百度文心', custom: '自定义 / 第三方代理'
+        };
+        return map[key] || key;
+    },
+    async _searchTutorial(key) {
+        const map = {
+            openai: [
+                { num: 1, title: '访问 OpenAI 官网', desc: '前往 platform.openai.com 并注册账号（需要海外手机号或代理）。' },
+                { num: 2, title: '进入 API Keys 页面', desc: '在左侧菜单点击 "API keys" → "Create new secret key"，输入名称并创建。' },
+                { num: 3, title: '复制 API Key', desc: '创建后立即复制 sk- 开头的密钥（仅显示一次），妥善保存。' },
+                { num: 4, title: '充值 API 额度', desc: '在 Billing 页面绑定信用卡或使用 Apple/Google Pay 充值。' },
+                { num: 5, title: '回到 VersePC 粘贴密钥', desc: '点击下方"我已知晓"，填入 API Key 与模型（如 gpt-4o）即可。' }
+            ],
+            anthropic: [
+                { num: 1, title: '访问 Anthropic 控制台', desc: '前往 console.anthropic.com，使用 Google 账号或邮箱注册。' },
+                { num: 2, title: '申请 API 访问', desc: '在 Plans & Billing 中选择 Build with API 套餐并完成支付。' },
+                { num: 3, title: '生成 API Key', desc: '进入 Settings → API Keys → Create Key，复制 sk-ant- 开头的密钥。' },
+                { num: 4, title: '回到 VersePC 配置', desc: '填入 API Key 与模型（如 claude-3-5-sonnet-20241022）。' }
+            ],
+            gemini: [
+                { num: 1, title: '访问 Google AI Studio', desc: '前往 aistudio.google.com，使用 Google 账号登录。' },
+                { num: 2, title: '生成 API Key', desc: '点击 "Get API key" → "Create API key"，选择或新建项目。' },
+                { num: 3, title: '复制密钥', desc: '复制 AIzaSy 开头的 API Key。' },
+                { num: 4, title: '填入 VersePC', desc: '模型可填 gemini-1.5-pro 或 gemini-2.0-flash-exp。' }
+            ],
+            deepseek: [
+                { num: 1, title: '访问 DeepSeek 开放平台', desc: '前往 platform.deepseek.com，使用手机号或邮箱注册。' },
+                { num: 2, title: '创建 API Key', desc: '进入 API Keys 页面，点击 "创建新密钥"，复制 sk- 开头的密钥。' },
+                { num: 3, title: '充值余额', desc: '在账户管理 → 余额 中充值（支持微信 / 支付宝）。' },
+                { num: 4, title: '填入 VersePC', desc: '模型可填 deepseek-chat 或 deepseek-reasoner。' }
+            ],
+            zhipu: [
+                { num: 1, title: '访问智谱 AI 开放平台', desc: '前往 bigmodel.cn，使用手机号注册并完成实名。' },
+                { num: 2, title: '进入 API Keys', desc: '在个人中心 → API Keys 中创建新的密钥。' },
+                { num: 3, title: '复制密钥', desc: '复制生成的密钥（一般以 4 位字母数字开头）。' },
+                { num: 4, title: '填入 VersePC', desc: '模型可填 glm-4-flash（免费）或 glm-4-plus。' }
+            ],
+            moonshot: [
+                { num: 1, title: '访问 Moonshot 开放平台', desc: '前往 platform.moonshot.cn，使用手机号注册。' },
+                { num: 2, title: '充值与创建 Key', desc: '在账户中心充值后，进入 API Keys 创建密钥。' },
+                { num: 3, title: '复制并填入', desc: '复制 sk- 开头的密钥，模型可填 moonshot-v1-8k / 32k / 128k。' }
+            ],
+            qwen: [
+                { num: 1, title: '访问阿里云百炼', desc: '前往 bailian.console.aliyun.com，使用阿里云账号登录。' },
+                { num: 2, title: '开通模型服务', desc: '在模型广场申请 Qwen 模型的 API 访问。' },
+                { num: 3, title: '创建 API Key', desc: '在 API-Key 管理 中创建并复制 Key。' },
+                { num: 4, title: '填入 VersePC', desc: '模型可填 qwen-plus / qwen-long / qwen-turbo。' }
+            ],
+            doubao: [
+                { num: 1, title: '访问火山引擎', desc: '前往 volcengine.com，注册并完成实名认证。' },
+                { num: 2, title: '开通豆包大模型', desc: '在控制台开通 "豆包大模型" 服务。' },
+                { num: 3, title: '创建 API Key', desc: '在 访问凭证 → API 访问密钥 中创建 Key。' },
+                { num: 4, title: '填入 VersePC', desc: '模型可填 doubao-pro-32k / doubao-lite-32k。' }
+            ],
+            spark: [
+                { num: 1, title: '访问讯飞开放平台', desc: '前往 console.xfyun.cn，注册并完成实名。' },
+                { num: 2, title: '创建应用', desc: '在 我的应用 中创建一个新应用，添加 "Spark v3.5/4.0" 接口。' },
+                { num: 3, title: '获取 API Key & Secret', desc: '在应用详情页获取 APIKey 和 APISecret。' },
+                { num: 4, title: '填入 VersePC', desc: '将 APIPassword 形式的合并密钥填入，模型可填 spark-v3.5。' }
+            ],
+            hunyuan: [
+                { num: 1, title: '访问腾讯混元大模型', desc: '前往 cloud.tencent.com/product/hunyuan，注册并实名。' },
+                { num: 2, title: '开通服务', desc: '在控制台开通混元大模型 API。' },
+                { num: 3, title: '创建 API Key', desc: '在 访问管理 → API 密钥管理 中创建 SecretId / SecretKey。' },
+                { num: 4, title: '填入 VersePC', desc: '填入 SecretId 与 SecretKey 组合密钥，模型可填 hunyuan-pro。' }
+            ],
+            wenxin: [
+                { num: 1, title: '访问百度智能云', desc: '前往 cloud.baidu.com，注册并完成实名认证。' },
+                { num: 2, title: '开通文心一言', desc: '在产品列表中找到 "文心一言"，开通付费或免费额度。' },
+                { num: 3, title: '创建 API Key', desc: '在千帆大模型 → API Key 中创建密钥。' },
+                { num: 4, title: '填入 VersePC', desc: '模型可填 ernie-4.0-8k / ernie-3.5-8k。' }
+            ],
+            custom: [
+                { num: 1, title: '选择代理服务', desc: '推荐使用 OneAPI / NewAPI / API2D 等 OpenAI 兼容中转。' },
+                { num: 2, title: '获取 Base URL', desc: '从代理服务获取形如 https://api.xxx.com/v1 的端点。' },
+                { num: 3, title: '创建 API Key', desc: '在代理服务中创建并复制 sk- 开头的密钥。' },
+                { num: 4, title: '回到 VersePC', desc: '点击下一步进入自定义模式填入 Base URL / Key / Model。' }
+            ]
+        };
+        return map[key] || [{ num: 1, title: '搜索 ' + this._providerName(key) + ' 教程', desc: '请前往搜索引擎搜索 "' + this._providerName(key) + ' API 接入教程"。' }];
+    },
+    _focusApiKey() {
+        setTimeout(() => {
+            const input = document.getElementById('onboard-apikey-input');
+            if (input) input.focus();
+        }, 360);
+    },
+    async _submitApiKey() {
+        const key = document.getElementById('onboard-apikey-input')?.value.trim();
+        const model = document.getElementById('onboard-model-input')?.value.trim();
+        const status = document.getElementById('onboard-apikey-status');
+        if (!key) {
+            if (status) { status.textContent = '请输入 API Key'; status.className = 'onboard-apikey-status error'; }
+            return;
+        }
+        if (!model) {
+            if (status) { status.textContent = '请输入模型 ID'; status.className = 'onboard-apikey-status error'; }
+            return;
+        }
+        try {
+            if (this.provider === 'custom') {
+                AIChat._customProvider = { baseUrl: '', apiKey: key, modelId: model, modelName: model, apiFormat: 'openai' };
+                await window.electronAPI.store.set('versepc_ai_custom_provider', JSON.stringify(AIChat._customProvider));
+            } else {
+                await window.electronAPI.store.set('versepc_ai_api_key', key);
+                AIChat.apiKey = key;
+            }
+            await window.electronAPI.store.set('versepc_ai_model', model);
+            AIChat.model = model;
+            this._persist();
+            if (status) { status.textContent = '已保存，正在进入新对话...'; status.className = 'onboard-apikey-status ok'; }
+            setTimeout(() => this._finish(), 600);
+        } catch (e) {
+            if (status) { status.textContent = '保存失败：' + e.message; status.className = 'onboard-apikey-status error'; }
+        }
+    },
+    async _finish() {
+        this._hide();
+        if (window.OnboardingUI) window.OnboardingUI._applyMode(this.role);
+        try { await AIChat.newChat(); } catch (e) { console.warn(e); }
+    },
+    _hide() {
+        const overlay = document.getElementById('onboard-overlay');
+        if (overlay) overlay.style.display = 'none';
+    },
+    _persist() {
+        try {
+            localStorage.setItem('versepc_onboard_role', this.role || '');
+            localStorage.setItem('versepc_onboard_folder', this.folderPath || '');
+            localStorage.setItem('versepc_onboard_done', '1');
+        } catch (e) {}
+    },
+    _restore() {
+        try {
+            this.role = localStorage.getItem('versepc_onboard_role') || null;
+            this.folderPath = localStorage.getItem('versepc_onboard_folder') || null;
+            this.folderName = this._basename(this.folderPath);
+            const done = localStorage.getItem('versepc_onboard_done') === '1';
+            return done;
+        } catch (e) { return false; }
+    },
+    async start(force) {
+        this.init();
+        const done = this._restore();
+        // 测试中：每次都显示
+        if (!force && done) return;
+        const overlay = document.getElementById('onboard-overlay');
+        if (overlay) {
+            overlay.style.display = 'flex';
+            this._goTo('welcome');
+        }
+    },
+    reset() {
+        try {
+            localStorage.removeItem('versepc_onboard_role');
+            localStorage.removeItem('versepc_onboard_folder');
+            localStorage.removeItem('versepc_onboard_done');
+        } catch (e) {}
+        this.role = null;
+        this.folderPath = null;
+        this.folderName = null;
+        this.provider = null;
+        this.currentStep = 'welcome';
+        document.querySelectorAll('.onboard-step').forEach(el => { el.classList.remove('onboard-step-active', 'onboard-step-leaving'); });
+        const overlay = document.getElementById('onboard-overlay');
+        if (overlay) overlay.style.display = 'flex';
+        this._goTo('welcome');
+    }
+};
+
+const OnboardingUI = {
+    init() {
+        // Restore previous state on page load
+        Onboarding._restore();
+        if (Onboarding.role) this._applyMode(Onboarding.role, true);
+    },
+    _applyMode(role, silent) {
+        if (!role) return;
+        AIChat._role = role;
+        const mode = role === 'gamer' ? 'chat' : 'dev';
+        Onboarding._setActiveMode(mode);
+        if (role === 'gamer') {
+            Onboarding._hideFolderBar();
+        } else {
+            Onboarding._showFolderBar();
+        }
+        if (!silent && typeof showToast === 'function') {
+            showToast(role === 'gamer' ? '当前为对话模式（项目文件夹已隐藏）' : '当前为开发者模式', 'info');
+        }
+    }
+};
+
+function startOnboarding(force) { Onboarding.start(force); }
+function resetOnboarding() { Onboarding.reset(); }
 
 let _editorPanelOpen = false;
 let _fileExplorerVisible = false;
