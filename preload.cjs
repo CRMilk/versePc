@@ -168,6 +168,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
         selectVersionResponse: (selId, selected) => {
             ipcRenderer.send('ai:select-version-response', { selId, selected });
         },
+        onAddDownloadTask: (callback) => {
+            const wrapper = (event, data) => callback(data);
+            ipcRenderer.on('ai:add-download-task', wrapper);
+            return () => ipcRenderer.removeListener('ai:add-download-task', wrapper);
+        },
         // SSE 模式 - 绕过 IPC 序列化瓶颈
         chatStreamSSE: async (params, onChunk, onDone, onError) => {
             const SSE_PORT = await getSSEPort();

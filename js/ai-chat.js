@@ -46,6 +46,8 @@ const TOOL_DISPLAY_NAMES = {
     explore_environment: '探索环境', search_mods: '搜索模组',
     get_installed_mods: '获取已安装模组', install_mod: '安装模组',
     toggle_mod: '切换模组', execute_command: '执行命令',
+    add_download_task: '添加下载任务', get_download_status: '查询下载进度',
+    search_modpacks: '搜索整合包', install_modpack: '安装整合包',
     sub_agent_dispatch: '派遣子代理', write_file: '写入文件',
     write_to_file: '写入文件', edit_file: '编辑文件',
     search_replace: '搜索替换',
@@ -199,6 +201,13 @@ const AIChat = {
             });
         }
 
+        if (window.electronAPI?.ai?.onAddDownloadTask && !this._onAddDlTaskRegistered) {
+            this._onAddDlTaskRegistered = true;
+            window.electronAPI.ai.onAddDownloadTask((data) => {
+                this._handleAIAddDownloadTask(data);
+            });
+        }
+
         this._recentFiles = new Set();
         this._referencedFiles = [];
         this._atMentionActive = false;
@@ -304,14 +313,22 @@ const AIChat = {
     },
 
     newChat() {
-        const conv = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: '新对话', messages: [], createdAt: Date.now(), folderPath: this._currentFolderPath || null };
-        this.conversations.unshift(conv);
-        this.currentId = conv.id;
-        this._todos = [];
-        this.updateTodoBar();
-        this.renderSidebar();
-        this.showWelcome();
-        this.saveConversations();
+        const existing = this.getConv(this.currentId);
+        if (existing && existing.messages.length === 0 && existing.title === '新对话') {
+            this._todos = [];
+            this.updateTodoBar();
+            this.showWelcome();
+            this.renderSidebar();
+        } else {
+            const conv = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: '新对话', messages: [], createdAt: Date.now(), folderPath: this._currentFolderPath || null };
+            this.conversations.unshift(conv);
+            this.currentId = conv.id;
+            this._todos = [];
+            this.updateTodoBar();
+            this.renderSidebar();
+            this.showWelcome();
+            this.saveConversations();
+        }
         const sidebar = document.getElementById('ai-chat-sidebar');
         if (sidebar && sidebar.classList.contains('open')) {
             sidebar.classList.remove('open');
@@ -2099,6 +2116,32 @@ const AIChat = {
         }
     },
 
+    _handleAIAddDownloadTask(data) {
+        const { sessionId, taskType, taskName, iconUrl } = data;
+        if (typeof dlManager !== 'undefined' && dlManager && dlManager.add) {
+            dlManager.add(sessionId, taskName || ('下载 ' + taskType), taskType, sessionId, iconUrl || '');
+        }
+        const pollFn = async () => {
+            try {
+                const statusApi = taskType === 'version' ? '/api/install/progress' : '/api/mods/download-status';
+                const resp = await fetch(statusApi + '?sessionId=' + encodeURIComponent(sessionId));
+                if (!resp.ok) return;
+                const st = await resp.json();
+                if (typeof dlManager !== 'undefined' && dlManager && dlManager.update) {
+                    const dlStatus = st.status === 'completed' ? 'completed' : st.status === 'failed' ? 'failed' : 'downloading';
+                    dlManager.update(sessionId, {
+                        progress: st.progress || 0,
+                        status: dlStatus,
+                        message: st.message || st.currentFile || '下载中...'
+                    });
+                }
+                if (st.status === 'completed' || st.status === 'failed') return;
+                setTimeout(pollFn, 800);
+            } catch (e) { setTimeout(pollFn, 2000); }
+        };
+        setTimeout(pollFn, 500);
+    },
+
     _openFileInEditor(filePath) {
         if (!filePath) return;
         const editorFrame = document.getElementById('editor-iframe');
@@ -2599,14 +2642,23 @@ Analyze intent before acting:
 
 ## Environment
 - OS: ${navigator.platform || 'Windows'}
-- Tools: bash, str_replace_based_edit_tool, json_edit_tool, sequential_thinking, attempt_completion, ckg, update_todo_list, sub_agent_dispatch, get_versions, get_current_context, select_version, explore_environment, search_mods, get_installed_mods, install_mod, toggle_mod
+- Tools: bash, str_replace_based_edit_tool, json_edit_tool, sequential_thinking, attempt_completion, ckg, update_todo_list, sub_agent_dispatch, get_versions, get_current_context, select_version, explore_environment, search_mods, get_installed_mods, install_mod, toggle_mod, add_download_task, get_download_status, search_modpacks, install_modpack
 - IMPORTANT: When you need to search files, analyze code, search resources, or analyze crash logs, you MUST call sub_agent_dispatch tool. Do NOT describe these actions in text - actually call the tool.
 - Versions dir: ~/.versepc/versions/
 - Mods dir: ~/.versepc/mods (shared) or ~/.versepc/versions/{id}/mods (per-version)
+- Resourcepacks dir: ~/.versepc/versions/{id}/resourcepacks/ (版本隔离) or ~/.versepc/resourcepacks/
+- Shaderpacks dir: ~/.versepc/versions/{id}/shaderpacks/ (版本隔离) or ~/.versepc/shaderpacks/
 - Always call get_versions(installedOnly:true) when working with versions
 - Use get_current_context to see current selected version
 - When user asks to install/change/select a version, use select_version tool to show a version selection card. The user will pick one from the card, then you continue with their choice.
 - NEVER assume which version the user wants. Always use select_version to let them choose.
+- **资源安装流程**: 当用户要求安装模组/光影包/资源包/材质包时，遵循以下步骤:
+  1. 搜索资源 (search_mods 或 web_search)
+  2. 调用 select_version 让用户选择目标版本
+  3. 用 add_download_task 将下载任务添加到下载管理页面（传入 targetVersionId 为用户选择的版本）
+  4. 用 get_download_status 查询进度并告知用户
+  taskType 映射: mod=模组, shader=光影包, resourcepack=资源包, texturepack=材质包, modpack=整合包, version=游戏版本
+- **下载任务由下载管理页面处理，AI页面不会显示下载进度条**
 
 ## Tool Guidelines
 1. Only call tools for actual system actions — never to "verify" known info.

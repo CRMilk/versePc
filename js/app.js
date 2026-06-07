@@ -1390,7 +1390,9 @@ function setupAccountButtons() {
     if (createOfflineBtn) createOfflineBtn.addEventListener('click', async () => {
         const offlineUsernameInput = document.getElementById('offline-username-input');
         const username = offlineUsernameInput ? offlineUsernameInput.value.trim() : '';
-        if (!username) { showToast('请输入用户名', 'error'); return; }
+        if (!username) { showToast('请输入玩家 ID', 'error'); return; }
+        if (username.length < 3 || username.length > 16) { showToast('玩家 ID 长度需为 3 - 16 位', 'error'); return; }
+        if (!/^[A-Za-z0-9_]+$/.test(username)) { showToast('玩家 ID 只能包含英文字母、数字与下划线', 'error'); return; }
         try {
             const result = await API.addOfflineAccount(username);
             if (result.success) {
@@ -2174,7 +2176,12 @@ function navigateToPage(pageName) {
     } else if (pageName === 'downloads') {
         dlManager.render();
     } else if (pageName === 'explore') {
-        // 进入实验性页面：显示首次使用引导（测试中：每次都显示）
+        if (!localStorage.getItem('experimental_disclaimer_accepted')) {
+            document.getElementById('page-explore').classList.remove('active');
+            document.getElementById('experimental-disclaimer-modal').style.display = 'flex';
+            document.querySelector('[data-page="explore"]').classList.add('active');
+            return;
+        }
         if (typeof Onboarding !== 'undefined') {
             setTimeout(() => {
                 Onboarding.init();
@@ -2182,6 +2189,19 @@ function navigateToPage(pageName) {
                 Onboarding.start(true);
             }, 50);
         }
+    }
+}
+
+function acceptExperimentalDisclaimer() {
+    localStorage.setItem('experimental_disclaimer_accepted', '1');
+    document.getElementById('experimental-disclaimer-modal').style.display = 'none';
+    document.getElementById('page-explore').classList.add('active');
+    if (typeof Onboarding !== 'undefined') {
+        setTimeout(() => {
+            Onboarding.init();
+            OnboardingUI.init();
+            Onboarding.start(true);
+        }, 50);
     }
 }
 
@@ -3578,8 +3598,8 @@ async function showModInstallConfirm(projectId, source, versionId, fileId) {
         }
         localStorage.setItem('lastModSavePath', savePath);
 
-        const currentGameVersion = document.getElementById('mod-filter-version')?.value || '';
-        const currentLoader = document.getElementById('mod-filter-loader')?.value || '';
+        const currentGameVersion = getCustomSelectValue('mod-filter-version') || '';
+        const currentLoader = getCustomSelectValue('mod-filter-loader') || '';
 
         if (versionId) {
             showToast('正在检查前置依赖...', 'info');
@@ -3651,8 +3671,8 @@ function showDependencyDialog(projectId, source, versionId, fileId, savePath, de
 async function proceedModInstall(projectId, source, versionId, fileId, savePath, includeDeps, deps, gameVersion, loader) {
     showToast('正在安装模组...', 'info');
     try {
-        const currentGameVersion = gameVersion || document.getElementById('mod-filter-version')?.value || '';
-        const currentLoader = loader || document.getElementById('mod-filter-loader')?.value || '';
+        const currentGameVersion = gameVersion || getCustomSelectValue('mod-filter-version') || '';
+        const currentLoader = loader || getCustomSelectValue('mod-filter-loader') || '';
         const result = await API.downloadModVersion(versionId || '', projectId, source, fileId || '', currentGameVersion, currentLoader, savePath, includeDeps);
         if (result.success) {
             showModDownloadModal(result.fileName, result.sessionId, savePath);
@@ -3689,8 +3709,8 @@ function openModSourceUrl() {
 async function quickInstallMod(projectId, source, versionId, fileId) {
     showToast('正在安装模组...', 'info');
     try {
-        const currentGameVersion = document.getElementById('mod-filter-version')?.value || '';
-        const currentLoader = document.getElementById('mod-filter-loader')?.value || '';
+        const currentGameVersion = getCustomSelectValue('mod-filter-version') || '';
+        const currentLoader = getCustomSelectValue('mod-filter-loader') || '';
         const result = await API.downloadModVersion(versionId || '', projectId, source, fileId || '', currentGameVersion, currentLoader);
         if (result.success) {
             showModDownloadModal(result.fileName, result.sessionId);
@@ -3757,8 +3777,8 @@ function toggleModMultiSelect() {
         modSelectedIds.clear();
         modSelectedVersions.clear();
         
-        const gv = document.getElementById('mod-filter-version')?.value || '';
-        const ld = document.getElementById('mod-filter-loader')?.value || '';
+        const gv = getCustomSelectValue('mod-filter-version') || '';
+        const ld = getCustomSelectValue('mod-filter-loader') || '';
         let hintParts = [];
         if (gv) hintParts.push(gv);
         if (ld) hintParts.push(ld.charAt(0).toUpperCase() + ld.slice(1));
@@ -4650,6 +4670,36 @@ async function deleteMod(modId) {
     } catch (e) { showToast('删除失败', 'error'); }
 }
 
+function _refreshAccountAvatars() {
+    const ts = Date.now();
+    document.querySelectorAll('.account-avatar-img').forEach(img => {
+        const src = img.src;
+        if (src && src.includes('/api/avatar')) {
+            img.src = src.replace(/&_=\d+/, '') + '&_=' + ts;
+        }
+    });
+    try {
+        const selectedId = localStorage.getItem('versepc_selected_account');
+        if (selectedId) {
+            API.getAccounts().then(accounts => {
+                const selected = accounts.find(a => a.id === selectedId);
+                if (selected) {
+                    const accUuid = (selected.uuid || '').replace(/-/g, '');
+                    if (accUuid) {
+                        const serverParam = selected.serverUrl ? `&serverUrl=${encodeURIComponent(selected.serverUrl)}` : '';
+                        const usernameParam = selected.username ? `&username=${encodeURIComponent(selected.username)}` : '';
+                        const offlineParam = (selected.type === 'offline' && !selected.serverUrl) ? '&offline=1' : '';
+                        const newUrl = `/api/avatar?uuid=${accUuid}${serverParam}${usernameParam}${offlineParam}&_=${ts}`;
+                        const homeAvatar = document.getElementById('home-avatar-img');
+                        if (homeAvatar) homeAvatar.src = newUrl;
+                        try { localStorage.setItem('cachedAvatarUrl', newUrl); } catch(e) {}
+                    }
+                }
+            }).catch(() => {});
+        }
+    } catch (e) {}
+}
+
 async function loadAccounts() {
     try {
         const [accounts, settings] = await Promise.all([
@@ -4670,7 +4720,8 @@ async function loadAccounts() {
                 if (accUuid) {
                     const serverParam = acc.serverUrl ? `&serverUrl=${encodeURIComponent(acc.serverUrl)}` : '';
                     const usernameParam = acc.username ? `&username=${encodeURIComponent(acc.username)}` : '';
-                    skinUrl = `/api/avatar?uuid=${accUuid}${serverParam}${usernameParam}`;
+                    const offlineParam = (acc.type === 'offline' && !acc.serverUrl) ? '&offline=1' : '';
+                    skinUrl = `/api/avatar?uuid=${accUuid}${serverParam}${usernameParam}${offlineParam}`;
                 }
                 const avatarHtml = skinUrl
                     ? `<img src="${skinUrl}" alt="" class="account-avatar-img">`
@@ -4882,6 +4933,7 @@ async function detailRefreshSkin() {
     const skinUrl = `/api/skin-texture?uuid=${accUuid}${acc.serverUrl ? '&serverUrl=' + encodeURIComponent(acc.serverUrl) : ''}${acc.username ? '&username=' + encodeURIComponent(acc.username) : ''}&_=${Date.now()}`;
     try {
         await _skinViewer.loadSkin(skinUrl);
+        _refreshAccountAvatars();
         showToast('皮肤已刷新', 'success');
     } catch (e) {
         showToast('皮肤刷新失败', 'error');
@@ -4999,6 +5051,7 @@ async function selectSkin(skinId, skinFile) {
             const skinUrl = `/api/skin-texture?uuid=${accUuid}&_=${Date.now()}`;
             if (_skinViewer) await _skinViewer.loadSkin(skinUrl);
             loadSkinSelector(_currentDetailAccount);
+            _refreshAccountAvatars();
             return;
         }
         const resp = await fetch('/api/set-account-skin', {
@@ -5015,6 +5068,7 @@ async function selectSkin(skinId, skinFile) {
             await _skinViewer.loadSkin(skinUrl);
         }
         loadSkinSelector(_currentDetailAccount);
+        _refreshAccountAvatars();
         showToast('皮肤已更换', 'success');
     } catch (e) {
         showToast('更换失败', 'error');
@@ -5043,6 +5097,7 @@ async function handleSkinUpload(input) {
             const skinUrl = `/api/skin-texture?uuid=${accUuid}&_=${Date.now()}`;
             if (_skinViewer) await _skinViewer.loadSkin(skinUrl);
             loadSkinSelector(_currentDetailAccount);
+            _refreshAccountAvatars();
             showToast('皮肤已导入', 'success');
         } else {
             showToast(result.error || '上传失败', 'error');
@@ -6996,8 +7051,8 @@ async function openResourceDetail(projectId, type) {
         mdAllVersions = data.versions || [];
         if (!Array.isArray(mdAllVersions)) mdAllVersions = [];
 
-        const currentGameVersion = document.getElementById('mod-filter-version')?.value || '';
-        const currentLoader = document.getElementById('mod-filter-loader')?.value || '';
+        const currentGameVersion = getCustomSelectValue('mod-filter-version') || '';
+        const currentLoader = getCustomSelectValue('mod-filter-loader') || '';
 
         if (currentGameVersion || currentLoader) {
             const filtered = mdAllVersions.filter(v => {
@@ -8581,6 +8636,22 @@ async function loadPersonalizeSettings() {
 }
 
 // ─── 其他设置函数 ──────────────────────────────────────────
+
+async function copyFeedbackEmail(btn) {
+    const email = 'doujie2978166201@163.com';
+    try {
+        if (window.electronAPI?.clipboard) {
+            await window.electronAPI.clipboard.writeText(email);
+        } else {
+            await navigator.clipboard.writeText(email);
+        }
+        btn.textContent = '已复制';
+        setTimeout(() => { btn.textContent = '复制'; }, 2000);
+        showToast('邮箱已复制到剪贴板', 'success');
+    } catch (e) {
+        showToast('复制失败，请手动复制', 'error');
+    }
+}
 
 function toggleDebugOptions() {
     const content = document.getElementById('debug-options-content');

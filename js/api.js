@@ -222,6 +222,7 @@ async function apiDelete(path, data = {}) {
 const API = {
     // === 系统信息 ===
     getSystemMemory: () => apiGet('/api/system/memory'),
+    memoryOptimize: () => window.electronAPI?.memoryOptimize?.() || Promise.reject(new Error('electronAPI.memoryOptimize not available')),
 
     // === 游戏版本管理 ===
     getVersions: (refresh = false) => apiGet('/api/versions', { refresh: refresh ? 'true' : '' }),

@@ -127,6 +127,70 @@
                                              }
                                          ]
                           },
+                  "mac":  {
+                              "target":  [
+                                             {
+                                                 "target":  "dmg",
+                                                 "arch":  [
+                                                              "x64",
+                                                              "arm64"
+                                                          ]
+                                             },
+                                             {
+                                                 "target":  "zip",
+                                                 "arch":  [
+                                                              "x64",
+                                                              "arm64"
+                                                          ]
+                                             }
+                                         ],
+                              "icon":  "img/icon.png",
+                              "category":  "public.app-category.games",
+                              "artifactName":  "VersePC-${version}-${arch}.${ext}"
+                          },
+                  "dmg":  {
+                              "artifactName":  "VersePC-${version}-${arch}.dmg",
+                              "contents":  [
+                                               {
+                                                   "x":  130,
+                                                   "y":  220
+                                               },
+                                               {
+                                                   "x":  410,
+                                                   "y":  220,
+                                                   "type":  "link",
+                                                   "path":  "/Applications"
+                                               }
+                                           ]
+                          },
+                  "linux":  {
+                                "target":  [
+                                               {
+                                                   "target":  "AppImage",
+                                                   "arch":  [
+                                                                "x64"
+                                                            ]
+                                               },
+                                               {
+                                                   "target":  "deb",
+                                                   "arch":  [
+                                                                "x64"
+                                                            ]
+                                               },
+                                               {
+                                                   "target":  "rpm",
+                                                   "arch":  [
+                                                                "x64"
+                                                            ]
+                                               }
+                                           ],
+                                "icon":  "img/icon.png",
+                                "category":  "Game",
+                                "artifactName":  "VersePC-${version}-${arch}.${ext}",
+                                "desktop":  {
+                                                "entry":  "Name=VersePC\nComment=VersePC - Minecraft Launcher\nCategories=Game;"
+                                            }
+                            },
                   "portable":  {
                                    "artifactName":  "VersePC-${version}.exe",
                                    "requestExecutionLevel":  "user"

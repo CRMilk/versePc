@@ -2132,8 +2132,9 @@
                             </div>
                             <div class="modal-body">
                                 <div class="form-group">
-                                    <label>用户名</label>
-                                    <input type="text" id="offline-username-input" class="text-input" placeholder="输入用户名" maxlength="16">
+                                    <label>玩家 ID</label>
+                                    <input type="text" id="offline-username-input" class="text-input" placeholder="3 - 16 位，只可包含英文字母、数字与下划线" maxlength="16">
+                                    <div class="form-hint" style="font-size:12px;color:var(--text-secondary);margin-top:4px;">UUID 将按照行业规范自动生成（与 HMCL、BakaXL 等一致）</div>
                                 </div>
                             </div>
                             <div class="modal-footer">
@@ -2194,6 +2195,28 @@
                             <div class="modal-body">
                                 <p style="color:var(--text-secondary);margin-bottom:16px;font-size:13px;">该账户有多个角色，请选择要使用的角色：</p>
                                 <div id="tp-profile-list" class="profile-select-list"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="experimental-disclaimer-modal" class="modal" style="display:none">
+                        <div class="modal-content" style="max-width:440px;">
+                            <div class="modal-header">
+                                <h3>⚠️ 实验性内容声明</h3>
+                            </div>
+                            <div class="modal-body">
+                                <p style="color:var(--text-secondary);line-height:1.7;font-size:13px;">
+                                    实验性页面中的功能尚处于<strong>开发测试阶段</strong>，无法保证可以正常使用。
+                                </p>
+                                <p style="color:var(--text-secondary);line-height:1.7;font-size:13px;margin-top:8px;">
+                                    若使用过程中出现问题（包括但不限于数据异常、启动失败、功能不可用等），<strong>开发团队概不负责</strong>。
+                                </p>
+                                <p style="color:var(--text-secondary);line-height:1.7;font-size:13px;margin-top:8px;">
+                                    继续使用即表示您已知晓并接受上述风险。
+                                </p>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-primary" onclick="acceptExperimentalDisclaimer()">已知晓</button>
                             </div>
                         </div>
                     </div>
@@ -2706,35 +2729,6 @@
 
                         <div class="card">
                             <h3>背景</h3>
-                            <div class="form-group">
-                                <label>选择背景风格</label>
-                                <div class="wallpaper-picker-grid">
-                                    <div class="wallpaper-option" data-wallpaper="panorama" onclick="selectWallpaper(this)">
-                                        <div class="wallpaper-preview" id="wp-preview-panorama">
-                                            <div class="wp-preview-icon">◎</div>
-                                        </div>
-                                        <span class="wallpaper-name">MC全景</span>
-                                    </div>
-                                    <div class="wallpaper-option active" data-wallpaper="none" onclick="selectWallpaper(this)">
-                                        <div class="wallpaper-preview" id="wp-preview-none">
-                                            <div class="wp-preview-icon">◻</div>
-                                        </div>
-                                        <span class="wallpaper-name">无背景</span>
-                                    </div>
-                                    <div class="wallpaper-option" data-wallpaper="customImage" onclick="selectWallpaper(this)">
-                                        <div class="wallpaper-preview" id="wp-preview-custom-image">
-                                            <div class="wp-preview-icon">🖼</div>
-                                        </div>
-                                        <span class="wallpaper-name">自定义图片</span>
-                                    </div>
-                                    <div class="wallpaper-option" data-wallpaper="customVideo" onclick="selectWallpaper(this)">
-                                        <div class="wallpaper-preview" id="wp-preview-custom-video">
-                                            <div class="wp-preview-icon">🎬</div>
-                                        </div>
-                                        <span class="wallpaper-name">自定义视频</span>
-                                    </div>
-                                </div>
-                            </div>
                             <div class="form-group" id="custom-wallpaper-file-group" style="display:none;">
                                 <label id="custom-wallpaper-file-label">选择文件</label>
                                 <div class="custom-wallpaper-file-row">
@@ -3042,6 +3036,18 @@
                                     </svg>
                                     安装并重启
                                 </button>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <h3>反馈</h3>
+                            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">如果你遇到了问题或有建议，欢迎通过邮件反馈</p>
+                            <div class="form-group">
+                                <label>反馈邮箱</label>
+                                <div class="input-with-btn">
+                                    <input type="text" class="text-input" value="doujie2978166201@163.com" readonly>
+                                    <button class="btn btn-primary btn-sm" onclick="copyFeedbackEmail(this)">复制</button>
+                                </div>
                             </div>
                         </div>
 

@@ -153,10 +153,32 @@ const VERSIONS_DIR = path.join(DATA_DIR, 'versions');
 const LIBRARIES_DIR = path.join(DATA_DIR, 'libraries');
 const ASSETS_DIR = path.join(DATA_DIR, 'assets');
 const MODS_DIR = path.join(DATA_DIR, 'mods');
-const JAVA_DIR = path.join(DATA_DIR, 'java');
 const NATIVES_DIR = path.join(DATA_DIR, 'natives');
 const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+
+function hasNonASCII(str) {
+    for (let i = 0; i < str.length; i++) {
+        if (str.charCodeAt(i) > 127) return true;
+    }
+    return false;
+}
+
+function getSafeJavaDir() {
+    const defaultDir = path.join(DATA_DIR, 'java');
+    if (!hasNonASCII(defaultDir)) return defaultDir;
+    const candidates = [
+        path.join(process.env.ProgramData || 'C:\\ProgramData', 'VersePC', 'java'),
+        path.join('C:\\VersePC', 'java'),
+        path.join(process.env.ALLUSERSPROFILE || 'C:\\ProgramData', 'VersePC', 'java')
+    ];
+    for (const dir of candidates) {
+        if (!hasNonASCII(dir)) return dir;
+    }
+    return defaultDir;
+}
+
+const JAVA_DIR = getSafeJavaDir();
 const LOGS_DIR = path.join(DATA_DIR, 'logs');
 const ICON_CACHE_DIR = path.join(DATA_DIR, 'cache', 'mod-icons');
 
@@ -164,9 +186,9 @@ const MOJANG_API = 'https://piston-meta.mojang.com';
 const VERSION_MANIFEST_URL = `${MOJANG_API}/mc/game/version_manifest_v2.json`;
 const VERSION_MANIFEST_MIRROR = 'https://bmclapi2.bangbang93.com/mc/game/version_manifest_v2.json';
 const MODRINTH_API = 'https://api.modrinth.com/v2';
-const MODRINTH_API_MIRROR = 'https://mod.mcimirror.top/modrinth';
+const MODRINTH_API_MIRROR = 'https://mod.mcimirror.top/modrinth/v2';
 const CURSEFORGE_API = 'https://api.curseforge.com/v1';
-const CURSEFORGE_API_MIRROR = 'https://mod.mcimirror.top/curseforge';
+const CURSEFORGE_API_MIRROR = 'https://mod.mcimirror.top/curseforge/v1';
 const JAVA_RUNTIME_URL = 'https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json';
 const FABRIC_META_URL = 'https://meta.fabricmc.net/v2';
 const FORGE_MAVEN_URL = 'https://maven.minecraftforge.net/net/minecraftforge/forge';
@@ -7338,6 +7360,116 @@ function hasGarbageCollectorArg(args) {
     return args.some(arg => gcPatterns.some(pattern => pattern.test(arg)));
 }
 
+const SKIN_BACKUP_DIR = path.join(DATA_DIR, 'skin-backups');
+
+function injectOfflineSkin(versionJson, account, assetsRoot) {
+    const backups = [];
+    try {
+        if (!account || account.type !== 'offline' || !account.skinFile) return backups;
+        const skinPath = path.join(__dirname, 'img', account.skinFile);
+        if (!fs.existsSync(skinPath)) return backups;
+        const skinBuf = fs.readFileSync(skinPath);
+        if (!skinBuf || skinBuf.length < 64) return backups;
+
+        if (!assetsRoot) assetsRoot = ASSETS_DIR;
+
+        const skinModel = account.skinModel || 'default';
+        const targetName = skinModel === 'slim' ? 'alex' : 'steve';
+        const targetPath = `minecraft/textures/entity/${targetName}.png`;
+
+        if (!fs.existsSync(SKIN_BACKUP_DIR)) fs.mkdirSync(SKIN_BACKUP_DIR, { recursive: true });
+
+        const assetIndexId = versionJson.assetIndex?.id;
+        if (assetIndexId) {
+            const indexPath = path.join(ASSETS_DIR, 'indexes', `${assetIndexId}.json`);
+            if (fs.existsSync(indexPath)) {
+                const indexData = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+                const obj = indexData.objects?.[targetPath];
+                if (obj && obj.hash) {
+                    const hash = obj.hash;
+                    const subDir = hash.substring(0, 2);
+                    const objectPath = path.join(ASSETS_DIR, 'objects', subDir, hash);
+                    if (fs.existsSync(objectPath)) {
+                        const backupName = `${assetIndexId}_${hash}`;
+                        const backupPath = path.join(SKIN_BACKUP_DIR, backupName);
+                        if (!fs.existsSync(backupPath)) {
+                            fs.copyFileSync(objectPath, backupPath);
+                        }
+                        fs.copyFileSync(skinPath, objectPath);
+                        backups.push({ type: 'object', path: objectPath, backup: backupPath });
+                        console.log(`[Skin] 已注入 ${targetName}.png -> objects/${subDir}/${hash}`);
+                    }
+                }
+                const altTarget = skinModel === 'slim' ? 'steve' : 'alex';
+                const altPath = `minecraft/textures/entity/${altTarget}.png`;
+                const altObj = indexData.objects?.[altPath];
+                if (altObj && altObj.hash) {
+                    const altHash = altObj.hash;
+                    const altSub = altHash.substring(0, 2);
+                    const altObjectPath = path.join(ASSETS_DIR, 'objects', altSub, altHash);
+                    if (fs.existsSync(altObjectPath)) {
+                        const altBackupName = `${assetIndexId}_${altHash}`;
+                        const altBackupPath = path.join(SKIN_BACKUP_DIR, altBackupName);
+                        if (!fs.existsSync(altBackupPath)) {
+                            fs.copyFileSync(altObjectPath, altBackupPath);
+                        }
+                        backups.push({ type: 'object_no_replace', path: altObjectPath, backup: altBackupPath });
+                    }
+                }
+            }
+        }
+
+        const virtualTargets = [
+            path.join(assetsRoot, 'virtual', 'legacy', targetPath),
+            path.join(ASSETS_DIR, 'virtual', 'legacy', targetPath)
+        ];
+        for (const vPath of virtualTargets) {
+            if (fs.existsSync(vPath)) {
+                const vBackup = path.join(SKIN_BACKUP_DIR, `virtual_${path.basename(vPath)}_${Date.now()}`);
+                fs.copyFileSync(vPath, vBackup);
+                fs.copyFileSync(skinPath, vPath);
+                backups.push({ type: 'virtual', path: vPath, backup: vBackup });
+                console.log(`[Skin] 已注入 virtual ${targetName}.png`);
+            }
+        }
+
+        const gameDirTargets = [
+            path.join(account.gameDir || '', 'resources', targetPath),
+        ];
+        for (const gPath of gameDirTargets) {
+            const gDir = path.dirname(gPath);
+            if (fs.existsSync(path.dirname(gDir))) {
+                if (!fs.existsSync(gDir)) fs.mkdirSync(gDir, { recursive: true });
+                if (fs.existsSync(gPath)) {
+                    const gBackup = path.join(SKIN_BACKUP_DIR, `gamedir_${path.basename(gPath)}_${Date.now()}`);
+                    fs.copyFileSync(gPath, gBackup);
+                    backups.push({ type: 'gamedir', path: gPath, backup: gBackup });
+                }
+                fs.copyFileSync(skinPath, gPath);
+                backups.push({ type: 'gamedir_inject', path: gPath, backup: null });
+                console.log(`[Skin] 已注入 gamedir ${targetName}.png`);
+            }
+        }
+    } catch (e) {
+        console.error('[Skin] 注入失败:', e.message);
+    }
+    return backups;
+}
+
+function restoreOfflineSkin(backups) {
+    if (!backups || backups.length === 0) return;
+    for (const b of backups) {
+        try {
+            if (b.type === 'object_no_replace') continue;
+            if (b.backup && fs.existsSync(b.backup)) {
+                fs.copyFileSync(b.backup, b.path);
+            }
+        } catch (e) {
+            console.error('[Skin] 恢复失败:', b.path, e.message);
+        }
+    }
+}
+
 function buildLaunchArguments(versionJson, settings, account, versionId, customGameDir = null, externalVersionDir = null) {
     const actualVersionId = versionId || versionJson.id || 'unknown';
     const isExternal = !!externalVersionDir;
@@ -7389,7 +7521,13 @@ function buildLaunchArguments(versionJson, settings, account, versionId, customG
         }
     }
     const playerName = account?.username || 'Player';
-    const uuid = account?.uuid || crypto.createHash('md5').update('OfflinePlayer:' + playerName).digest('hex').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+    let uuid = account?.uuid;
+    if (!uuid) {
+        const md5 = crypto.createHash('md5').update('OfflinePlayer:' + playerName).digest();
+        md5[6] = (md5[6] & 0x0f) | 0x30;
+        md5[8] = (md5[8] & 0x3f) | 0x80;
+        uuid = md5.toString('hex').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+    }
     // 离线账户使用兼容格式的伪令牌，避免自定义 BootstrapLauncher 的 Base64 解析崩溃
     // 某些整合包（如 YUMC 系）的定制 BootstrapLauncher 会尝试 Base64 解码 accessToken
     const rawAccessToken = account?.accessToken || '';
@@ -8575,12 +8713,16 @@ async function doLaunch(versionId, versionJson, settings, account, externalVersi
                 
                 const newArgs = [...jvmOnlyArgs, '-jar', wrapperJar, ...gameOnlyArgs];
                 console.log(`[Launch] Manifest JAR: ${wrapperJar}, classpath条目: ${cpEntries.length}`);
-                
+
+                let skinBackups = [];
+                try { skinBackups = injectOfflineSkin(versionJson, account, ASSETS_DIR); } catch (e) {}
+
                 const gameProcess = spawn(javaPath, newArgs, spawnOptions);
-                
+
                 gameProcess.on('exit', () => {
                     try { fs.unlinkSync(wrapperJar); } catch (e) {}
                     try { fs.rmSync(manifestDir, { recursive: true, force: true }); } catch (e) {}
+                    try { restoreOfflineSkin(skinBackups); } catch (e) {}
                 });
                 
                 console.log(`[Launch] 进程已启动(Manifest JAR模式), PID: ${gameProcess.pid}`);
@@ -8724,8 +8866,11 @@ async function doLaunch(versionId, versionJson, settings, account, externalVersi
             }
         }
 
+        let skinBackups = [];
+        try { skinBackups = injectOfflineSkin(versionJson, account, ASSETS_DIR); } catch (e) {}
+
         const gameProcess = spawn(javaPath, args, spawnOptions);
-        
+
         console.log(`[Launch] 进程已启动, PID: ${gameProcess.pid}`);
         
         applyPerformanceOptimizations(gameProcess.pid);
@@ -8796,6 +8941,7 @@ async function doLaunch(versionId, versionJson, settings, account, externalVersi
         let launchVersionId = versionId;
 
         gameProcess.on('close', (code) => {
+            try { restoreOfflineSkin(skinBackups); } catch (e) {}
             const recentLogs = instanceInfo.logBuffer.slice(-100).join('\n');
             let analysis = analyzeExitCode(code, launchVersionId);
             if (!analysis.isCrash && code !== 0 && recentLogs.includes('Invalid paths argument')) {
@@ -14273,8 +14419,14 @@ async function handleAPI(pathname, req, res, parsedUrl) {
 
             case '/api/accounts/add-offline': {
                 const data = await readBody();
-                const username = data.username || 'Player';
-                const uuid = crypto.createHash('md5').update('OfflinePlayer:' + username).digest('hex').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+                const username = (data.username || '').trim();
+                if (!username) { sendError('请输入用户名', 400); break; }
+                if (username.length < 3 || username.length > 16) { sendError('用户名长度需为 3 - 16 位', 400); break; }
+                if (!/^[A-Za-z0-9_]+$/.test(username)) { sendError('用户名只能包含英文字母、数字与下划线', 400); break; }
+                const md5 = crypto.createHash('md5').update('OfflinePlayer:' + username).digest();
+                md5[6] = (md5[6] & 0x0f) | 0x30;
+                md5[8] = (md5[8] & 0x3f) | 0x80;
+                const uuid = md5.toString('hex').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
                 const accounts = loadAccounts();
                 const newAccount = {
                     id: crypto.randomUUID(),
@@ -15319,10 +15471,22 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 }
 
                 if (isOfflineAccount) {
-                    const defaultHead = await getSteveHeadLocal();
-                    if (defaultHead) {
-                        AVATAR_CACHE.set(cacheKey, { data: defaultHead, contentType: 'image/png', time: Date.now() });
-                        serveImage(defaultHead, 'image/png');
+                    let offlineHead = null;
+                    try {
+                        const accounts = loadAccounts();
+                        const acc = accounts.find(a => (a.uuid || '').replace(/-/g, '') === cleanUuid);
+                        if (acc && acc.skinFile) {
+                            const skinPath = path.join(__dirname, 'img', acc.skinFile);
+                            if (fs.existsSync(skinPath)) {
+                                const skinBuf = fs.readFileSync(skinPath);
+                                offlineHead = await cropSkinToHeadWithSharp(skinBuf);
+                            }
+                        }
+                    } catch (e) {}
+                    if (!offlineHead) offlineHead = await getSteveHeadLocal();
+                    if (offlineHead) {
+                        AVATAR_CACHE.set(cacheKey, { data: offlineHead, contentType: 'image/png', time: Date.now() });
+                        serveImage(offlineHead, 'image/png');
                     } else {
                         res.writeHead(302, { Location: '/img/steve_head.png' });
                         res.end();

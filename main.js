@@ -2314,10 +2314,49 @@ function registerAIChatIPC() {
             type: 'function',
             function: {
                 name: 'select_version',
-                description: '向用户展示版本选择卡片，让用户选择一个已安装的游戏版本。当需要用户确认目标版本时使用此工具（如安装模组、切换版本等场景）。调用后会暂停AI思考，等待用户选择版本后自动继续。',
+                description: '向用户展示版本选择卡片，让用户选择一个已安装的游戏版本。当需要用户确认目标版本时使用此工具（如安装模组、光影包、资源包、材质包等场景）。调用后会暂停AI思考，等待用户选择版本后自动继续。',
                 parameters: { type: 'object', properties: {
-                    purpose: { type: 'string', description: '选择版本的目的说明，如"安装模组到目标版本"、"切换游戏版本"等，会显示在卡片标题中' }
+                    purpose: { type: 'string', description: '选择版本的目的说明，如"安装模组到目标版本"、"安装光影包"等，会显示在卡片标题中' }
                 }, required: ['purpose'] }
+            }
+        },
+        {
+            type: 'function',
+            function: {
+                name: 'add_download_task',
+                description: '向下载管理页面添加下载任务。支持模组(mod)、光影包(shader)、资源包(resourcepack)、材质包(texturepack)、整合包(modpack)、游戏版本(version)。任务会显示在下载管理页面，用户可查看进度。安装模组/光影包/资源包/材质包前，ALWAYS 先调用 select_version 让用户选择目标版本，然后用返回的 selected 版本ID作为 targetVersionId。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        taskType: { type: 'string', enum: ['mod', 'shader', 'resourcepack', 'texturepack', 'modpack', 'version'], description: '下载任务类型：mod=模组, shader=光影包, resourcepack=资源包, texturepack=材质包, modpack=整合包, version=游戏版本' },
+                        projectId: { type: 'string', description: '项目ID（mod/modpack从搜索结果获取）' },
+                        source: { type: 'string', enum: ['modrinth', 'curseforge'], description: '来源平台，默认modrinth' },
+                        name: { type: 'string', description: '任务显示名称' },
+                        mcVersion: { type: 'string', description: 'Minecraft版本号' },
+                        loader: { type: 'string', description: '加载器类型，如fabric、forge、neoforge' },
+                        targetVersionId: { type: 'string', description: '目标已安装版本ID（从select_version返回的selected字段获取），用于确定下载到哪个版本文件夹' },
+                        versionId: { type: 'string', description: 'Modrinth/CurseForge的版本ID（精确版本下载时使用）' },
+                        iconUrl: { type: 'string', description: '任务图标URL' },
+                        downloadUrl: { type: 'string', description: '直接下载URL（shader/resourcepack/texturepack有时需要）' },
+                        fileName: { type: 'string', description: '文件名（直接下载时使用）' }
+                    },
+                    required: ['taskType', 'name']
+                }
+            }
+        },
+        {
+            type: 'function',
+            function: {
+                name: 'get_download_status',
+                description: '查询下载任务的进度状态。返回任务状态(downloading/completed/failed)、进度百分比、当前文件、速度等信息。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        sessionId: { type: 'string', description: '下载会话ID（从add_download_task返回）' },
+                        taskType: { type: 'string', enum: ['mod', 'version', 'modpack'], description: '任务类型，用于选择正确的状态查询接口' }
+                    },
+                    required: ['sessionId', 'taskType']
+                }
             }
         },
         {
@@ -3922,6 +3961,70 @@ function registerAIChatIPC() {
                         pendingVersionSelections.set(selId, { resolve, timer });
                     });
                     return JSON.stringify({ purpose: args.purpose || '', selected, installed });
+                }
+                case 'add_download_task': {
+                    const taskType = args.taskType;
+                    const taskName = args.name;
+                    const source = args.source || 'modrinth';
+                    const targetVersionId = args.targetVersionId || '';
+                    const mcVersion = args.mcVersion || '';
+                    const loader = args.loader || '';
+                    const iconUrl = args.iconUrl || '';
+                    const sessionId = 'ai-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+
+                    if (mainWindow && mainWindow.webContents) {
+                        mainWindow.webContents.send('ai:add-download-task', {
+                            sessionId, taskType, taskName, source, targetVersionId,
+                            mcVersion, loader, iconUrl,
+                            projectId: args.projectId || '',
+                            versionId: args.versionId || '',
+                            downloadUrl: args.downloadUrl || '',
+                            fileName: args.fileName || ''
+                        });
+                    }
+
+                    let apiResult;
+                    if (taskType === 'mod') {
+                        const body = {
+                            projectId: args.projectId, source, loader, mcVersion,
+                            versionId: targetVersionId || args.versionId || ''
+                        };
+                        apiResult = await callAPI('/api/mods/download', 'POST', JSON.stringify(body), {});
+                    } else if (taskType === 'modpack') {
+                        const body = { projectId: args.projectId, mcVersion };
+                        apiResult = await callAPI('/api/modpacks/install', 'POST', JSON.stringify(body), {});
+                    } else if (taskType === 'version') {
+                        const body = { versionId: args.mcVersion || args.projectId };
+                        apiResult = await callAPI('/api/install', 'POST', JSON.stringify(body), {});
+                    } else {
+                        const body = {
+                            projectId: args.projectId, versionId: args.versionId || '',
+                            projectType: taskType === 'texturepack' ? 'resourcepack' : taskType,
+                            targetVersionId, source,
+                            downloadUrl: args.downloadUrl || '', fileName: args.fileName || ''
+                        };
+                        apiResult = await callAPI('/api/resources/download', 'POST', JSON.stringify(body), {});
+                    }
+
+                    if (apiResult) {
+                        const respBody = JSON.parse(apiResult.body.toString());
+                        return JSON.stringify({ success: true, sessionId, ...respBody });
+                    }
+                    return JSON.stringify({ success: true, sessionId, message: '下载任务已添加到下载管理页面' });
+                }
+                case 'get_download_status': {
+                    const sessionId = args.sessionId;
+                    const taskType = args.taskType;
+                    if (taskType === 'version') {
+                        const result = await callAPI('/api/install/progress', 'GET', null, { sessionId });
+                        return result.body.toString();
+                    } else if (taskType === 'modpack') {
+                        const result = await callAPI('/api/mods/download-status', 'GET', null, { sessionId });
+                        return result.body.toString();
+                    } else {
+                        const result = await callAPI('/api/mods/download-status', 'GET', null, { sessionId });
+                        return result.body.toString();
+                    }
                 }
                 case 'search_modpacks': {
                     const query = {
