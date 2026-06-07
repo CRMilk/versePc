@@ -16322,6 +16322,56 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                             }))
                         }));
                         sendJSON({ versions: result });
+                    } else if (mvSource === 'curseforge') {
+                        const settings = loadSettingsCached();
+                        const cfApiKey = settings.curseforgeApiKey || '';
+                        const cfHeaders = cfApiKey ? { 'x-api-key': cfApiKey } : {};
+                        let cfUrl = `${CURSEFORGE_API}/mods/${mvProjectId}/files`;
+                        const cfParams = [];
+                        if (mvGameVer) cfParams.push(`gameVersion=${mvGameVer}`);
+                        if (mvLoader) {
+                            const loaderMap = { fabric: 4, forge: 1, neoforge: 6, quilt: 5 };
+                            const loaderType = loaderMap[mvLoader.toLowerCase()];
+                            if (loaderType) cfParams.push(`modLoaderType=${loaderType}`);
+                        }
+                        if (cfParams.length > 0) cfUrl += '?' + cfParams.join('&');
+
+                        const cfRes = await fetchJSON(cfUrl, cfHeaders);
+                        const cfFiles = cfRes.data || [];
+                        const byVersion = new Map();
+                        for (const f of cfFiles) {
+                            const gv = (f.gameVersions || []).find(v => /^\d+\.\d+/.test(v)) || (f.gameVersions || [])[0] || '';
+                            const key = gv || f.id;
+                            if (!byVersion.has(key)) {
+                                byVersion.set(key, {
+                                    id: String(f.id),
+                                    versionNumber: f.displayName || f.fileName || '',
+                                    versionName: f.displayName || f.fileName || '',
+                                    gameVersions: f.gameVersions || [],
+                                    loaders: (f.gameVersions || []).filter(v => ['fabric','forge','neoforge','quilt','fabric-loader','forge-loader'].includes(v.toLowerCase())).map(v => v.toLowerCase().replace('-loader','')),
+                                    releaseType: f.releaseType === 1 ? 'release' : f.releaseType === 2 ? 'beta' : 'alpha',
+                                    datePublished: f.fileDate || '',
+                                    downloads: 0,
+                                    changelog: '',
+                                    files: [],
+                                    dependencies: (f.dependencies || []).map(d => ({
+                                        projectId: String(d.modId || ''),
+                                        versionId: String(d.fileId || ''),
+                                        dependencyType: d.relationType === 3 ? 'required' : d.relationType === 2 ? 'optional' : 'incompatible',
+                                        modName: ''
+                                    }))
+                                });
+                            }
+                            byVersion.get(key).files.push({
+                                id: String(f.id),
+                                url: f.downloadUrl || '',
+                                filename: f.fileName || '',
+                                size: f.fileLength || 0,
+                                primary: byVersion.get(key).files.length === 0,
+                                sha1: ''
+                            });
+                        }
+                        sendJSON({ versions: Array.from(byVersion.values()) });
                     } else {
                         sendError('Unsupported source', 400);
                     }

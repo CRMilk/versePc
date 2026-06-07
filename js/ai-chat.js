@@ -8781,7 +8781,6 @@ const Onboarding = {
         try {
             localStorage.setItem('versepc_onboard_role', this.role || '');
             localStorage.setItem('versepc_onboard_folder', this.folderPath || '');
-            localStorage.setItem('versepc_onboard_done', '1');
         } catch (e) {}
     },
     _restore() {
@@ -8789,8 +8788,7 @@ const Onboarding = {
             this.role = localStorage.getItem('versepc_onboard_role') || null;
             this.folderPath = localStorage.getItem('versepc_onboard_folder') || null;
             this.folderName = this._basename(this.folderPath);
-            const done = localStorage.getItem('versepc_onboard_done') === '1';
-            return done;
+            return false;
         } catch (e) { return false; }
     },
     async start(force) {

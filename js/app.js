@@ -2175,24 +2175,14 @@ function navigateToPage(pageName) {
     } else if (pageName === 'downloads') {
         dlManager.render();
     } else if (pageName === 'explore') {
-        if (!localStorage.getItem('experimental_disclaimer_accepted')) {
-            document.getElementById('page-explore').classList.remove('active');
-            document.getElementById('experimental-disclaimer-modal').style.display = 'flex';
-            document.querySelector('[data-page="explore"]').classList.add('active');
-            return;
-        }
-        if (typeof Onboarding !== 'undefined') {
-            setTimeout(() => {
-                Onboarding.init();
-                OnboardingUI.init();
-                Onboarding.start(true);
-            }, 50);
-        }
+        document.getElementById('page-explore').classList.remove('active');
+        document.getElementById('experimental-disclaimer-modal').style.display = 'flex';
+        document.querySelector('[data-page="explore"]').classList.add('active');
+        return;
     }
 }
 
 function acceptExperimentalDisclaimer() {
-    localStorage.setItem('experimental_disclaimer_accepted', '1');
     document.getElementById('experimental-disclaimer-modal').style.display = 'none';
     document.getElementById('page-explore').classList.add('active');
     if (typeof Onboarding !== 'undefined') {
