@@ -47,6 +47,10 @@ const TOOL_DISPLAY_NAMES = {
     get_installed_mods: '获取已安装模组', install_mod: '安装模组',
     toggle_mod: '切换模组', execute_command: '执行命令',
     add_download_task: '添加下载任务', get_download_status: '查询下载进度',
+    check_dev_environment: '检查开发环境', install_dev_tools: '安装开发工具',
+    init_mod_project: '初始化模组项目', build_mod: '编译模组',
+    create_datapack: '创建数据包', create_resourcepack: '创建资源包',
+    mod_compile_and_install: '编译安装模组',
     search_modpacks: '搜索整合包', install_modpack: '安装整合包',
     sub_agent_dispatch: '派遣子代理', write_file: '写入文件',
     write_to_file: '写入文件', edit_file: '编辑文件',
@@ -2661,8 +2665,14 @@ const AIChat = {
                 if (!isChatMode) return '';
                 return `\n\n## Mode: Conversation (对话模式)\n当前用户处于对话模式，你只能访问 VERsE 的版本下载文件夹（~/.versepc/versions/）以及用户已添加的外部版本文件夹。如果用户要求读取/写入/执行任何其他外部路径（例如：E:\\、D:\\、C:\\Users、桌面、文档等），你必须回复："我现在是对话模式，无法访问外部的文件夹，需要调整为开发者模式才可以。" 并提示用户点击上方的"开发者模式"按钮切换。`;
             })();
+            const _devToolsRule = (() => {
+                const activeBtn = document.querySelector('.rc-mode-btn.rc-mode-btn-active');
+                const isDevMode = activeBtn ? activeBtn.dataset.mode === 'dev' : (this._role !== 'gamer');
+                if (!isDevMode) return '';
+                return `\n\n## 模组开发工具 (开发者模式可用)\n- check_dev_environment: 检查开发环境（JDK/Gradle/MDK），在使用其他开发工具前应先调用\n- install_dev_tools: 安装缺失的JDK/Gradle/模板\n- init_mod_project: 初始化新模组项目(fabric/forge/neoforge)\n- build_mod: 用Gradle编译模组项目\n- create_datapack: 创建数据包（配方/战利品表/标签/进度）\n- create_resourcepack: 创建资源包（模型/纹理/语言文件）\n- mod_compile_and_install: 一键编译并安装到指定版本\n\n### 生成模组流程:\n1. 判断需求复杂度：简单需求（配方/战利品表/标签/进度）优先用数据包\n2. 数据包路径: create_datapack → 写入 ~/.versepc/versions/{版本ID}/datapacks/\n3. 完整模组: check_dev_environment → init_mod_project → 用 str_replace_based_edit_tool 编写代码 → build_mod → 安装\n4. 模组开发文档: https://fabricmc.net/wiki/ 或 https://docs.neoforged.net/`;
+            })();
             const sysPrompt = `You are VersePC Coder, a coding agent specialized in Minecraft launcher development.
-${_langRule}${_customPrompt}${_modeRule}
+${_langRule}${_customPrompt}${_modeRule}${_devToolsRule}
 
 ${this.userMemory ? `## User Preferences
 ${this.userMemory}

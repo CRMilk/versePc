@@ -5588,7 +5588,23 @@ function detectSystemJava() {
     return results;
 }
 
-async function downloadJavaAsync(majorVersion, sessionId, sessionFile) {
+function getTemurinMirrorUrl(githubUrl, mirrorIndex) {
+    if (!githubUrl || !githubUrl.includes('github.com/adoptium/')) return githubUrl;
+    const match = githubUrl.match(/github\.com\/adoptium\/temurin(\d+)-binaries\/releases\/download\/(.+?)\/(.+)$/);
+    if (!match) return githubUrl;
+    const majorVer = match[1];
+    const tag = match[2];
+    const fileName = match[3];
+    const mirrors = [
+        `https://mirrors.tuna.tsinghua.edu.cn/Adoptium/${majorVer}/ga/windows/x64/jdk/${tag}/${fileName}`,
+        `https://mirrors.ustc.edu.cn/adoptium/${majorVer}/ga/windows/x64/jdk/${tag}/${fileName}`,
+        `https://mirror.iscas.ac.cn/adoptium/${majorVer}/ga/windows/x64/jdk/${tag}/${fileName}`,
+        githubUrl
+    ];
+    return mirrors[mirrorIndex] || githubUrl;
+}
+
+async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorIndex = 0) {
     const updateStatus = (status, progress, message = '', speed = 0, downloadedBytes = 0, totalBytes = 0) => {
         try {
             fs.writeFileSync(sessionFile, JSON.stringify({
@@ -5645,24 +5661,37 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile) {
             throw new Error(`未找到JDK ${majorVersion}的下载信息，所有源均不可用`);
         }
         
+        if (mirrorIndex >= 0 && mirrorIndex <= 3) {
+            const mirrorUrl = getTemurinMirrorUrl(downloadUrl, mirrorIndex);
+            if (mirrorUrl !== downloadUrl) {
+                console.log(`[Java] 使用国内镜像下载: ${mirrorUrl.substring(0, 80)}...`);
+                downloadUrl = mirrorUrl;
+            }
+        }
+        
         console.log(`[Java] 文件大小: ${totalSize} bytes`);
         
         const tempFile = path.join(DATA_DIR, fileName);
         
         updateStatus('downloading', 10, `正在下载Temurin JDK ${majorVersion}...`);
         
-        await downloadFileChunked(downloadUrl, tempFile, { onProgress: (progress) => {
-            const pct = progress.totalBytes > 0 ? Math.min(80, Math.floor((progress.bytesDownloaded / progress.totalBytes) * 70) + 10) : 10;
+        const calcPct = (progress) => {
+            const tb = progress.totalBytes > 0 ? progress.totalBytes : totalSize;
+            return tb > 0 ? Math.min(80, Math.floor((progress.bytesDownloaded / tb) * 70) + 10) : 10;
+        };
+        const formatProgress = (progress) => {
+            const tb = progress.totalBytes > 0 ? progress.totalBytes : totalSize;
             const dlMB = Math.floor(progress.bytesDownloaded / 1024 / 1024);
-            const totalMB = Math.ceil(progress.totalBytes / 1024 / 1024);
-            updateStatus('downloading', pct, `正在下载Temurin JDK ${majorVersion}... ${dlMB}MB / ${totalMB}MB`, progress.speed, progress.bytesDownloaded, progress.totalBytes);
+            const totalMB = Math.ceil(tb / 1024 / 1024);
+            return `正在下载Temurin JDK ${majorVersion}... ${dlMB}MB / ${totalMB}MB`;
+        };
+        
+        await downloadFileChunked(downloadUrl, tempFile, { onProgress: (progress) => {
+            updateStatus('downloading', calcPct(progress), formatProgress(progress), progress.speed, progress.bytesDownloaded, progress.totalBytes || totalSize);
         }, timeout: 600000, retries: 3 }).catch(err => {
             console.log(`[Java] 分块下载失败，回退单线程: ${err.message}`);
             return _dlSingle(downloadUrl, tempFile, { onProgress: (progress) => {
-                const pct = progress.totalBytes > 0 ? Math.min(80, Math.floor((progress.bytesDownloaded / progress.totalBytes) * 70) + 10) : 10;
-                const dlMB = Math.floor(progress.bytesDownloaded / 1024 / 1024);
-                const totalMB = Math.ceil(progress.totalBytes / 1024 / 1024);
-                updateStatus('downloading', pct, `正在下载Temurin JDK ${majorVersion}... ${dlMB}MB / ${totalMB}MB`, progress.speed, progress.bytesDownloaded, progress.totalBytes);
+                updateStatus('downloading', calcPct(progress), formatProgress(progress), progress.speed, progress.bytesDownloaded, progress.totalBytes || totalSize);
             }, timeout: 600000, retries: 3 });
         });
         
@@ -18119,7 +18148,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
             case '/api/java/download': {
                 try {
                     const body = await readBody();
-                    const { majorVersion } = body;
+                    const { majorVersion, mirrorIndex } = body;
                     
                     if (!majorVersion) {
                         sendError('缺少majorVersion参数', 400);
@@ -18136,7 +18165,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         startTime: Date.now()
                     }));
                     
-                    downloadJavaAsync(majorVersion, sessionId, sessionFile);
+                    downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorIndex || 0);
                     
                     sendJSON({ sessionId: sessionId });
                 } catch (e) {
