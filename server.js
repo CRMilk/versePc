@@ -5733,14 +5733,23 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
             const totalMB = Math.ceil(tb / 1024 / 1024);
             return `正在下载Temurin JDK ${majorVersion}... ${dlMB}MB / ${totalMB}MB`;
         };
+        let _lastDlBytes = 0, _lastDlTime = Date.now();
+        const onDlProgress = (progress) => {
+            const now = Date.now();
+            const dt = (now - _lastDlTime) / 1000;
+            let speed = progress.speed || 0;
+            if (dt >= 0.5) {
+                const localSpeed = (progress.bytesDownloaded - _lastDlBytes) / dt;
+                speed = speed > 0 ? speed : localSpeed;
+                _lastDlBytes = progress.bytesDownloaded;
+                _lastDlTime = now;
+            }
+            updateStatus('downloading', calcPct(progress), formatProgress(progress), speed, progress.bytesDownloaded, progress.totalBytes || totalSize);
+        };
         
-        await downloadFileChunked(downloadUrl, tempFile, { onProgress: (progress) => {
-            updateStatus('downloading', calcPct(progress), formatProgress(progress), progress.speed, progress.bytesDownloaded, progress.totalBytes || totalSize);
-        }, timeout: 600000, retries: 3 }).catch(err => {
+        await downloadFileChunked(downloadUrl, tempFile, { onProgress: onDlProgress, timeout: 600000, retries: 3 }).catch(err => {
             console.log(`[Java] 分块下载失败，回退单线程: ${err.message}`);
-            return _dlSingle(downloadUrl, tempFile, { onProgress: (progress) => {
-                updateStatus('downloading', calcPct(progress), formatProgress(progress), progress.speed, progress.bytesDownloaded, progress.totalBytes || totalSize);
-            }, timeout: 600000, retries: 3 });
+            return _dlSingle(downloadUrl, tempFile, { onProgress: onDlProgress, timeout: 600000, retries: 3 });
         });
         
         updateStatus('extracting', 85, '正在解压JDK...');

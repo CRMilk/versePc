@@ -4743,11 +4743,21 @@ async function loadAccounts() {
                     const avatarDiv = this.parentElement;
                     if (avatarDiv) {
                         this.style.display = 'none';
-                        const textSpan = document.createElement('span');
-                        textSpan.className = 'account-avatar-text';
-                        const name = avatarDiv.closest('.account-item')?.querySelector('.account-item-name')?.textContent || '?';
-                        textSpan.textContent = name.charAt(0).toUpperCase();
-                        avatarDiv.appendChild(textSpan);
+                        const accItem = avatarDiv.closest('.account-item');
+                        const accType = accItem?.querySelector('.account-item-type')?.textContent;
+                        if (accType === '外置登录') {
+                            const origSrc = this.src.split('&_=')[0];
+                            setTimeout(() => {
+                                const retryImg = document.createElement('img');
+                                retryImg.src = origSrc + '&_=' + Date.now();
+                                retryImg.className = 'account-avatar-img';
+                                retryImg.onerror = function() { retryImg.style.display = 'none'; };
+                                retryImg.onload = function() {
+                                    avatarDiv.innerHTML = '';
+                                    avatarDiv.appendChild(retryImg);
+                                };
+                            }, 2000);
+                        }
                     }
                 };
             });
@@ -4782,10 +4792,19 @@ async function loadAccounts() {
                 };
                 img.onerror = function() {
                     img.style.display = 'none';
-                    const span = document.createElement('span');
-                    span.className = 'account-avatar-text';
-                    span.textContent = selectedAccount.username.charAt(0).toUpperCase();
-                    homeAvatar.appendChild(span);
+                    if (selectedAccount.type === 'thirdparty' && selectedAccount.serverUrl) {
+                        setTimeout(() => {
+                            const retryImg = document.createElement('img');
+                            retryImg.src = accSkinUrl.split('&_=')[0] + '&_=' + Date.now();
+                            retryImg.className = 'account-avatar-img';
+                            retryImg.width = 64;
+                            retryImg.height = 64;
+                            retryImg.onload = function() {
+                                homeAvatar.innerHTML = '';
+                                homeAvatar.appendChild(retryImg);
+                            };
+                        }, 2000);
+                    }
                 };
                 homeAvatar.appendChild(img);
             }
@@ -4800,10 +4819,17 @@ async function loadAccounts() {
                 img2.className = 'account-avatar-img';
                 img2.onerror = function() {
                     img2.style.display = 'none';
-                    const span = document.createElement('span');
-                    span.className = 'account-avatar-text';
-                    span.textContent = selectedAccount.username.charAt(0).toUpperCase();
-                    launchAvatar.appendChild(span);
+                    if (selectedAccount.type === 'thirdparty' && selectedAccount.serverUrl) {
+                        setTimeout(() => {
+                            const retryImg2 = document.createElement('img');
+                            retryImg2.src = accSkinUrl.split('&_=')[0] + '&_=' + Date.now();
+                            retryImg2.className = 'account-avatar-img';
+                            retryImg2.onload = function() {
+                                launchAvatar.innerHTML = '';
+                                launchAvatar.appendChild(retryImg2);
+                            };
+                        }, 2000);
+                    }
                 };
                 launchAvatar.appendChild(img2);
             }
