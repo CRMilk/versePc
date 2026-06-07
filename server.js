@@ -3360,8 +3360,21 @@ async function downloadFileChunked(url, destPath, options = {}) {
                         const ws = fs.createWriteStream(c.tmp);
                         let dl = 0;
                         let aborted = false;
+                        let stallTimer = null;
+                        const resetStall = () => {
+                            if (stallTimer) clearTimeout(stallTimer);
+                            stallTimer = setTimeout(() => {
+                                if (!aborted) {
+                                    console.warn(`[Java] Chunk ${c.i} stall timeout (30s), aborting...`);
+                                    try { cr.stream.destroy(); } catch (_) {}
+                                    try { ws.destroy(); } catch (_) {}
+                                }
+                            }, 30000);
+                        };
+                        resetStall();
                         const onAbort = () => {
                             aborted = true;
+                            if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
                             if (cr.stream) cr.stream.destroy();
                             if (ws) ws.destroy();
                         };
@@ -3371,7 +3384,7 @@ async function downloadFileChunked(url, destPath, options = {}) {
                                 dl += d.length;
                                 DownloadManager.recordProgress(d.length);
                                 cProg[c.i] = dl;
-                                
+                                resetStall();
                                 if (onProgress && Date.now() - lastProgUpdate > 50) {
                                     lastProgUpdate = Date.now();
                                     const t = cProg.reduce((a, b) => a + b, 0);
@@ -3381,16 +3394,19 @@ async function downloadFileChunked(url, destPath, options = {}) {
                             });
                             cr.stream.pipe(ws);
                             ws.on('finish', () => {
+                                if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
                                 ws.close();
                                 if (abortSignal) abortSignal.removeEventListener('abort', onAbort);
                                 if (aborted) return;
                                 resolve();
                             });
                             ws.on('error', (err) => {
+                                if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
                                 if (abortSignal) abortSignal.removeEventListener('abort', onAbort);
                                 reject(err);
                             });
                             cr.stream.on('error', (err) => {
+                                if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
                                 if (abortSignal) abortSignal.removeEventListener('abort', onAbort);
                                 reject(err);
                             });
@@ -5709,15 +5725,23 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
         if (!downloadUrl) {
             throw new Error(`未找到JDK ${majorVersion}的下载信息，所有源均不可用（请检查网络连接或VPN）`);
         }
-        
-        const githubUrl = downloadUrl;
-        
+
+        let downloadMirrors = [];
+        if (downloadUrl.includes('github.com/adoptium/')) {
+            const mirrors = getTemurinMirrorUrl(downloadUrl, osName, arch);
+            if (Array.isArray(mirrors)) {
+                downloadMirrors = mirrors;
+                console.log(`[Java] GitHub URL检测到，生成${downloadMirrors.length}个国内镜像`);
+                downloadMirrors.forEach(m => console.log(`  -> ${m.substring(0, 80)}`));
+            }
+        }
+
         console.log(`[Java] 文件大小: ${totalSize} bytes`);
-        
+
         const tempFile = path.join(DATA_DIR, fileName);
-        
+
         updateStatus('downloading', 10, `正在下载Temurin JDK ${majorVersion}...`);
-        
+
         const calcPct = (progress) => {
             const tb = progress.totalBytes > 0 ? progress.totalBytes : totalSize;
             return tb > 0 ? Math.min(80, Math.floor((progress.bytesDownloaded / tb) * 70) + 10) : 10;
@@ -5741,10 +5765,22 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
             }
             updateStatus('downloading', calcPct(progress), formatProgress(progress), speed, progress.bytesDownloaded, progress.totalBytes || totalSize);
         };
-        
-        await downloadFileChunked(downloadUrl, tempFile, { onProgress: onDlProgress, timeout: 600000, retries: 3 }).catch(err => {
-            console.log(`[Java] 分块下载失败，回退单线程: ${err.message}`);
-            return _dlSingle(downloadUrl, tempFile, { onProgress: onDlProgress, timeout: 600000, retries: 3 });
+
+        await downloadFileChunked(downloadMirrors.length > 0 ? downloadMirrors[0] : downloadUrl, tempFile, { onProgress: onDlProgress, timeout: 600000, retries: 3, mirrors: downloadMirrors.length > 0 ? downloadMirrors : null }).catch(async (err) => {
+            console.log(`[Java] 分块下载失败: ${err.message}，回退单线程`);
+            const fallbackUrls = downloadMirrors.length > 0 ? [...downloadMirrors, downloadUrl] : [downloadUrl];
+            let lastErr = err;
+            for (const url of fallbackUrls) {
+                try {
+                    console.log(`[Java] 尝试单线程下载: ${url.substring(0, 80)}...`);
+                    await _dlSingle(url, tempFile, { onProgress: onDlProgress, timeout: 600000, retries: 2, stallTimeout: 30000 });
+                    return;
+                } catch (e) {
+                    console.warn(`[Java] 单线程下载失败: ${e.message}`);
+                    lastErr = e;
+                }
+            }
+            throw lastErr;
         });
         
         updateStatus('extracting', 85, '正在解压JDK...');
