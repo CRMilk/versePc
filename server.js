@@ -5634,7 +5634,9 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
         
         const apiHosts = [
             `${TEMURIN_API}/assets/latest`,
-            'https://mirrors.tuna.tsinghua.edu.cn/Adoptium/v3/assets/latest'
+            'https://mirrors.tuna.tsinghua.edu.cn/Adoptium/v3/assets/latest',
+            'https://mirrors.ustc.edu.cn/adoptium/v3/assets/latest',
+            'https://repo.huaweicloud.com/adoptium/v3/assets/latest'
         ];
         
         let downloadUrl = '';
@@ -5665,7 +5667,26 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
         }
         
         if (!downloadUrl) {
-            throw new Error(`未找到JDK ${majorVersion}的下载信息，所有源均不可用`);
+            console.log('[Java] API全部不可用，尝试GitHub releases直接获取...');
+            try {
+                const ghApiUrl = `https://api.github.com/repos/adoptium/temurin${majorVersion}-binaries/releases/latest`;
+                const ghResp = await Promise.race([
+                    fetchJSONWithMethod(ghApiUrl, 'GET'),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('GitHub API timeout')), 15000))
+                ]);
+                const asset = (ghResp.assets || []).find(a => a.name && a.name.includes('windows') && a.name.includes('x64') && a.name.endsWith('.zip') && !a.name.endsWith('.sha256.txt'));
+                if (asset) {
+                    downloadUrl = asset.browser_download_url;
+                    fileName = asset.name;
+                    console.log(`[Java] GitHub回退成功: ${fileName}`);
+                }
+            } catch (ghErr) {
+                console.log('[Java] GitHub回退也失败:', ghErr.message);
+            }
+        }
+
+        if (!downloadUrl) {
+            throw new Error(`未找到JDK ${majorVersion}的下载信息，所有源均不可用（请检查网络连接或VPN）`);
         }
         
         const githubUrl = downloadUrl;

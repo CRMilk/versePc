@@ -138,7 +138,7 @@ const API_BASE = '';
 // 带超时的 fetch 包装器，默认超时30秒，超时自动中断请求
 async function fetchWithTimeout(url, options = {}, timeout = 30000) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const timeoutId = setTimeout(() => controller.abort('timeout'), timeout);
     
     try {
         const response = await fetch(url, {
@@ -254,8 +254,13 @@ const API = {
         apiPost('/api/mods/download-version', { versionId, projectId, source, fileId, gameVersion, loader, savePath, includeDeps }),
     getModDownloadStatus: (sessionId) => apiGet('/api/mods/download-status', { sessionId }),
     getModDetail: (projectId, source = 'modrinth') => apiGet('/api/mods/detail', { projectId, source }),
-    getModVersions: (projectId, source = 'modrinth', loader = '', gameVersion = '') =>
-        apiGet('/api/mods/versions', { projectId, source, loader, gameVersion }),
+    getModVersions: (projectId, source = 'modrinth', loader = '', gameVersion = '') => {
+        const query = new URLSearchParams({ projectId, source, loader, gameVersion }).toString();
+        return fetchWithTimeout(`${API_BASE}/api/mods/versions?${query}`, {}, 60000).then(async res => {
+            if (!res.ok) throw new ApiError(`HTTP ${res.status}`, 'HTTP_ERROR');
+            return res.json();
+        });
+    },
     getModCategories: (source = 'modrinth') => apiGet('/api/mods/categories', { source }),
     getFeaturedMods: (loader = '', gameVersion = '') => apiGet('/api/mods/featured', { loader, gameVersion }),
     toggleMod: (modId, enabled) => apiPost('/api/mods/toggle', { modId, enabled }),
