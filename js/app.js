@@ -1206,6 +1206,14 @@ async function init() {
         try { splashOverlay.remove(); } catch (err) {}
     }
 
+    if (typeof Onboarding !== 'undefined' && typeof OnboardingUI !== 'undefined') {
+        setTimeout(() => {
+            Onboarding.init();
+            OnboardingUI.init();
+            Onboarding.start(true);
+        }, 300);
+    }
+
     // 首屏显示后，延迟加载非关键数据
     setTimeout(() => {
         Promise.allSettled([

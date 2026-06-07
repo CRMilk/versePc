@@ -3079,6 +3079,7 @@ async function fetchJSON(urlStr, retriesOrHeaders = 3, timeoutMs) {
     const agent = actualUrl.startsWith('https') ? SHARED_HTTPS_AGENT : SHARED_HTTP_AGENT;
 
     const tryUrls = actualUrl !== urlStr ? [actualUrl, urlStr] : [urlStr];
+    let lastErr = null;
     for (const tryUrl of tryUrls) {
         for (let attempt = 0; attempt < Math.min(retries, 2); attempt++) {
             try {
@@ -3087,7 +3088,7 @@ async function fetchJSON(urlStr, retriesOrHeaders = 3, timeoutMs) {
                     const req = mod.get(tryUrl, { headers, agent, timeout: reqTimeout }, (res) => {
                         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
                             req.destroy();
-                            return fetchJSON(res.headers.location, extraHeaders).then(resolve).catch(reject);
+                            return fetchJSON(res.headers.location, retries, reqTimeout).then(resolve).catch(reject);
                         }
                         if (res.statusCode !== 200) {
                             req.destroy();
@@ -3098,18 +3099,20 @@ async function fetchJSON(urlStr, retriesOrHeaders = 3, timeoutMs) {
                         res.on('data', chunk => { data += chunk; });
                         res.on('end', () => {
                             try { resolve(JSON.parse(data)); }
-                            catch (e) { reject(e); }
+                            catch (e) { reject(new Error(`JSON解析失败: ${e.message}`)); }
                         });
                     });
-                    req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
+                    req.on('timeout', () => { req.destroy(); reject(new Error(`请求超时 (${reqTimeout}ms)`)); });
                     req.on('error', reject);
                 });
             } catch (e) {
+                lastErr = e;
+                console.warn(`[fetchJSON] ${tryUrl.substring(0, 60)}... 尝试${attempt + 1}失败: ${e.message}`);
                 if (attempt >= 1) break;
             }
         }
     }
-    throw new Error('fetchJSON failed: ' + urlStr.substring(0, 80));
+    throw lastErr || new Error('fetchJSON failed: ' + urlStr.substring(0, 80));
 }
 
 function fetchText(urlStr) {
@@ -5643,7 +5646,10 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
                 const apiUrl = `${host}/${majorVersion}/hotspot?architecture=${arch}&image_type=jdk&os=${osName}&vendor=eclipse`;
                 console.log(`[Java] 请求Adoptium API: ${apiUrl}`);
                 
-                const apiResponse = await fetchJSONWithMethod(apiUrl, 'GET');
+                const apiResponse = await Promise.race([
+                    fetchJSONWithMethod(apiUrl, 'GET'),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('API timeout (20s)')), 20000))
+                ]);
                 
                 if (apiResponse && apiResponse.length > 0 && apiResponse[0].binary && apiResponse[0].binary.package && apiResponse[0].binary.package.link) {
                     const latest = apiResponse[0];
@@ -16356,13 +16362,21 @@ async function handleAPI(pathname, req, res, parsedUrl) {
 
                 try {
                     if (mvSource === 'modrinth') {
-                        let versionUrl = `${MODRINTH_API}/project/${mvProjectId}/version`;
+                        const encodedId = encodeURIComponent(mvProjectId);
+                        let versionUrl = `${MODRINTH_API}/project/${encodedId}/version`;
                         const params = [];
-                        if (mvLoader) params.push(`loaders=["${mvLoader}"]`);
-                        if (mvGameVer) params.push(`game_versions=["${mvGameVer}"]`);
+                        if (mvLoader) params.push(`loaders=["${encodeURIComponent(mvLoader)}"]`);
+                        if (mvGameVer) params.push(`game_versions=["${encodeURIComponent(mvGameVer)}"]`);
                         if (params.length > 0) versionUrl += '?' + params.join('&');
 
-                        const versions = await fetchJSON(versionUrl, 3, 25000);
+                        let versions;
+                        try {
+                            versions = await fetchJSON(versionUrl, 3, 25000);
+                        } catch (mirrorErr) {
+                            console.warn(`[Modrinth] 镜像请求失败，直接请求官方API: ${mirrorErr.message}`);
+                            const officialUrl = `https://api.modrinth.com/v2/project/${encodedId}/version${params.length > 0 ? '?' + params.join('&') : ''}`;
+                            versions = await fetchJSON(officialUrl, 2, 30000);
+                        }
                         const result = (versions || []).map(v => ({
                             id: v.id,
                             versionNumber: v.version_number || '',

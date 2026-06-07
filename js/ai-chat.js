@@ -483,7 +483,7 @@ const AIChat = {
         if (role === 'user') {
             header.innerHTML = `<span style="font-weight:600;font-size:13px;color:var(--ai-text-primary)">你</span><span style="font-size:11px;color:var(--ai-text-muted)">${timeStr}</span>`;
         } else {
-            header.innerHTML = `<img src="images/avatar-steve.png" alt="" class="ai-msg-avatar"><span style="font-weight:600;font-size:13px;color:var(--ai-text-primary)">VersePC Coder</span><span style="font-size:11px;color:var(--ai-text-muted);margin-left:auto">${timeStr}</span>`;
+            header.innerHTML = `<span class="ai-msg-avatar ai-msg-avatar-steve"></span><span style="font-weight:600;font-size:13px;color:var(--ai-text-primary)">VersePC Coder</span><span style="font-size:11px;color:var(--ai-text-muted);margin-left:auto">${timeStr}</span>`;
         }
 
         const contentWrapper = document.createElement('div');
@@ -522,7 +522,7 @@ const AIChat = {
         const streamHeader = document.createElement('div');
         streamHeader.className = 'ai-msg-header';
         const streamTime = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-        streamHeader.innerHTML = `<img src="images/avatar-steve.png" alt="" class="ai-msg-avatar"><span style="font-weight:600;font-size:13px;color:var(--ai-text-primary)">VersePC Coder</span><span style="font-size:11px;color:var(--ai-text-muted);margin-left:auto">${streamTime}</span>`;
+        streamHeader.innerHTML = `<span class="ai-msg-avatar ai-msg-avatar-steve"></span><span style="font-weight:600;font-size:13px;color:var(--ai-text-primary)">VersePC Coder</span><span style="font-size:11px;color:var(--ai-text-muted);margin-left:auto">${streamTime}</span>`;
 
         const bubble = document.createElement('div');
         bubble.className = 'ai-msg-bubble';
@@ -566,7 +566,7 @@ const AIChat = {
         header.className = 'ai-msg-header';
         header.style.cssText = 'display:flex;align-items:center;gap:10px;cursor:default;margin-bottom:10px;word-break:break-word;';
         const timeStr2 = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-        header.innerHTML = `<img src="images/avatar-steve.png" alt="" class="ai-msg-avatar"><span style="font-weight:600;font-size:13px;color:var(--ai-text-primary)">VersePC Coder</span><span class="ai-msg-header-thinking-toggle" onclick="AIChat._toggleWorkflowThinking()"><span>思考过程</span><span class="ai-msg-header-thinking-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><polyline points="6 9 12 15 18 9"/></svg></span></span><span style="font-size:11px;color:var(--ai-text-muted);margin-left:auto">${timeStr2}</span>`;
+        header.innerHTML = `<span class="ai-msg-avatar ai-msg-avatar-steve"></span><span style="font-weight:600;font-size:13px;color:var(--ai-text-primary)">VersePC Coder</span><span class="ai-msg-header-thinking-toggle" onclick="AIChat._toggleWorkflowThinking()"><span>思考过程</span><span class="ai-msg-header-thinking-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><polyline points="6 9 12 15 18 9"/></svg></span></span><span style="font-size:11px;color:var(--ai-text-muted);margin-left:auto">${timeStr2}</span>`;
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'ai-msg-content ai-msg-body';
@@ -2080,7 +2080,7 @@ const AIChat = {
         const { selId, purpose, installed } = data;
         if (!this._messagesContainer) return;
         const cardHtml = '<div class="ai-message ai-message-assistant" data-version-sel="' + selId + '">' +
-            '<img src="images/avatar-steve.png" alt="" class="ai-msg-avatar">' +
+            '<span class="ai-msg-avatar ai-msg-avatar-steve"></span>' +
             '<div class="ai-message-content"><div class="ai-message-text">' +
             '<div class="ai-version-select-card" data-sel-id="' + selId + '">' +
             '<div class="ai-version-select-header"><span class="ai-version-select-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span><span class="ai-version-select-title">' + this._escapeHtml(purpose) + '</span><span class="ai-version-select-count">' + installed.length + ' 个版本</span></div>' +
