@@ -8640,7 +8640,7 @@ async function loadPersonalizeSettings() {
                 if (defaultThemeEl) selectTheme(defaultThemeEl);
             }
             const defaultWpEl = document.querySelector('.wallpaper-option[data-wallpaper="none"]');
-            if (defaultWpEl && !document.querySelector('.wallpaper-option.active')) selectWallpaper(defaultWpEl);
+            if (defaultWpEl) selectWallpaper(defaultWpEl);
         }
 
         const glassSaved = await window.electronAPI.store.get('versepc_glass_effect');

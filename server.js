@@ -3058,7 +3058,7 @@ function saveVersionSettings(versionId, settings) {
     fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
 }
 
-async function fetchJSON(urlStr, retriesOrHeaders = 3) {
+async function fetchJSON(urlStr, retriesOrHeaders = 3, timeoutMs) {
     let retries = 3;
     let extraHeaders = {};
     if (typeof retriesOrHeaders === 'object' && retriesOrHeaders !== null) {
@@ -3067,6 +3067,7 @@ async function fetchJSON(urlStr, retriesOrHeaders = 3) {
     } else if (typeof retriesOrHeaders === 'number') {
         retries = retriesOrHeaders;
     }
+    const reqTimeout = typeof timeoutMs === 'number' ? timeoutMs : 15000;
 
     let actualUrl = urlStr;
     if (urlStr.startsWith(MODRINTH_API)) {
@@ -3083,7 +3084,7 @@ async function fetchJSON(urlStr, retriesOrHeaders = 3) {
             try {
                 return await new Promise((resolve, reject) => {
                     const headers = { 'User-Agent': 'VersePC/2.0 (PCL2)', 'Connection': 'keep-alive', ...extraHeaders };
-                    const req = mod.get(tryUrl, { headers, agent, timeout: 8000 }, (res) => {
+                    const req = mod.get(tryUrl, { headers, agent, timeout: reqTimeout }, (res) => {
                         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
                             req.destroy();
                             return fetchJSON(res.headers.location, extraHeaders).then(resolve).catch(reject);
@@ -5661,12 +5662,49 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
             throw new Error(`未找到JDK ${majorVersion}的下载信息，所有源均不可用`);
         }
         
-        if (mirrorIndex >= 0 && mirrorIndex <= 3) {
-            const mirrorUrl = getTemurinMirrorUrl(downloadUrl, mirrorIndex);
-            if (mirrorUrl !== downloadUrl) {
-                console.log(`[Java] 使用国内镜像下载: ${mirrorUrl.substring(0, 80)}...`);
-                downloadUrl = mirrorUrl;
+        const githubUrl = downloadUrl;
+        const allMirrorUrls = [
+            getTemurinMirrorUrl(githubUrl, mirrorIndex || 0),
+            getTemurinMirrorUrl(githubUrl, 0),
+            getTemurinMirrorUrl(githubUrl, 1),
+            getTemurinMirrorUrl(githubUrl, 2),
+            githubUrl
+        ];
+        const uniqueUrls = [...new Set(allMirrorUrls)];
+        
+        let lastError = null;
+        for (const tryUrl of uniqueUrls) {
+            const isMirror = tryUrl !== githubUrl;
+            const mirrorLabel = isMirror ? tryUrl.split('/')[2] : 'GitHub';
+            console.log(`[Java] 尝试从 ${mirrorLabel} 下载: ${tryUrl.substring(0, 80)}...`);
+            updateStatus('fetching', 5, `正在检测 ${mirrorLabel} 可用性...`);
+            
+            try {
+                const headController = new AbortController();
+                const headTimer = setTimeout(() => headController.abort(), 15000);
+                const testResp = await fetch(tryUrl, { method: 'HEAD', signal: headController.signal });
+                clearTimeout(headTimer);
+                if (!testResp.ok) {
+                    console.warn(`[Java] ${mirrorLabel} 返回 ${testResp.status}，跳过`);
+                    lastError = new Error(`HTTP ${testResp.status}`);
+                    continue;
+                }
+                if (testResp.headers.get('content-length')) {
+                    totalSize = parseInt(testResp.headers.get('content-length'), 10) || totalSize;
+                }
+                console.log(`[Java] ${mirrorLabel} 可用，开始下载`);
+                downloadUrl = tryUrl;
+                lastError = null;
+                break;
+            } catch (e) {
+                console.warn(`[Java] ${mirrorLabel} 不可达: ${e.message}`);
+                lastError = e;
+                continue;
             }
+        }
+        
+        if (lastError) {
+            throw new Error(`所有下载源均不可用: ${lastError.message}`);
         }
         
         console.log(`[Java] 文件大小: ${totalSize} bytes`);
@@ -16324,7 +16362,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         if (mvGameVer) params.push(`game_versions=["${mvGameVer}"]`);
                         if (params.length > 0) versionUrl += '?' + params.join('&');
 
-                        const versions = await fetchJSON(versionUrl);
+                        const versions = await fetchJSON(versionUrl, 3, 25000);
                         const result = (versions || []).map(v => ({
                             id: v.id,
                             versionNumber: v.version_number || '',
@@ -16365,7 +16403,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         }
                         if (cfParams.length > 0) cfUrl += '?' + cfParams.join('&');
 
-                        const cfRes = await fetchJSON(cfUrl, cfHeaders);
+                        const cfRes = await fetchJSON(cfUrl, cfHeaders, 25000);
                         const cfFiles = cfRes.data || [];
                         const byVersion = new Map();
                         for (const f of cfFiles) {
