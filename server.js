@@ -5592,20 +5592,19 @@ function detectSystemJava() {
     return results;
 }
 
-function getTemurinMirrorUrl(githubUrl, mirrorIndex) {
+function getTemurinMirrorUrl(githubUrl) {
     if (!githubUrl || !githubUrl.includes('github.com/adoptium/')) return githubUrl;
     const match = githubUrl.match(/github\.com\/adoptium\/temurin(\d+)-binaries\/releases\/download\/(.+?)\/(.+)$/);
     if (!match) return githubUrl;
     const majorVer = match[1];
-    const tag = match[2];
-    const fileName = match[3];
+    const tag = decodeURIComponent(match[2]);
+    const fileName = decodeURIComponent(match[3]);
     const mirrors = [
-        `https://mirrors.tuna.tsinghua.edu.cn/Adoptium/${majorVer}/ga/windows/x64/jdk/${tag}/${fileName}`,
         `https://mirrors.ustc.edu.cn/adoptium/${majorVer}/ga/windows/x64/jdk/${tag}/${fileName}`,
-        `https://mirror.iscas.ac.cn/adoptium/${majorVer}/ga/windows/x64/jdk/${tag}/${fileName}`,
-        githubUrl
+        `https://mirrors.tuna.tsinghua.edu.cn/Adoptium/${majorVer}/ga/windows/x64/jdk/${tag}/${fileName}`,
+        `https://mirror.iscas.ac.cn/adoptium/${majorVer}/ga/windows/x64/jdk/${tag}/${fileName}`
     ];
-    return mirrors[mirrorIndex] || githubUrl;
+    return mirrors;
 }
 
 async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorIndex = 0) {
@@ -5690,14 +5689,8 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
         }
         
         const githubUrl = downloadUrl;
-        const allMirrorUrls = [
-            getTemurinMirrorUrl(githubUrl, mirrorIndex || 0),
-            getTemurinMirrorUrl(githubUrl, 0),
-            getTemurinMirrorUrl(githubUrl, 1),
-            getTemurinMirrorUrl(githubUrl, 2),
-            githubUrl
-        ];
-        const uniqueUrls = [...new Set(allMirrorUrls)];
+        const mirrorUrls = getTemurinMirrorUrl(githubUrl);
+        const uniqueUrls = [...new Set([...mirrorUrls, githubUrl])];
         
         let lastError = null;
         for (const tryUrl of uniqueUrls) {
