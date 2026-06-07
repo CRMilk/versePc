@@ -62,6 +62,7 @@
             "css/**/*",
             "js/**/*",
             "img/**/*",
+            "images/**/*",
             "fonts/**/*",
             "scripts/**/*",
             "resources/**/*",

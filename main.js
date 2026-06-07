@@ -352,6 +352,13 @@ function createWindow() {
                     click: () => {
                         mainWindow?.webContents.toggleDevTools();
                     }
+                },
+                {
+                    label: '开发者工具 (备选)',
+                    accelerator: 'CmdOrCtrl+Shift+I',
+                    click: () => {
+                        mainWindow?.webContents.toggleDevTools();
+                    }
                 }
             ]
         }

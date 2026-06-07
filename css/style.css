@@ -1,4 +1,4 @@
-/**
+﻿/**
  * VersePC - Minecraft Launcher
  * Copyright (c) 2026 豆杰. All Rights Reserved.
  *
@@ -41,6 +41,7 @@
 }
 
 :root {
+    --steve-skin: url('data:image/png;base64,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');
     --bg-primary: #ffffff;
     --bg-secondary: #f5f5f7;
     --bg-tertiary: #eeeef0;
@@ -4939,7 +4940,7 @@ body.dark-theme .acct-btn-danger:hover {
     height: 22px;
     border-radius: 4px;
     flex-shrink: 0;
-    background-image: url('../images/steve-skin.png');
+    background-image: var(--steve-skin);
     background-size: 176px;
     background-position: -22px -22px;
     image-rendering: pixelated;
@@ -9815,7 +9816,7 @@ body.dark-theme .acct-btn-danger:hover {
 /* --- 欢迎�?--- */
 .rc-welcome { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:40px; text-align:center; }
 .ai-welcome-avatar { width:80px; height:80px; border-radius:16px; overflow:hidden; background:var(--ai-bg-tertiary); display:flex; align-items:center; justify-content:center; color:var(--ai-accent); box-shadow:0 4px 20px rgba(0,0,0,0.1); }
-.ai-welcome-avatar-steve { background-image:url('../images/steve-skin.png'); background-size:640px; background-position:-80px -80px; image-rendering:pixelated; }
+.ai-welcome-avatar-steve { background-image:var(--steve-skin); background-size:640px; background-position:-80px -80px; image-rendering:pixelated; }
 .ai-welcome-avatar-img { width:80px; height:80px; display:block; }
 .ai-welcome-typewriter { font-size:24px; font-weight:600; color:var(--ai-text-primary); min-height:36px; margin:4px 0; }
 .ai-welcome-typewriter::after { content:'|'; animation:ai-cursor-blink 0.8s step-end infinite; color:var(--ai-accent); font-weight:300; margin-left:1px; }
@@ -11102,7 +11103,7 @@ body.dark-theme .rc-context-sep { background:#222; }
 .ai-msg-user { align-items:flex-end; }
 .ai-msg-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
 .ai-msg-avatar { width:20px; height:20px; border-radius:4px; object-fit:cover; flex-shrink:0; background:var(--ai-bg-tertiary); }
-.ai-msg-avatar-steve { display:inline-block; width:20px; height:20px; border-radius:4px; flex-shrink:0; background-image:url('../images/steve-skin.png'); background-size:160px; background-position:-20px -20px; image-rendering:pixelated; }
+.ai-msg-avatar-steve { display:inline-block; width:20px; height:20px; border-radius:4px; flex-shrink:0; background-image:var(--steve-skin); background-size:160px; background-position:-20px -20px; image-rendering:pixelated; }
 .ai-msg-content { flex:1; min-width:0; }
 .ai-msg-user .ai-msg-content { display:flex; flex-direction:column; align-items:flex-end; }
 .ai-msg-bubble { display:inline-block; padding:8px 12px; border-radius:8px; font-size:13px; line-height:1.6; max-width:100%; word-wrap:break-word; overflow-wrap:break-word; }
@@ -11775,7 +11776,7 @@ body.dark-theme .rc-context-sep { background:#222; }
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
 }
 .onboard-avatar-steve {
-    background-image: url('../images/steve-skin.png');
+    background-image: var(--steve-skin);
     background-size: 768px;
     background-position: -96px -96px;
     image-rendering: pixelated;
