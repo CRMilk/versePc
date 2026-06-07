@@ -712,11 +712,10 @@ function showToast(message, type = 'info') {
     container.appendChild(toast);
     setTimeout(() => {
         toast.style.opacity = '0';
-        toast.style.transform = 'translateX(100%)';
+        toast.style.transform = 'translateY(-100%) scale(0.9)';
         toast.style.transition = 'all 0.3s ease';
         setTimeout(() => {
             toast.remove();
-            // 如果没有 toast 了，清理容器引用
             if (container.children.length === 0) domCache.delete('toast-container');
         }, 300);
     }, 3000);
@@ -8545,10 +8544,20 @@ async function updateCustomAccentColor(color) {
     }
 }
 
+function toggleGlassEffect(enabled) {
+    if (enabled) {
+        document.documentElement.removeAttribute('data-no-glass');
+    } else {
+        document.documentElement.setAttribute('data-no-glass', '');
+    }
+    window.electronAPI.store.set('versepc_glass_effect', enabled ? '1' : '0').catch(() => {});
+}
+
 async function savePersonalizeSettings() {
     const settings = {
         theme: document.querySelector('.theme-option.active')?.dataset.theme || 'light',
-        wallpaper: document.querySelector('.wallpaper-option.active')?.dataset.wallpaper || 'none'
+        wallpaper: document.querySelector('.wallpaper-option.active')?.dataset.wallpaper || 'none',
+        glassEffect: document.getElementById('setting-glass-effect')?.checked ?? true
     };
 
     try {
@@ -8575,10 +8584,14 @@ async function resetPersonalizeSettings() {
     const fitSelect = document.getElementById('wallpaper-fit-select');
     if (fitSelect) { fitSelect.value = 'cover'; onWallpaperFitChange('cover'); }
 
+    const glassCheckbox = document.getElementById('setting-glass-effect');
+    if (glassCheckbox) { glassCheckbox.checked = true; toggleGlassEffect(true); }
+
     try {
         await window.electronAPI.store.set('versepc_personalize_settings', JSON.stringify({
             theme: 'light',
-            wallpaper: 'none'
+            wallpaper: 'none',
+            glassEffect: true
         }));
         await window.electronAPI.store.set('versepc_wallpaper', 'none');
         await window.electronAPI.store.delete('versepc_solid_color');
@@ -8587,6 +8600,7 @@ async function resetPersonalizeSettings() {
         await window.electronAPI.store.set('versepc_wallpaper_fit', 'cover');
         await window.electronAPI.store.delete('versepc_custom_image');
         await window.electronAPI.store.delete('versepc_custom_video');
+        await window.electronAPI.store.set('versepc_glass_effect', '1');
         _updateCustomImagePreview(null);
         const nameEl = document.getElementById('custom-wallpaper-file-name');
         if (nameEl) nameEl.textContent = '未选择';
@@ -8615,6 +8629,12 @@ async function loadPersonalizeSettings() {
                 const wpEl = document.querySelector(`.wallpaper-option[data-wallpaper="${wpName}"]`);
                 if (wpEl) selectWallpaper(wpEl);
             }
+            if (settings.glassEffect !== undefined) {
+                const enabled = settings.glassEffect;
+                const glassCheckbox = document.getElementById('setting-glass-effect');
+                if (glassCheckbox) glassCheckbox.checked = enabled;
+                toggleGlassEffect(enabled);
+            }
         } else {
             const savedTheme = await window.electronAPI.store.get('versepc_theme');
             if (savedTheme) {
@@ -8629,6 +8649,14 @@ async function loadPersonalizeSettings() {
             }
             const defaultWpEl = document.querySelector('.wallpaper-option[data-wallpaper="none"]');
             if (defaultWpEl && !document.querySelector('.wallpaper-option.active')) selectWallpaper(defaultWpEl);
+        }
+
+        const glassSaved = await window.electronAPI.store.get('versepc_glass_effect');
+        if (glassSaved !== null && glassSaved !== undefined) {
+            const enabled = glassSaved === '1';
+            const glassCheckbox = document.getElementById('setting-glass-effect');
+            if (glassCheckbox) glassCheckbox.checked = enabled;
+            toggleGlassEffect(enabled);
         }
     } catch (e) {
         console.error('[Settings] Load personalize settings error:', e);

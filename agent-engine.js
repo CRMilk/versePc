@@ -456,10 +456,21 @@ function buildNonStreamingEndpoint(platform, modelId, apiKey) {
 
 // Anthropic 消息格式转换
 function _toAnthropicMessages(messages) {
-    const system = messages.find(m => m.role === 'system');
+    const systemMsgs = messages.filter(m => m.role === 'system');
     const others = messages.filter(m => m.role !== 'system');
     const result = { messages: [] };
-    if (system) result.system = system.content;
+
+    if (systemMsgs.length > 0) {
+        if (systemMsgs.length === 1) {
+            result.system = [{ type: 'text', text: systemMsgs[0].content, cache_control: { type: 'ephemeral' } }];
+        } else {
+            result.system = systemMsgs.map((m, idx) => ({
+                type: 'text',
+                text: m.content,
+                ...(idx === 0 || idx === systemMsgs.length - 1 ? { cache_control: { type: 'ephemeral' } } : {})
+            }));
+        }
+    }
 
     let i = 0;
     while (i < others.length) {
@@ -2173,23 +2184,21 @@ Take action now. Do not explain your limitations.`
     _summarizeToolResult(toolName, result) {
         if (!result || typeof result !== 'string') return String(result || '');
         if (result.length <= 2000) return result;
+
+        result = this._compressToolOutput(toolName, result);
+        if (result.length <= 2000) return result;
+
         try {
             const parsed = JSON.parse(result);
             if (parsed.error) {
                 const errStr = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
                 const kept = { error: errStr.slice(0, 500) };
                 if (parsed.success !== undefined) kept.success = parsed.success;
-                if (parsed.output) kept.output = typeof parsed.output === 'string' ? parsed.output.slice(0, 500) : '[output truncated]';
+                if (parsed.output) kept.output = typeof parsed.output === 'string' ? this._compressText(parsed.output, 500) : '[output truncated]';
                 return JSON.stringify(kept) + '...[summarized]';
             }
             if (parsed.output && typeof parsed.output === 'string') {
-                const output = parsed.output;
-                if (output.length > 1500) {
-                    const lines = output.split('\n');
-                    const firstLines = lines.slice(0, 30).join('\n');
-                    const lastLines = lines.slice(-10).join('\n');
-                    parsed.output = firstLines + '\n...[' + (lines.length - 40) + ' lines omitted]\n' + lastLines;
-                }
+                parsed.output = this._compressText(parsed.output, 1200);
                 return JSON.stringify(parsed);
             }
             const keys = Object.keys(parsed);
@@ -2202,14 +2211,113 @@ Take action now. Do not explain your limitations.`
             }
             return JSON.stringify(summary);
         } catch (e) {
-            const lines = result.split('\n');
-            if (lines.length > 40) {
-                const first = lines.slice(0, 25).join('\n');
-                const last = lines.slice(-10).join('\n');
-                return first + '\n...[' + (lines.length - 35) + ' lines omitted]\n' + last;
-            }
-            return result.slice(0, 1500) + '\n...[truncated ' + (result.length - 1500) + ' chars]';
+            return this._compressText(result, 1500);
         }
+    }
+
+    _compressToolOutput(toolName, text) {
+        const lines = text.split('\n');
+        let compressed = lines;
+
+        if (toolName === 'read_file' || toolName === 'str_replace_based_edit_tool') {
+            compressed = this._compressCode(lines);
+        } else if (toolName === 'grep_search' || toolName === 'search_files' || toolName === 'glob_search') {
+            compressed = this._compressSearchResults(lines);
+        } else if (toolName === 'bash' || toolName === 'execute_command') {
+            compressed = this._compressShellOutput(lines);
+        } else if (toolName === 'web_fetch' || toolName === 'web_search' || toolName === 'web_search_general') {
+            compressed = this._compressWebContent(lines);
+        } else {
+            compressed = this._compressGeneric(lines);
+        }
+
+        const result = compressed.join('\n');
+        return result.length < text.length ? result : text;
+    }
+
+    _compressCode(lines) {
+        const result = [];
+        let blankCount = 0;
+        let commentBlock = false;
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) { blankCount++; if (blankCount <= 2) result.push(''); continue; }
+            blankCount = 0;
+            if (trimmed.startsWith('/*')) commentBlock = true;
+            if (commentBlock) { if (trimmed.includes('*/')) commentBlock = false; continue; }
+            if (trimmed.startsWith('//') && !trimmed.includes('TODO') && !trimmed.includes('FIXME') && !trimmed.includes('HACK')) continue;
+            result.push(line);
+        }
+        return result;
+    }
+
+    _compressSearchResults(lines) {
+        const unique = [];
+        const seen = new Set();
+        for (const line of lines) {
+            const key = line.replace(/^\d+[:\-→]\s*/, '').trim();
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            unique.push(line);
+        }
+        return unique;
+    }
+
+    _compressShellOutput(lines) {
+        const result = [];
+        let blankCount = 0;
+        let repeatCount = 0;
+        let lastLine = '';
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) { blankCount++; if (blankCount <= 1) result.push(''); continue; }
+            blankCount = 0;
+            if (trimmed === lastLine) { repeatCount++; continue; }
+            if (repeatCount > 0) { result.push(`...[${repeatCount} identical lines]`); repeatCount = 0; }
+            lastLine = trimmed;
+            if (/^(npm WARN|npm notice|npm ERR!)/i.test(trimmed) && result.some(l => l.includes(trimmed.slice(0, 20)))) continue;
+            result.push(line);
+        }
+        if (repeatCount > 0) result.push(`...[${repeatCount} identical lines]`);
+        return result;
+    }
+
+    _compressWebContent(lines) {
+        const result = [];
+        let blankCount = 0;
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) { blankCount++; if (blankCount <= 1) result.push(''); continue; }
+            blankCount = 0;
+            if (/^(Advertisement|Cookie|Sign up|Log in|Subscribe|Newsletter)/i.test(trimmed)) continue;
+            if (trimmed.length < 3) continue;
+            result.push(line);
+        }
+        return result;
+    }
+
+    _compressGeneric(lines) {
+        const result = [];
+        let blankCount = 0;
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) { blankCount++; if (blankCount <= 1) result.push(''); continue; }
+            blankCount = 0;
+            result.push(line);
+        }
+        return result;
+    }
+
+    _compressText(text, maxLen) {
+        if (text.length <= maxLen) return text;
+        const lines = text.split('\n');
+        if (lines.length <= 40) return text.slice(0, maxLen) + '...[truncated]';
+        const headLines = Math.min(25, Math.floor(lines.length * 0.6));
+        const tailLines = Math.min(15, lines.length - headLines);
+        const head = lines.slice(0, headLines).join('\n');
+        const tail = lines.slice(-tailLines).join('\n');
+        const omitted = lines.length - headLines - tailLines;
+        return head + '\n...[' + omitted + ' lines omitted]\n' + tail;
     }
 
     // =========================================================================

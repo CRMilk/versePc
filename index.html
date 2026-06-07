@@ -2729,6 +2729,23 @@
 
                         <div class="card">
                             <h3>背景</h3>
+                            <div class="form-group">
+                                <label>选择背景风格</label>
+                                <div class="wallpaper-picker-grid wallpaper-picker-text-only">
+                                    <div class="wallpaper-option active" data-wallpaper="none" onclick="selectWallpaper(this)">
+                                        <span class="wallpaper-name">无背景</span>
+                                    </div>
+                                    <div class="wallpaper-option" data-wallpaper="panorama" onclick="selectWallpaper(this)">
+                                        <span class="wallpaper-name">MC全景</span>
+                                    </div>
+                                    <div class="wallpaper-option" data-wallpaper="customImage" onclick="selectWallpaper(this)">
+                                        <span class="wallpaper-name">自定义图片</span>
+                                    </div>
+                                    <div class="wallpaper-option" data-wallpaper="customVideo" onclick="selectWallpaper(this)">
+                                        <span class="wallpaper-name">自定义视频</span>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="form-group" id="custom-wallpaper-file-group" style="display:none;">
                                 <label id="custom-wallpaper-file-label">选择文件</label>
                                 <div class="custom-wallpaper-file-row">
@@ -2763,7 +2780,16 @@
                             </div>
                         </div>
 
-
+                        <div class="card">
+                            <h3>视觉效果</h3>
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="setting-glass-effect" checked onchange="toggleGlassEffect(this.checked)">
+                                    <span>毛玻璃效果</span>
+                                </label>
+                                <span class="form-hint">开启后界面元素将呈现半透明毛玻璃质感，关闭可提升性能</span>
+                            </div>
+                        </div>
 
                         <div class="form-actions">
                             <button class="btn btn-primary" onclick="savePersonalizeSettings()">保存设置</button>

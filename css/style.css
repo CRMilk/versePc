@@ -2538,41 +2538,58 @@ body.dark-theme .acct-btn-danger:hover {
 
 .toast-container {
     position: fixed;
-    top: 60px;
-    right: 20px;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 2000;
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 8px;
+    pointer-events: none;
 }
 
 .toast {
-    padding: 12px 20px;
-    border-radius: var(--radius);
+    padding: 10px 20px;
+    border-radius: var(--radius-lg);
     font-size: 13px;
+    font-weight: 500;
     animation: toastIn 0.4s var(--ease-out-expo);
-    box-shadow: var(--shadow);
-    max-width: 360px;
+    box-shadow: var(--shadow-lg);
+    max-width: 420px;
+    min-width: 200px;
+    text-align: center;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    pointer-events: auto;
+    background: var(--bg-card-glass);
+    color: var(--text-primary);
+    border-left: 3px solid var(--accent);
 }
 
 .toast.success {
-    background: var(--green);
-    color: white;
+    border-left-color: var(--green);
+    color: var(--text-primary);
+    background: var(--bg-card-glass);
 }
 
 .toast.error {
-    background: var(--red);
-    color: white;
+    border-left-color: var(--red);
+    color: var(--text-primary);
+    background: var(--bg-card-glass);
 }
 
 .toast.warning {
-    background: #f0a020;
-    color: white;
+    border-left-color: var(--orange);
+    color: var(--text-primary);
+    background: var(--bg-card-glass);
 }
 
 .toast.info {
-    background: var(--accent);
-    color: var(--accent-text);
+    border-left-color: var(--accent);
+    color: var(--text-primary);
+    background: var(--bg-card-glass);
 }
 
 @keyframes slideIn {
@@ -3508,8 +3525,8 @@ body.dark-theme .acct-btn-danger:hover {
 }
 
 @keyframes toastIn {
-    from { transform: translateX(100%) scale(0.8); opacity: 0; }
-    to { transform: translateX(0) scale(1); opacity: 1; }
+    from { transform: translateY(-100%) scale(0.9); opacity: 0; }
+    to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
 .java-install-modal-content {
@@ -4002,6 +4019,15 @@ body.dark-theme .acct-btn-danger:hover {
     gap: 10px;
 }
 
+.wallpaper-picker-text-only {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.wallpaper-picker-text-only .wallpaper-option {
+    padding: 10px 12px;
+    justify-content: center;
+}
+
 .wallpaper-option {
     display: flex;
     flex-direction: column;
@@ -4211,6 +4237,47 @@ body.dark-theme .acct-btn-danger:hover {
 #app .card,
 #app .title-bar {
     transition: background 0.4s ease, backdrop-filter 0.4s ease;
+}
+
+[data-no-glass] .title-bar {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--bg-primary) !important;
+}
+
+[data-no-glass] .sidebar {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--bg-primary) !important;
+}
+
+[data-no-glass] .card,
+[data-no-glass] .stat-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--bg-card) !important;
+}
+
+[data-no-glass] .home-hero {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: linear-gradient(135deg, var(--bg-card), var(--bg-secondary)) !important;
+}
+
+[data-no-glass] .toast {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--bg-card) !important;
+}
+
+[data-no-glass] #app.wp-light .sidebar,
+[data-no-glass] #app.wp-dark .sidebar,
+[data-no-glass] #app.wp-light .card,
+[data-no-glass] #app.wp-dark .card,
+[data-no-glass] #app.wp-light .title-bar,
+[data-no-glass] #app.wp-dark .title-bar {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
 }
 
 .color-picker-row {
