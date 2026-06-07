@@ -2070,6 +2070,19 @@ function navigateToPage(pageName) {
             }
         } catch (e) {}
     }
+
+    if (pageName === 'explore') {
+        if (currentPage) {
+            currentPage.classList.remove('active');
+            currentPage.style.animation = '';
+        }
+        document.getElementById('experimental-disclaimer-modal').style.display = 'flex';
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.nav-sub-btn').forEach(b => b.classList.remove('active'));
+        const navBtn = document.querySelector('.nav-btn[data-page="explore"]');
+        if (navBtn) navBtn.classList.add('active');
+        return;
+    }
     
     const isDetailPage = pageName === 'version-detail' || pageName === 'mod-detail' || pageName === 'version-settings';
     
@@ -2183,23 +2196,26 @@ function navigateToPage(pageName) {
         modDetailHistory = [];
     } else if (pageName === 'downloads') {
         dlManager.render();
-    } else if (pageName === 'explore') {
-        document.getElementById('page-explore').classList.remove('active');
-        document.getElementById('experimental-disclaimer-modal').style.display = 'flex';
-        document.querySelector('[data-page="explore"]').classList.add('active');
-        return;
     }
 }
 
 function acceptExperimentalDisclaimer() {
+    console.log('[Disclaimer] accepted');
     document.getElementById('experimental-disclaimer-modal').style.display = 'none';
     document.getElementById('page-explore').classList.add('active');
-    if (typeof Onboarding !== 'undefined') {
+    if (typeof Onboarding !== 'undefined' && typeof OnboardingUI !== 'undefined') {
         setTimeout(() => {
-            Onboarding.init();
-            OnboardingUI.init();
-            Onboarding.start(true);
-        }, 50);
+            try {
+                Onboarding.init();
+                OnboardingUI.init();
+                Onboarding.start(true);
+                console.log('[Onboarding] started');
+            } catch (e) {
+                console.error('[Onboarding] start failed:', e);
+            }
+        }, 100);
+    } else {
+        console.warn('[Onboarding] not available, Onboarding:', typeof Onboarding, 'OnboardingUI:', typeof OnboardingUI);
     }
 }
 
