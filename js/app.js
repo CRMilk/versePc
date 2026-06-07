@@ -956,7 +956,10 @@ function showSupportModal(count) {
         var countEl = document.getElementById('support-modal-count');
         var modalEl = document.getElementById('support-modal');
         if (countEl) countEl.textContent = count;
-        if (modalEl) modalEl.style.display = '';
+        if (modalEl) {
+            modalEl.style.display = '';
+            modalEl.classList.add('modal-visible');
+        }
     }, 800);
 }
 
@@ -966,7 +969,11 @@ function openSupportPage() {
 }
 
 function dismissSupportModal() {
-    document.getElementById('support-modal').style.display = 'none';
+    const modal = document.getElementById('support-modal');
+    if (modal) {
+        modal.classList.remove('modal-visible');
+        modal.style.display = 'none';
+    }
 }
 
 function generateColorAvatar(username, size) {
@@ -1205,13 +1212,6 @@ async function init() {
         await new Promise(r => setTimeout(r, 400));
         try { splashOverlay.remove(); } catch (err) {}
     }
-
-    setTimeout(() => {
-        const disclaimerModal = document.getElementById('experimental-disclaimer-modal');
-        if (disclaimerModal) {
-            disclaimerModal.style.display = 'flex';
-        }
-    }, 500);
 
     // 首屏显示后，延迟加载非关键数据
     setTimeout(() => {
@@ -2076,11 +2076,20 @@ function navigateToPage(pageName) {
             currentPage.classList.remove('active');
             currentPage.style.animation = '';
         }
-        document.getElementById('experimental-disclaimer-modal').style.display = 'flex';
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.nav-sub-btn').forEach(b => b.classList.remove('active'));
         const navBtn = document.querySelector('.nav-btn[data-page="explore"]');
         if (navBtn) navBtn.classList.add('active');
+        const disclaimerModal = document.getElementById('experimental-disclaimer-modal');
+        if (disclaimerModal) {
+            disclaimerModal.style.display = 'flex';
+            disclaimerModal.classList.add('modal-visible');
+            console.log('[Navigate] disclaimer modal shown');
+        } else {
+            console.warn('[Navigate] disclaimer modal NOT found, showing explore directly');
+            target.classList.add('active');
+            target.scrollTop = 0;
+        }
         return;
     }
     
@@ -2201,7 +2210,11 @@ function navigateToPage(pageName) {
 
 function acceptExperimentalDisclaimer() {
     console.log('[Disclaimer] accepted');
-    document.getElementById('experimental-disclaimer-modal').style.display = 'none';
+    const disclaimerModal = document.getElementById('experimental-disclaimer-modal');
+    if (disclaimerModal) {
+        disclaimerModal.classList.remove('modal-visible');
+        disclaimerModal.style.display = 'none';
+    }
     document.getElementById('page-explore').classList.add('active');
     if (typeof Onboarding !== 'undefined' && typeof OnboardingUI !== 'undefined') {
         setTimeout(() => {
@@ -8967,6 +8980,7 @@ async function openScreenshots(versionId) {
     const grid = document.getElementById('screenshot-grid');
     grid.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:20px;">加载中...</div>';
     modal.style.display = 'flex';
+    modal.classList.add('modal-visible');
 
     try {
         const result = await API.getScreenshots(versionId);
@@ -8986,7 +9000,11 @@ async function openScreenshots(versionId) {
 }
 
 function closeScreenshotModal() {
-    document.getElementById('screenshot-modal').style.display = 'none';
+    const modal = document.getElementById('screenshot-modal');
+    if (modal) {
+        modal.classList.remove('modal-visible');
+        modal.style.display = 'none';
+    }
 }
 
 // ─── 初始化设置页面 ──────────────────────────────────────

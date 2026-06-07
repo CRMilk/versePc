@@ -5592,7 +5592,7 @@ function detectSystemJava() {
     return results;
 }
 
-function getTemurinMirrorUrl(githubUrl) {
+function getTemurinMirrorUrl(githubUrl, osName = 'windows', arch = 'x64') {
     if (!githubUrl || !githubUrl.includes('github.com/adoptium/')) return githubUrl;
     const match = githubUrl.match(/github\.com\/adoptium\/temurin(\d+)-binaries\/releases\/download\/(.+?)\/(.+)$/);
     if (!match) return githubUrl;
@@ -5600,9 +5600,9 @@ function getTemurinMirrorUrl(githubUrl) {
     const tag = decodeURIComponent(match[2]);
     const fileName = decodeURIComponent(match[3]);
     const mirrors = [
-        `https://mirrors.ustc.edu.cn/adoptium/${majorVer}/ga/windows/x64/jdk/${tag}/${fileName}`,
-        `https://mirrors.tuna.tsinghua.edu.cn/Adoptium/${majorVer}/ga/windows/x64/jdk/${tag}/${fileName}`,
-        `https://mirror.iscas.ac.cn/adoptium/${majorVer}/ga/windows/x64/jdk/${tag}/${fileName}`
+        `https://mirrors.ustc.edu.cn/adoptium/releases/temurin${majorVer}-binaries/${tag}/${fileName}`,
+        `https://mirrors.tuna.tsinghua.edu.cn/Adoptium/releases/temurin${majorVer}-binaries/${tag}/${fileName}`,
+        `https://mirror.iscas.ac.cn/adoptium/releases/temurin${majorVer}-binaries/${tag}/${fileName}`
     ];
     return mirrors;
 }
@@ -5635,87 +5635,82 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
         let fileName = '';
         let totalSize = 0;
         
-        const apiUrl = `${TEMURIN_API}/assets/latest/${majorVersion}/hotspot?architecture=${arch}&image_type=jdk&os=${osName}&vendor=eclipse`;
-        console.log(`[Java] 请求Adoptium API: ${apiUrl}`);
+        const mirrorBases = [
+            `https://mirrors.ustc.edu.cn/adoptium/releases/temurin${majorVersion}-binaries/`,
+            `https://mirrors.tuna.tsinghua.edu.cn/Adoptium/releases/temurin${majorVersion}-binaries/`,
+            `https://mirror.iscas.ac.cn/adoptium/releases/temurin${majorVersion}-binaries/`
+        ];
         
-        try {
-            const apiResponse = await Promise.race([
-                fetchJSONWithMethod(apiUrl, 'GET'),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('API timeout (20s)')), 20000))
-            ]);
-            
-            if (apiResponse && apiResponse.length > 0 && apiResponse[0].binary && apiResponse[0].binary.package && apiResponse[0].binary.package.link) {
-                const latest = apiResponse[0];
-                downloadUrl = latest.binary.package.link;
-                fileName = latest.binary.package.name || `jdk-${majorVersion}.zip`;
-                totalSize = latest.binary.package.size || 0;
-                console.log(`[Java] API返回下载链接: ${downloadUrl.substring(0, 80)}...`);
+        for (const mirrorBase of mirrorBases) {
+            try {
+                updateStatus('fetching', 5, `正在扫描镜像 ${new URL(mirrorBase).hostname}...`);
+                const listController = new AbortController();
+                const listTimer = setTimeout(() => listController.abort(), 12000);
+                const listResp = await fetch(mirrorBase, { signal: listController.signal });
+                clearTimeout(listTimer);
+                if (!listResp.ok) { console.log(`[Java] ${new URL(mirrorBase).hostname} 目录不可用 (${listResp.status})`); continue; }
+                const html = await listResp.text();
+                const versionDirs = [];
+                const dirRegex = /href="[^"]*?(jdk-\d+\.\d+\.\d+%2B\d+)[^"]*?"/g;
+                let m;
+                while ((m = dirRegex.exec(html)) !== null) {
+                    versionDirs.push(decodeURIComponent(m[1]));
+                }
+                if (versionDirs.length === 0) continue;
+                versionDirs.sort().reverse();
+                for (const verDir of versionDirs) {
+                    const verMatch = verDir.match(/jdk-(\d+)\.(\d+)\.(\d+)\+(\d+)/);
+                    if (!verMatch) continue;
+                    const altFileName = `OpenJDK${majorVersion}U-jdk_${arch}_${osName}_hotspot_${verMatch[2]}.${verMatch[3]}_${verMatch[4]}.zip`;
+                    const altUrl = mirrorBase + verDir + '/' + altFileName;
+                    try {
+                        const h = new AbortController();
+                        const t = setTimeout(() => h.abort(), 10000);
+                        const r = await fetch(altUrl, { method: 'HEAD', signal: h.signal });
+                        clearTimeout(t);
+                        if (r.ok) {
+                            console.log(`[Java] 镜像可用 (${verDir}): ${altUrl.substring(0, 80)}`);
+                            downloadUrl = altUrl;
+                            fileName = altFileName;
+                            if (r.headers.get('content-length')) {
+                                totalSize = parseInt(r.headers.get('content-length'), 10) || totalSize;
+                            }
+                            break;
+                        }
+                    } catch (e) {}
+                }
+                if (downloadUrl) break;
+            } catch (e) {
+                console.warn(`[Java] 扫描镜像 ${new URL(mirrorBase).hostname} 失败: ${e.message}`);
             }
-        } catch (e) {
-            console.warn(`[Java] Adoptium API失败: ${e.message}`);
         }
         
         if (!downloadUrl) {
-            console.log('[Java] API全部不可用，尝试GitHub releases直接获取...');
+            updateStatus('fetching', 5, '正在请求Adoptium官方API...');
+            const apiUrl = `${TEMURIN_API}/assets/latest/${majorVersion}/hotspot?architecture=${arch}&image_type=jdk&os=${osName}&vendor=eclipse`;
+            console.log(`[Java] 请求Adoptium API: ${apiUrl}`);
             try {
-                const ghApiUrl = `https://api.github.com/repos/adoptium/temurin${majorVersion}-binaries/releases/latest`;
-                const ghResp = await Promise.race([
-                    fetchJSONWithMethod(ghApiUrl, 'GET'),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('GitHub API timeout')), 15000))
+                const apiResponse = await Promise.race([
+                    fetchJSONWithMethod(apiUrl, 'GET'),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('API timeout (20s)')), 20000))
                 ]);
-                const asset = (ghResp.assets || []).find(a => a.name && a.name.includes('windows') && a.name.includes('x64') && a.name.endsWith('.zip') && !a.name.endsWith('.sha256.txt'));
-                if (asset) {
-                    downloadUrl = asset.browser_download_url;
-                    fileName = asset.name;
-                    console.log(`[Java] GitHub回退成功: ${fileName}`);
+                if (apiResponse && apiResponse.length > 0 && apiResponse[0].binary && apiResponse[0].binary.package && apiResponse[0].binary.package.link) {
+                    const latest = apiResponse[0];
+                    downloadUrl = latest.binary.package.link;
+                    fileName = latest.binary.package.name || `jdk-${majorVersion}.zip`;
+                    totalSize = latest.binary.package.size || 0;
+                    console.log(`[Java] API返回下载链接: ${downloadUrl.substring(0, 80)}...`);
                 }
-            } catch (ghErr) {
-                console.log('[Java] GitHub回退也失败:', ghErr.message);
+            } catch (e) {
+                console.warn(`[Java] Adoptium API失败: ${e.message}`);
             }
         }
-
+        
         if (!downloadUrl) {
             throw new Error(`未找到JDK ${majorVersion}的下载信息，所有源均不可用（请检查网络连接或VPN）`);
         }
         
         const githubUrl = downloadUrl;
-        const mirrorUrls = getTemurinMirrorUrl(githubUrl);
-        const uniqueUrls = [...new Set([...mirrorUrls, githubUrl])];
-        
-        let lastError = null;
-        for (const tryUrl of uniqueUrls) {
-            const isMirror = tryUrl !== githubUrl;
-            const mirrorLabel = isMirror ? tryUrl.split('/')[2] : 'GitHub';
-            console.log(`[Java] 尝试从 ${mirrorLabel} 下载: ${tryUrl.substring(0, 80)}...`);
-            updateStatus('fetching', 5, `正在检测 ${mirrorLabel} 可用性...`);
-            
-            try {
-                const headController = new AbortController();
-                const headTimer = setTimeout(() => headController.abort(), 15000);
-                const testResp = await fetch(tryUrl, { method: 'HEAD', signal: headController.signal });
-                clearTimeout(headTimer);
-                if (!testResp.ok) {
-                    console.warn(`[Java] ${mirrorLabel} 返回 ${testResp.status}，跳过`);
-                    lastError = new Error(`HTTP ${testResp.status}`);
-                    continue;
-                }
-                if (testResp.headers.get('content-length')) {
-                    totalSize = parseInt(testResp.headers.get('content-length'), 10) || totalSize;
-                }
-                console.log(`[Java] ${mirrorLabel} 可用，开始下载`);
-                downloadUrl = tryUrl;
-                lastError = null;
-                break;
-            } catch (e) {
-                console.warn(`[Java] ${mirrorLabel} 不可达: ${e.message}`);
-                lastError = e;
-                continue;
-            }
-        }
-        
-        if (lastError) {
-            throw new Error(`所有下载源均不可用: ${lastError.message}`);
-        }
         
         console.log(`[Java] 文件大小: ${totalSize} bytes`);
         

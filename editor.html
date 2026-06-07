@@ -126,10 +126,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
     <span class="statusbar-item" id="statusEOL">LF</span>
 </div>
 
-<script src="node_modules/monaco-editor/dev/vs/loader.js"></script>
 <link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css">
 <script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
 <script src="node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+<script src="node_modules/monaco-editor/dev/vs/loader.js"></script>
 <script>
 const ipcRenderer = window.editorAPI;
 const path = { extname: (f) => { const i = f.lastIndexOf('.'); return i >= 0 ? f.slice(i) : ''; }, join: (...args) => args.join('/'), basename: (f) => f.split('/').pop() };
@@ -277,7 +277,7 @@ require(['vs/editor/editor.main'], function () {
     let _completionAbortController = null;
     let _completionDebounceTimer = null;
 
-    const completionProvider = languages.registerInlineCompletionsProvider('*', {
+    const completionProvider = monaco.languages.registerInlineCompletionsProvider('*', {
         provideInlineCompletions: async (model, position, context, token) => {
             if (!_completionEnabled) return { items: [] };
 
@@ -446,18 +446,22 @@ function updateTabUI() {
     }
 }
 
-ipcRenderer.onOpenFile((filePath) => {
-    loadFile(filePath);
-});
-
-ipcRenderer.onUpdateContent((filePath, newContent) => {
-    if (openFiles.has(filePath)) {
-        const data = openFiles.get(filePath);
-        data.model.setValue(newContent);
-    } else {
+if (ipcRenderer && ipcRenderer.onOpenFile) {
+    ipcRenderer.onOpenFile((filePath) => {
         loadFile(filePath);
-    }
-});
+    });
+}
+
+if (ipcRenderer && ipcRenderer.onUpdateContent) {
+    ipcRenderer.onUpdateContent((filePath, newContent) => {
+        if (openFiles.has(filePath)) {
+            const data = openFiles.get(filePath);
+            data.model.setValue(newContent);
+        } else {
+            loadFile(filePath);
+        }
+    });
+}
 
 let diffEditor = null;
 let diffOriginalModel = null;
@@ -603,9 +607,11 @@ function applyDiff() {
 
 function rejectDiff() { closeDiff(); clearAILines(); }
 
-ipcRenderer.onShowDiff((filePath, original, modified) => {
-    showDiff(filePath, original, modified);
-});
+if (ipcRenderer && ipcRenderer.onShowDiff) {
+    ipcRenderer.onShowDiff((filePath, original, modified) => {
+        showDiff(filePath, original, modified);
+    });
+}
 
 window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'editor:show-diff') {
@@ -653,18 +659,24 @@ function initTerminal() {
     xtermInstance.open(body);
     fitAddon.fit();
     terminalSessionId = 'term-' + Date.now();
-    ipcRenderer.createTerminal(terminalSessionId, xtermInstance.cols, xtermInstance.rows);
+    if (ipcRenderer && ipcRenderer.createTerminal) {
+        ipcRenderer.createTerminal(terminalSessionId, xtermInstance.cols, xtermInstance.rows);
+    }
     xtermInstance.onData((data) => {
-        ipcRenderer.writeTerminal(terminalSessionId, data);
+        if (ipcRenderer && ipcRenderer.writeTerminal) ipcRenderer.writeTerminal(terminalSessionId, data);
     });
-    ipcRenderer.onTerminalData((id, data) => {
-        if (id === terminalSessionId && xtermInstance) xtermInstance.write(data);
-    });
-    ipcRenderer.onTerminalExit((id, code) => {
-        if (id === terminalSessionId && xtermInstance) {
-            xtermInstance.write(`\r\n\x1b[33m[进程已退出，代码 ${code}]\x1b[0m\r\n`);
-        }
-    });
+    if (ipcRenderer && ipcRenderer.onTerminalData) {
+        ipcRenderer.onTerminalData((id, data) => {
+            if (id === terminalSessionId && xtermInstance) xtermInstance.write(data);
+        });
+    }
+    if (ipcRenderer && ipcRenderer.onTerminalExit) {
+        ipcRenderer.onTerminalExit((id, code) => {
+            if (id === terminalSessionId && xtermInstance) {
+                xtermInstance.write(`\r\n\x1b[33m[进程已退出，代码 ${code}]\x1b[0m\r\n`);
+            }
+        });
+    }
     xtermInstance.focus();
     window.addEventListener('resize', () => { if (fitAddon) fitAddon.fit(); });
 }
@@ -675,7 +687,7 @@ function clearTerminal() {
 
 function createTerminal() {
     if (terminalSessionId) {
-        ipcRenderer.killTerminal(terminalSessionId);
+        if (ipcRenderer && ipcRenderer.killTerminal) ipcRenderer.killTerminal(terminalSessionId);
     }
     if (xtermInstance) { xtermInstance.dispose(); xtermInstance = null; fitAddon = null; }
     terminalSessionId = null;
