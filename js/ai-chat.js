@@ -2117,10 +2117,45 @@ const AIChat = {
     },
 
     _handleAIAddDownloadTask(data) {
-        const { sessionId, taskType, taskName, iconUrl } = data;
+        const { sessionId, taskType, taskName, iconUrl, source, targetVersionId,
+                mcVersion, loader, projectId, versionId, downloadUrl, fileName } = data;
         if (typeof dlManager !== 'undefined' && dlManager && dlManager.add) {
             dlManager.add(sessionId, taskName || ('下载 ' + taskType), taskType, sessionId, iconUrl || '');
         }
+
+        const startDownload = async () => {
+            try {
+                let apiUrl, body;
+                if (taskType === 'mod') {
+                    apiUrl = '/api/mods/download';
+                    body = { projectId, source: source || 'modrinth', loader, mcVersion, versionId: targetVersionId || versionId || '' };
+                } else if (taskType === 'modpack') {
+                    apiUrl = '/api/modpacks/install';
+                    body = { projectId, mcVersion };
+                } else if (taskType === 'version') {
+                    apiUrl = '/api/install';
+                    body = { versionId: mcVersion || projectId };
+                } else {
+                    apiUrl = '/api/resources/download';
+                    body = { projectId, versionId: versionId || '', projectType: taskType === 'texturepack' ? 'resourcepack' : taskType, targetVersionId, source: source || 'modrinth', downloadUrl: downloadUrl || '', fileName: fileName || '' };
+                }
+                const resp = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const result = await resp.json();
+                if (result.sessionId && result.sessionId !== sessionId) {
+                    if (typeof dlManager !== 'undefined' && dlManager && dlManager.tasks) {
+                        const task = dlManager.tasks.get(sessionId);
+                        if (task) { task.sessionId = result.sessionId; dlManager.tasks.delete(sessionId); dlManager.tasks.set(result.sessionId, task); }
+                    }
+                }
+            } catch (e) {
+                console.error('[AI Download] Start failed:', e);
+                if (typeof dlManager !== 'undefined' && dlManager && dlManager.update) {
+                    dlManager.update(sessionId, { status: 'failed', message: '启动下载失败: ' + e.message });
+                }
+            }
+        };
+        startDownload();
+
         const pollFn = async () => {
             try {
                 const statusApi = taskType === 'version' ? '/api/install/progress' : '/api/mods/download-status';
@@ -2139,7 +2174,7 @@ const AIChat = {
                 setTimeout(pollFn, 800);
             } catch (e) { setTimeout(pollFn, 2000); }
         };
-        setTimeout(pollFn, 500);
+        setTimeout(pollFn, 1000);
     },
 
     _openFileInEditor(filePath) {

@@ -3983,34 +3983,7 @@ function registerAIChatIPC() {
                         });
                     }
 
-                    let apiResult;
-                    if (taskType === 'mod') {
-                        const body = {
-                            projectId: args.projectId, source, loader, mcVersion,
-                            versionId: targetVersionId || args.versionId || ''
-                        };
-                        apiResult = await callAPI('/api/mods/download', 'POST', JSON.stringify(body), {});
-                    } else if (taskType === 'modpack') {
-                        const body = { projectId: args.projectId, mcVersion };
-                        apiResult = await callAPI('/api/modpacks/install', 'POST', JSON.stringify(body), {});
-                    } else if (taskType === 'version') {
-                        const body = { versionId: args.mcVersion || args.projectId };
-                        apiResult = await callAPI('/api/install', 'POST', JSON.stringify(body), {});
-                    } else {
-                        const body = {
-                            projectId: args.projectId, versionId: args.versionId || '',
-                            projectType: taskType === 'texturepack' ? 'resourcepack' : taskType,
-                            targetVersionId, source,
-                            downloadUrl: args.downloadUrl || '', fileName: args.fileName || ''
-                        };
-                        apiResult = await callAPI('/api/resources/download', 'POST', JSON.stringify(body), {});
-                    }
-
-                    if (apiResult) {
-                        const respBody = JSON.parse(apiResult.body.toString());
-                        return JSON.stringify({ success: true, sessionId, ...respBody });
-                    }
-                    return JSON.stringify({ success: true, sessionId, message: '下载任务已添加到下载管理页面' });
+                    return JSON.stringify({ success: true, sessionId, message: '下载任务已添加到下载管理页面，任务ID: ' + sessionId });
                 }
                 case 'get_download_status': {
                     const sessionId = args.sessionId;
