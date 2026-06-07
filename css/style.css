@@ -11735,10 +11735,10 @@ body.dark-theme .rc-context-sep { background:#222; }
    Onboarding flow (实验性首次使用引导)
    ============================================================ */
 .onboard-overlay {
-    position: absolute;
+    position: fixed;
     inset: 0;
     background: var(--bg-primary, #0a0a0a);
-    z-index: 50;
+    z-index: 9999;
     display: flex;
     align-items: center;
     justify-content: center;

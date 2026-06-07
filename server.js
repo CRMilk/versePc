@@ -18165,43 +18165,12 @@ async function handleAPI(pathname, req, res, parsedUrl) {
 
             case '/api/java/list': {
                 try {
-                    const javaVersions = [];
                     const requiredVersions = [8, 17, 21, 25];
-                    
-                    const apiHosts = [
-                        `${TEMURIN_API}/assets/latest`,
-                        'https://mirrors.tuna.tsinghua.edu.cn/Adoptium/v3/assets/latest'
-                    ];
-                    
-                    for (const majorVersion of requiredVersions) {
-                        let found = false;
-                        for (const host of apiHosts) {
-                            try {
-                                const apiUrl = `${host}/${majorVersion}/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse`;
-                                console.log(`[Java] 获取版本列表: ${apiUrl}`);
-                                const response = await fetchJSONWithMethod(apiUrl, 'GET');
-                                
-                                if (response && response.length > 0 && response[0].binary && response[0].binary.package && response[0].binary.package.link) {
-                                    const latest = response[0];
-                                    javaVersions.push({
-                                        majorVersion: majorVersion,
-                                        version: latest.version.semver || `${majorVersion}.0.0`,
-                                        binary: { package: { link: latest.binary.package.link, name: latest.binary.package.name, size: latest.binary.package.size || 0, checksum: '' } },
-                                        source: 'Adoptium (Temurin)'
-                                    });
-                                    found = true;
-                                    console.log(`[Java] Java ${majorVersion} 版本获取成功: ${latest.version.semver}`);
-                                    break;
-                                }
-                            } catch (e) {
-                                console.warn(`[Java] 获取 Java ${majorVersion} 失败 (${host}): ${e.message}`);
-                            }
-                        }
-                        if (!found) {
-                            console.warn(`[Java] Java ${majorVersion} 所有源均失败，跳过`);
-                        }
-                    }
-                    
+                    const javaVersions = requiredVersions.map(v => ({
+                        majorVersion: v,
+                        version: `Java ${v}`,
+                        source: 'Adoptium (Temurin)'
+                    }));
                     sendJSON({ versions: javaVersions });
                 } catch (e) {
                     console.error('[Java] 获取Java列表失败:', e.message);
