@@ -2195,27 +2195,7 @@
                         </div>
                     </div>
 
-                    <div id="experimental-disclaimer-modal" class="modal" style="display:none">
-                        <div class="modal-content" style="max-width:440px;">
-                            <div class="modal-header">
-                                <h3>⚠️ 实验性内容声明</h3>
-                            </div>
-                            <div class="modal-body">
-                                <p style="color:var(--text-secondary);line-height:1.7;font-size:13px;">
-                                    实验性页面中的功能尚处于<strong>开发测试阶段</strong>，无法保证可以正常使用。
-                                </p>
-                                <p style="color:var(--text-secondary);line-height:1.7;font-size:13px;margin-top:8px;">
-                                    若使用过程中出现问题（包括但不限于数据异常、启动失败、功能不可用等），<strong>开发团队概不负责</strong>。
-                                </p>
-                                <p style="color:var(--text-secondary);line-height:1.7;font-size:13px;margin-top:8px;">
-                                    继续使用即表示您已知晓并接受上述风险。
-                                </p>
-                            </div>
-                            <div class="modal-footer">
-                                <button class="btn btn-primary" onclick="acceptExperimentalDisclaimer()">已知晓</button>
-                            </div>
-                        </div>
-                    </div>
+
 
                     <div id="page-account-detail" class="acct-detail" style="display:none">
                         <div class="acct-detail-left" id="acct-detail-left">
@@ -3433,5 +3413,28 @@
         }
     })();
     </script>
+
+    <div id="experimental-disclaimer-modal" class="modal" style="display:none">
+        <div class="modal-content" style="max-width:440px;">
+            <div class="modal-header">
+                <h3>⚠️ 实验性内容声明</h3>
+            </div>
+            <div class="modal-body">
+                <p style="color:var(--text-secondary);line-height:1.7;font-size:13px;">
+                    实验性页面中的功能尚处于<strong>开发测试阶段</strong>，无法保证可以正常使用。
+                </p>
+                <p style="color:var(--text-secondary);line-height:1.7;font-size:13px;margin-top:8px;">
+                    若使用过程中出现问题（包括但不限于数据异常、启动失败、功能不可用等），<strong>开发团队概不负责</strong>。
+                </p>
+                <p style="color:var(--text-secondary);line-height:1.7;font-size:13px;margin-top:8px;">
+                    继续使用即表示您已知晓并接受上述风险。
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="acceptExperimentalDisclaimer()">已知晓</button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

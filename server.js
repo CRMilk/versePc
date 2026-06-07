@@ -5631,38 +5631,28 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
         const arch = archMap[platformKey] || 'x64';
         const osName = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'macos' : 'linux');
         
-        const apiHosts = [
-            `${TEMURIN_API}/assets/latest`,
-            'https://mirrors.tuna.tsinghua.edu.cn/Adoptium/v3/assets/latest',
-            'https://mirrors.ustc.edu.cn/adoptium/v3/assets/latest',
-            'https://repo.huaweicloud.com/adoptium/v3/assets/latest'
-        ];
-        
         let downloadUrl = '';
         let fileName = '';
         let totalSize = 0;
         
-        for (const host of apiHosts) {
-            try {
-                const apiUrl = `${host}/${majorVersion}/hotspot?architecture=${arch}&image_type=jdk&os=${osName}&vendor=eclipse`;
-                console.log(`[Java] 请求Adoptium API: ${apiUrl}`);
-                
-                const apiResponse = await Promise.race([
-                    fetchJSONWithMethod(apiUrl, 'GET'),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('API timeout (20s)')), 20000))
-                ]);
-                
-                if (apiResponse && apiResponse.length > 0 && apiResponse[0].binary && apiResponse[0].binary.package && apiResponse[0].binary.package.link) {
-                    const latest = apiResponse[0];
-                    downloadUrl = latest.binary.package.link;
-                    fileName = latest.binary.package.name || `jdk-${majorVersion}.zip`;
-                    totalSize = latest.binary.package.size || 0;
-                    console.log(`[Java] API返回下载链接: ${downloadUrl.substring(0, 80)}...`);
-                    break;
-                }
-            } catch (e) {
-                console.warn(`[Java] 获取JDK ${majorVersion} 下载信息失败 (${host}): ${e.message}`);
+        const apiUrl = `${TEMURIN_API}/assets/latest/${majorVersion}/hotspot?architecture=${arch}&image_type=jdk&os=${osName}&vendor=eclipse`;
+        console.log(`[Java] 请求Adoptium API: ${apiUrl}`);
+        
+        try {
+            const apiResponse = await Promise.race([
+                fetchJSONWithMethod(apiUrl, 'GET'),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('API timeout (20s)')), 20000))
+            ]);
+            
+            if (apiResponse && apiResponse.length > 0 && apiResponse[0].binary && apiResponse[0].binary.package && apiResponse[0].binary.package.link) {
+                const latest = apiResponse[0];
+                downloadUrl = latest.binary.package.link;
+                fileName = latest.binary.package.name || `jdk-${majorVersion}.zip`;
+                totalSize = latest.binary.package.size || 0;
+                console.log(`[Java] API返回下载链接: ${downloadUrl.substring(0, 80)}...`);
             }
+        } catch (e) {
+            console.warn(`[Java] Adoptium API失败: ${e.message}`);
         }
         
         if (!downloadUrl) {
