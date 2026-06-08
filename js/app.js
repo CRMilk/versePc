@@ -1102,12 +1102,6 @@ async function init() {
 
         setProgress(90, '正在完成...');
 
-        // 尝试加载游玩时间（非关键，失败不影响首屏）
-        try {
-            const selVal = homeVersionCustomSelect ? homeVersionCustomSelect.getValue() : '';
-            if (selVal) await loadPlayTimeDisplay(selVal);
-        } catch (e) {}
-
         setProgress(100, '准备就绪!');
 
         updateGameStatus();
@@ -1924,7 +1918,6 @@ function updateVersionSelects() {
         homeVersionCustomSelect = new CustomSelect('home-version-select-wrapper', {
             onChange: (value) => {
                 if (launchVersionCustomSelect) launchVersionCustomSelect.setValue(value);
-                loadPlayTimeDisplay(value);
             }
         });
     }
@@ -5739,10 +5732,6 @@ async function updateGameStatus() {
                 } catch (e) {
                     console.warn('[Launch] 退出分析失败:', e);
                 }
-                try {
-                    const selVal = homeVersionCustomSelect ? homeVersionCustomSelect.getValue() : '';
-                    if (selVal) loadPlayTimeDisplay(selVal);
-                } catch (e) {}
             }
         }
     } catch (e) {
@@ -5812,76 +5801,6 @@ function showCrashAnalysisDialog(result) {
             crashAnalyzerUI.show();
         }
     });
-}
-
-async function loadPlayTimeDisplay(versionId) {
-    const card = document.getElementById('home-play-time-card');
-    const sessionEl = document.getElementById('home-play-time-session');
-    const worldsEl = document.getElementById('home-play-time-worlds');
-    if (!card || !versionId) {
-        if (card) card.style.display = 'none';
-        return;
-    }
-
-    try {
-        const data = await API.getPlayTime(versionId);
-        const hasSession = data.session && (data.session.totalSeconds > 0 || data.session.playCount > 0);
-        const hasWorlds = data.worlds && data.worlds.length > 0;
-
-        if (!hasSession && !hasWorlds) {
-            card.style.display = 'none';
-            return;
-        }
-
-        card.style.display = '';
-
-        if (hasSession) {
-            const s = data.session;
-            let sessionHtml = `<div style="display:flex;gap:16px;flex-wrap:wrap">`;
-            sessionHtml += `<div style="flex:1;min-width:120px;padding:12px;background:var(--bg-primary);border-radius:8px">
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">累计游戏时长</div>
-                <div style="font-size:16px;font-weight:600;color:var(--text-primary)">${s.formatted}</div>
-            </div>`;
-            sessionHtml += `<div style="flex:1;min-width:120px;padding:12px;background:var(--bg-primary);border-radius:8px">
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">启动次数</div>
-                <div style="font-size:16px;font-weight:600;color:var(--text-primary)">${s.playCount} 次</div>
-            </div>`;
-            if (s.lastPlayed) {
-                const lastDate = new Date(s.lastPlayed);
-                const now = new Date();
-                const diffMs = now - lastDate;
-                let lastPlayedText;
-                if (diffMs < 60000) lastPlayedText = '刚刚';
-                else if (diffMs < 3600000) lastPlayedText = Math.floor(diffMs / 60000) + ' 分钟前';
-                else if (diffMs < 86400000) lastPlayedText = Math.floor(diffMs / 3600000) + ' 小时前';
-                else lastPlayedText = Math.floor(diffMs / 86400000) + ' 天前';
-                sessionHtml += `<div style="flex:1;min-width:120px;padding:12px;background:var(--bg-primary);border-radius:8px">
-                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">上次游玩</div>
-                    <div style="font-size:16px;font-weight:600;color:var(--text-primary)">${lastPlayedText}</div>
-                </div>`;
-            }
-            sessionHtml += `</div>`;
-            sessionEl.innerHTML = sessionHtml;
-        } else {
-            sessionEl.innerHTML = '';
-        }
-
-        if (hasWorlds) {
-            const sorted = [...data.worlds].sort((a, b) => b.seconds - a.seconds);
-            let worldsHtml = `<div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">存档游玩时间</div>`;
-            for (const w of sorted.slice(0, 5)) {
-                worldsHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg-primary);border-radius:6px;margin-bottom:4px">
-                    <span style="font-size:13px;color:var(--text-primary)">${w.worldName}</span>
-                    <span style="font-size:12px;color:var(--text-muted)">${w.formatted}</span>
-                </div>`;
-            }
-            worldsEl.innerHTML = worldsHtml;
-        } else {
-            worldsEl.innerHTML = '';
-        }
-    } catch (e) {
-        if (card) card.style.display = 'none';
-    }
 }
 
 function showLaunchModal() {
@@ -6682,52 +6601,6 @@ function browseFolder(type) {
 function updateHomeStats() {
     const el = document.getElementById('stat-installed');
     if (el) el.textContent = installedVersions.length;
-}
-
-async function pingServer() {
-    const input = document.getElementById('server-ping-input');
-    const hostPort = input.value.trim();
-    if (!hostPort) { showToast('请输入服务器地址', 'error'); return; }
-
-    let host, port = 25565;
-    if (hostPort.includes(':')) {
-        const parts = hostPort.split(':');
-        host = parts[0];
-        port = parseInt(parts[1]) || 25565;
-    } else {
-        host = hostPort;
-    }
-
-    const resultDiv = document.getElementById('server-ping-result');
-    resultDiv.style.display = 'none';
-    showToast('正在查询服务器状态...', 'info');
-
-    try {
-        const result = await API.pingServer(host, port);
-        if (result.online) {
-            document.getElementById('server-ping-version').textContent = result.version;
-            document.getElementById('server-ping-players').textContent = `${result.players.online} / ${result.players.max} 在线`;
-            const latencyEl = document.getElementById('server-ping-latency');
-            latencyEl.textContent = `${result.latency}ms`;
-            latencyEl.style.color = result.latency < 150 ? '#4ade80' : result.latency < 400 ? '#fbbf24' : '#ef4444';
-            document.getElementById('server-ping-motd').textContent = result.description?.replace(/§[0-9a-fk-or]/g, '') || '';
-
-            const iconEl = document.getElementById('server-ping-icon');
-            if (result.favicon) {
-                iconEl.src = result.favicon;
-                iconEl.style.display = 'block';
-            } else {
-                iconEl.style.display = 'none';
-            }
-
-            resultDiv.style.display = 'block';
-            showToast('服务器在线', 'success');
-        } else {
-            showToast('服务器离线或无法连接', 'error');
-        }
-    } catch (e) {
-        showToast('查询失败: ' + e.message, 'error');
-    }
 }
 
 let isWindowMode = false;

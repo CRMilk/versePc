@@ -344,7 +344,6 @@ const API = {
     getExitAnalysis: () => apiGet('/api/game/exit-analysis'),
     getCrashLog: (versionId) => apiGet('/api/game/crash-log', { versionId }),
     analyzeCrash: (versionId) => apiGet('/api/game/crash-analyze', { versionId }),
-    getPlayTime: (versionId) => apiGet('/api/game/play-time', { versionId }),
     diagnoseGame: (versionId) => apiGet('/api/game/diagnose', { versionId }),
     exportLaunchScript: (versionId) => apiPost('/api/version/export-script', { versionId }),
 
@@ -413,7 +412,6 @@ const API = {
 
     // === 服务端状态 ===
     getStatus: () => apiGet('/api/status'),
-    pingServer: (host, port = 25565) => apiGet('/api/server/ping', { host, port }),
 
     // === 文件系统操作 ===
     openFolder: (folder) => apiPost('/api/open-folder', { folder }),
