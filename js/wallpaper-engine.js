@@ -158,6 +158,10 @@ class WallpaperEngine {
     _onResize() {
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight;
+        if (this.glCanvas) {
+            this.glCanvas.width = window.innerWidth;
+            this.glCanvas.height = window.innerHeight;
+        }
         if (this.renderer && this.renderer.onResize) {
             this.renderer.onResize();
         }
