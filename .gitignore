@@ -79,3 +79,19 @@ installer-app/package-lock.json
 
 # ─── ffmpeg ───
 ffmpeg/
+
+# ─── Kotlin 编译产物 ───
+bin/
+
+# ─── 宣传/推广资源（视频、素材等） ───
+versepc-promo/
+
+# ─── 内部文档 / 设计稿 ───
+docs/
+
+# ─── IDE 配置（Trae 等） ───
+.trae/
+
+# ─── 工具脚本 ───
+do_replace.ps1
+push-api.ps1
