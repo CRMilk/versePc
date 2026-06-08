@@ -1756,6 +1756,7 @@ function initAutoUpdater() {
             const updateInfo = await fetchUpdateJson();
             if (!updateInfo) {
                 console.log('[Updater] No update info available');
+                sendToUpdateUI('update-not-available', { version: app.getVersion() });
                 return;
             }
 
