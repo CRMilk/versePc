@@ -346,12 +346,15 @@ const AIChat = {
     switchTo(id) {
         this.currentId = id;
         this._todos = [];
+        this._taskToolCalls = {};
+        this._lastTodoState = '';
         this.updateTodoBar();
         const conv = this.getConv(id);
         if (!conv || conv.messages.length === 0) {
             this.showWelcome();
         } else {
             this.showMessages(conv.messages);
+            this._loadTodos();
         }
         this.renderSidebar();
         if (this._sidePanelOpen) this.updateSidePanel();
@@ -2131,8 +2134,8 @@ const AIChat = {
             try {
                 let apiUrl, body;
                 if (taskType === 'mod') {
-                    apiUrl = '/api/mods/download';
-                    body = { projectId, source: source || 'modrinth', loader, mcVersion, versionId: targetVersionId || versionId || '' };
+                    apiUrl = '/api/mods/download-version';
+                    body = { versionId: targetVersionId || versionId || '', projectId: projectId || '', source: source || 'modrinth', fileId: '', gameVersion: mcVersion || '', loader: loader || '', includeDeps: true };
                 } else if (taskType === 'modpack') {
                     apiUrl = '/api/modpacks/install';
                     body = { projectId, mcVersion };
@@ -2145,12 +2148,36 @@ const AIChat = {
                 }
                 const resp = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
                 const result = await resp.json();
-                if (result.sessionId && result.sessionId !== sessionId) {
-                    if (typeof dlManager !== 'undefined' && dlManager && dlManager.tasks) {
-                        const task = dlManager.tasks.get(sessionId);
-                        if (task) { task.sessionId = result.sessionId; dlManager.tasks.delete(sessionId); dlManager.tasks.set(result.sessionId, task); }
+                let pollSessionId = sessionId;
+                if (result.sessionId) {
+                    pollSessionId = result.sessionId;
+                    if (result.sessionId !== sessionId) {
+                        if (typeof dlManager !== 'undefined' && dlManager && dlManager.tasks) {
+                            const task = dlManager.tasks.get(sessionId);
+                            if (task) { task.sessionId = result.sessionId; dlManager.tasks.delete(sessionId); dlManager.tasks.set(result.sessionId, task); }
+                        }
                     }
                 }
+                if (result.fileName) {
+                    if (typeof dlManager !== 'undefined' && dlManager && dlManager.update) {
+                        dlManager.update(pollSessionId, { message: result.fileName });
+                    }
+                }
+                const pollFn = async () => {
+                    try {
+                        const statusApi = taskType === 'version' ? '/api/install/progress' : '/api/mods/download-status';
+                        const pollResp = await fetch(statusApi + '?sessionId=' + encodeURIComponent(pollSessionId));
+                        if (!pollResp.ok) return;
+                        const st = await pollResp.json();
+                        if (typeof dlManager !== 'undefined' && dlManager && dlManager.update) {
+                            const dlStatus = st.status === 'completed' ? 'completed' : st.status === 'failed' ? 'failed' : 'downloading';
+                            dlManager.update(pollSessionId, { progress: st.progress || 0, status: dlStatus, message: st.message || st.currentFile || '下载中...' });
+                        }
+                        if (st.status === 'completed' || st.status === 'failed') return;
+                        setTimeout(pollFn, 500);
+                    } catch (e) { setTimeout(pollFn, 1000); }
+                };
+                setTimeout(pollFn, 500);
             } catch (e) {
                 console.error('[AI Download] Start failed:', e);
                 if (typeof dlManager !== 'undefined' && dlManager && dlManager.update) {
@@ -2159,26 +2186,6 @@ const AIChat = {
             }
         };
         startDownload();
-
-        const pollFn = async () => {
-            try {
-                const statusApi = taskType === 'version' ? '/api/install/progress' : '/api/mods/download-status';
-                const resp = await fetch(statusApi + '?sessionId=' + encodeURIComponent(sessionId));
-                if (!resp.ok) return;
-                const st = await resp.json();
-                if (typeof dlManager !== 'undefined' && dlManager && dlManager.update) {
-                    const dlStatus = st.status === 'completed' ? 'completed' : st.status === 'failed' ? 'failed' : 'downloading';
-                    dlManager.update(sessionId, {
-                        progress: st.progress || 0,
-                        status: dlStatus,
-                        message: st.message || st.currentFile || '下载中...'
-                    });
-                }
-                if (st.status === 'completed' || st.status === 'failed') return;
-                setTimeout(pollFn, 800);
-            } catch (e) { setTimeout(pollFn, 2000); }
-        };
-        setTimeout(pollFn, 1000);
     },
 
     _openFileInEditor(filePath) {
@@ -2575,7 +2582,7 @@ const AIChat = {
         document.getElementById('ai-input').value = '';
         aiAutoResize(document.getElementById('ai-input'));
 
-        this._todos = [];
+        this._saveTodos();
         this.isGenerating = true;
         this._userScrollingUp = false;
         this._lastChunkTime = Date.now();
@@ -2887,6 +2894,7 @@ Call attempt_completion when all operations are done and verified.
         this._hideStatusIndicator();
         this.updateSendButton(false);
         this.updateTodoBar();
+        this._saveTodos();
 
         try {
         this._collapseCompletedTaskThinking();
@@ -3021,6 +3029,7 @@ Call attempt_completion when all operations are done and verified.
         this._hideStatusIndicator();
         this.updateSendButton(false);
         this.updateTodoBar();
+        this._saveTodos();
 
         const wf = document.getElementById('ai-active-workflow');
         if (wf) {
@@ -4851,7 +4860,7 @@ Call attempt_completion when all operations are done and verified.
                         <div style="flex:1"><div class="rc-apikey-form-header"><div class="rc-apikey-form-header-title"><span style="font-size:12px;color:var(--text-text-secondary,#9599a6)">显示名称</span></div></div><input type="text" class="rc-apikey-form-input" id="ai-custom-model-name" placeholder="可选" value="${this._escapeHtml(this._customProvider?.modelName || '')}" style="height:28px;margin-top:2px;padding:0 8px;border:1px solid var(--border-border-neutral-l1,rgba(255,255,255,0.08));border-radius:4px;background:var(--bg-bg-overlay-l1,rgba(237,241,248,0.04))"></div>
                     </div>
                     <div style="display:flex;gap:8px;margin-top:4px">
-                        <div style="flex:1"><div class="rc-apikey-form-header"><div class="rc-apikey-form-header-title"><span style="font-size:12px;color:var(--text-text-secondary,#9599a6)">最大 Token</span></div></div><input type="number" class="rc-apikey-form-input" id="ai-custom-max-tokens" placeholder="4096" value="${this._customProvider?.maxTokens || 4096}" style="height:28px;margin-top:2px;padding:0 8px;border:1px solid var(--border-border-neutral-l1,rgba(255,255,255,0.08));border-radius:4px;background:var(--bg-bg-overlay-l1,rgba(237,241,248,0.04))"></div>
+                        <div style="flex:1"><div class="rc-apikey-form-header"><div class="rc-apikey-form-header-title"><span style="font-size:12px;color:var(--text-text-secondary,#9599a6)">最大 Token</span></div></div><input type="number" class="rc-apikey-form-input" id="ai-custom-max-tokens" placeholder="16384" value="${this._customProvider?.maxTokens || 16384}" style="height:28px;margin-top:2px;padding:0 8px;border:1px solid var(--border-border-neutral-l1,rgba(255,255,255,0.08));border-radius:4px;background:var(--bg-bg-overlay-l1,rgba(237,241,248,0.04))"></div>
                         <div style="flex:1"><div class="rc-apikey-form-header"><div class="rc-apikey-form-header-title"><span style="font-size:12px;color:var(--text-text-secondary,#9599a6)">上下文窗口</span></div></div><input type="number" class="rc-apikey-form-input" id="ai-custom-context-window" placeholder="128000" value="${this._customProvider?.contextWindow || 128000}" style="height:28px;margin-top:2px;padding:0 8px;border:1px solid var(--border-border-neutral-l1,rgba(255,255,255,0.08));border-radius:4px;background:var(--bg-bg-overlay-l1,rgba(237,241,248,0.04))"></div>
                     </div>
                     <div style="margin-top:4px"><label class="rc-settings-checkbox"><input type="checkbox" id="ai-custom-streaming" ${this._customProvider?.streaming !== false ? 'checked' : ''}><span style="font-size:12px;color:var(--text-text-secondary,#9599a6)">启用流式输出</span></label></div>
@@ -4883,7 +4892,7 @@ Call attempt_completion when all operations are done and verified.
                 <div class="rc-settings-item"><label class="rc-settings-item-label">Model ID <span style="color:var(--ai-error,#f44)">*</span></label><input type="text" class="rc-input" id="ai-custom-model-id" placeholder="gpt-4o" value="${this._escapeHtml(cp.modelId || '')}"></div>
                 <div class="rc-settings-item"><label class="rc-settings-item-label">API 格式</label><select class="rc-settings-select" id="ai-custom-api-format"><option value="openai" ${cp.apiFormat === 'anthropic' ? '' : 'selected'}>OpenAI (Chat Completions)</option><option value="anthropic" ${cp.apiFormat === 'anthropic' ? 'selected' : ''}>Anthropic (Messages API)</option></select><div class="rc-settings-item-desc">选择服务商的 API 接口格式。OpenAI 格式兼容大多数服务商（DeepSeek、GLM、Kimi 等），Anthropic 格式用于 Claude。</div></div>
                 <div class="rc-settings-item"><label class="rc-settings-item-label">模型显示名称</label><input type="text" class="rc-input" id="ai-custom-model-name" placeholder="自定义模型 (可选)" value="${this._escapeHtml(cp.modelName || '')}"></div>
-                <div class="rc-settings-item"><label class="rc-settings-item-label">最大 Token</label><input type="number" class="rc-input" id="ai-custom-max-tokens" placeholder="4096" value="${cp.maxTokens || 4096}" style="width:120px"></div>
+                <div class="rc-settings-item"><label class="rc-settings-item-label">最大 Token</label><input type="number" class="rc-input" id="ai-custom-max-tokens" placeholder="16384" value="${cp.maxTokens || 16384}" style="width:120px"></div>
                 <div class="rc-settings-item"><label class="rc-settings-item-label">上下文窗口</label><input type="number" class="rc-input" id="ai-custom-context-window" placeholder="128000" value="${cp.contextWindow || 128000}" style="width:120px"></div>
                 <div class="rc-settings-item"><label class="rc-settings-item-label">自定义 Headers</label><div id="ai-custom-headers-list">${(cp.headers || []).map((h, i) => `<div style="display:flex;gap:6px;margin-bottom:4px"><input type="text" class="rc-input" placeholder="Header Name" value="${this._escapeHtml(h[0])}" data-idx="${i}" data-field="key" style="flex:1"><input type="text" class="rc-input" placeholder="Header Value" value="${this._escapeHtml(h[1])}" data-idx="${i}" data-field="val" style="flex:1"><button class="rc-btn rc-btn-secondary rc-btn-sm" onclick="AIChat._removeCustomHeader(${i})">✕</button></div>`).join('')}</div><button class="rc-btn rc-btn-secondary rc-btn-sm" onclick="AIChat._addCustomHeader()" style="margin-top:4px">+ 添加 Header</button></div>
                 <div class="rc-settings-item" style="margin-top:8px"><label class="rc-settings-checkbox"><input type="checkbox" id="ai-custom-streaming" ${cp.streaming !== false ? 'checked' : ''}><span>启用流式输出</span></label></div>
@@ -4977,7 +4986,7 @@ Call attempt_completion when all operations are done and verified.
         const apiKey = document.getElementById('ai-custom-api-key')?.value?.trim();
         const modelId = document.getElementById('ai-custom-model-id')?.value?.trim();
         const modelName = document.getElementById('ai-custom-model-name')?.value?.trim();
-        const maxTokens = parseInt(document.getElementById('ai-custom-max-tokens')?.value) || 4096;
+        const maxTokens = parseInt(document.getElementById('ai-custom-max-tokens')?.value) || 16384;
         const contextWindow = parseInt(document.getElementById('ai-custom-context-window')?.value) || 128000;
         const streaming = document.getElementById('ai-custom-streaming')?.checked !== false;
         const apiFormat = document.getElementById('ai-custom-api-format')?.value || 'openai';
@@ -5526,7 +5535,7 @@ Call attempt_completion when all operations are done and verified.
                         </div>
                         <div class="amd-form-group" style="flex:1">
                             <label class="amd-form-label">最大 Token</label>
-                            <input type="number" class="amd-form-input" id="amd-custom-tokens" placeholder="4096" value="${this._customProvider?.maxTokens || 4096}">
+                            <input type="number" class="amd-form-input" id="amd-custom-tokens" placeholder="16384" value="${this._customProvider?.maxTokens || 16384}">
                         </div>
                     </div>
                     <div class="amd-form-group">
@@ -5653,7 +5662,7 @@ Call attempt_completion when all operations are done and verified.
         const apiKey = document.getElementById('amd-custom-key')?.value?.trim();
         const modelId = document.getElementById('amd-custom-model')?.value?.trim();
         const modelName = document.getElementById('amd-custom-name')?.value?.trim();
-        const maxTokens = parseInt(document.getElementById('amd-custom-tokens')?.value) || 4096;
+        const maxTokens = parseInt(document.getElementById('amd-custom-tokens')?.value) || 16384;
         const contextWindow = parseInt(document.getElementById('amd-custom-ctx')?.value) || 128000;
         const streaming = document.getElementById('amd-custom-stream')?.checked !== false;
         const apiFormat = document.getElementById('amd-custom-format')?.value || 'openai';
@@ -5975,6 +5984,7 @@ Call attempt_completion when all operations are done and verified.
         const todos = this._todos || [];
         if (todos.length === 0) {
             bar.style.display = 'none';
+            this.updateSidePanelTasks();
             return;
         }
         bar.style.display = '';
@@ -6007,6 +6017,8 @@ Call attempt_completion when all operations are done and verified.
                 </div>
             </div>`;
         }).join('');
+
+        try { this.updateSidePanelTasks(); } catch (e) {}
     },
 
     _toggleTaskCard() {
@@ -8781,7 +8793,7 @@ const Onboarding = {
                 const baseUrl = document.getElementById('onboard-base-url')?.value.trim();
                 const apiFormat = document.getElementById('onboard-api-format')?.value || 'openai';
                 const displayName = document.getElementById('onboard-custom-name')?.value.trim() || model;
-                const maxTokens = parseInt(document.getElementById('onboard-max-tokens')?.value, 10) || 4096;
+                const maxTokens = parseInt(document.getElementById('onboard-max-tokens')?.value, 10) || 16384;
                 if (!baseUrl) {
                     if (status) { status.textContent = '请输入 Base URL'; status.className = 'onboard-apikey-status error'; }
                     return;

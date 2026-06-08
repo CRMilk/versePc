@@ -2070,11 +2070,6 @@ function navigateToPage(pageName) {
     }
 
     if (currentPage && currentPage.id === 'page-explore' && pageName !== 'explore') {
-        try {
-            if (typeof AIChat !== 'undefined' && AIChat && AIChat.isGenerating) {
-                AIChat.stopGenerationForce();
-            }
-        } catch (e) {}
     }
 
     if (pageName === 'explore') {

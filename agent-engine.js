@@ -1256,9 +1256,10 @@ class AgentEngine {
 
             if (apiFormat === 'anthropic') {
                 const anthropicMessages = _toAnthropicMessages(conversation);
+                const maxOutput = this._provider.maxTokens || 16384;
                 const reqBody = {
                     model: this._requestModel,
-                    max_tokens: 8192,
+                    max_tokens: maxOutput,
                     stream: true,
                     ...(anthropicMessages.system ? { system: anthropicMessages.system } : {}),
                     messages: anthropicMessages.messages
@@ -1267,18 +1268,21 @@ class AgentEngine {
                 bodyStr = JSON.stringify(reqBody);
             } else if (apiFormat === 'google') {
                 const googleMessages = _toGoogleMessages(conversation);
+                const maxOutput = this._provider.maxTokens || 16384;
                 const reqBody = {
                     ...(googleMessages.system_instruction ? { system_instruction: googleMessages.system_instruction } : {}),
                     contents: googleMessages.contents,
-                    generationConfig: { temperature: temperature != null ? temperature : 0.7 }
+                    generationConfig: { temperature: temperature != null ? temperature : 0.7, maxOutputTokens: maxOutput }
                 };
                 if (hasTools) reqBody.tools = _toGoogleTools(tools);
                 bodyStr = JSON.stringify(reqBody);
             } else {
+                const maxOutput = this._provider.maxTokens || 16384;
                 const reqBody = {
                     model: this._requestModel,
                     messages: conversation,
                     temperature: temperature != null ? temperature : 0.7,
+                    max_tokens: maxOutput,
                     stream: true,
                     stream_options: { include_usage: true }
                 };
@@ -1434,7 +1438,11 @@ Take action now. Do not explain your limitations.`
 
             const completionFromTool = toolResults.find(r => r.isCompletion);
             const completionText = completionFromTool ? completionFromTool.completionText : '';
-            this._send({ type: 'say', say: SayType.COMPLETION, text: roundData.fullContent || completionText || '' });
+            let finalText = roundData.fullContent || completionText || '';
+            if (roundData.finishReason === 'length') {
+                finalText += '\n\n> ⚠️ 输出已达到最大 Token 限制，内容可能被截断。如需继续，请发送"继续"。';
+            }
+            this._send({ type: 'say', say: SayType.COMPLETION, text: finalText });
             if (totalUsage.total_tokens > 0) {
                 this._send({ type: 'usage', usage: totalUsage });
             }
