@@ -4655,22 +4655,22 @@ Call attempt_completion when all operations are done and verified.
             if (historyBtn) historyBtn.classList.remove('active');
         }
 
-        if (page.style.display === 'none') {
-            page.style.display = '';
+        if (page.classList.contains('rc-settings-closed')) {
+            page.classList.remove('rc-settings-closed');
             welcome.style.display = 'none';
             messages.style.display = 'none';
             inputArea.style.display = 'none';
             this.loadSettingsUI();
             this.renderSettingsPanel();
         } else {
-            page.style.display = 'none';
-            const conv = this.getCurrent();
-            if (!conv || conv.messages.length === 0) {
-                welcome.style.display = '';
-            } else {
-                messages.style.display = '';
-            }
-            inputArea.style.display = '';
+            page.classList.add('rc-settings-closed');
+            setTimeout(() => {
+                if (page.classList.contains('rc-settings-closed')) {
+                    welcome.style.display = '';
+                    messages.style.display = '';
+                    inputArea.style.display = '';
+                }
+            }, 300);
         }
     },
 
