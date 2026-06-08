@@ -255,7 +255,7 @@ class PanoramaRenderer {
         this.cube = null;
         this.loaded = false;
         this.autoRotation = 0;
-        this.ROTATION_SPEED = 0.03;
+        this.ROTATION_SPEED = 0.005;
         this.currentTheme = 'overworld';
         this.init();
     }
