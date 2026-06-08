@@ -1178,6 +1178,12 @@ async function init() {
                 if (select) { select.value = savedFit; onWallpaperFitChange(savedFit); }
             }
 
+            const savedPanoramaTheme = await window.electronAPI.store.get('versepc_panorama_theme');
+            if (savedPanoramaTheme) {
+                const themeEl = document.querySelector(`.panorama-theme-option[data-theme="${savedPanoramaTheme}"]`);
+                if (themeEl) selectPanoramaTheme(themeEl);
+            }
+
             const savedCustomImage = await window.electronAPI.store.get('versepc_custom_image');
             if (savedCustomImage) {
                 const nameEl = document.getElementById('custom-wallpaper-file-name');
@@ -8395,8 +8401,12 @@ async function selectWallpaper(element) {
     }
 
     const isCustom = mode === 'customImage' || mode === 'customVideo';
+    const isPanorama = mode === 'panorama';
     document.getElementById('custom-wallpaper-file-group').style.display = isCustom ? '' : 'none';
     document.getElementById('wallpaper-fit-group').style.display = isCustom ? '' : 'none';
+    document.getElementById('wallpaper-opacity-group').style.display = isCustom ? '' : 'none';
+    document.getElementById('wallpaper-blur-group').style.display = isCustom ? '' : 'none';
+    document.getElementById('panorama-theme-group').style.display = isPanorama ? '' : 'none';
 
     if (isCustom) {
         const fileLabel = document.getElementById('custom-wallpaper-file-label');
@@ -8574,6 +8584,14 @@ function onWallpaperFitChange(value) {
     window.electronAPI?.store?.set('versepc_wallpaper_fit', value).catch(() => {});
 }
 
+function selectPanoramaTheme(element) {
+    document.querySelectorAll('.panorama-theme-option').forEach(opt => opt.classList.remove('active'));
+    element.classList.add('active');
+    const theme = element.dataset.theme;
+    if (typeof setPanoramaTheme === 'function') setPanoramaTheme(theme);
+    window.electronAPI?.store?.set('versepc_panorama_theme', theme).catch(() => {});
+}
+
 function aiToggleApiKeyVisibility() {
     const input = document.getElementById('ai-api-key-input');
     if (!input) return;
@@ -8666,6 +8684,7 @@ async function resetPersonalizeSettings() {
         await window.electronAPI.store.set('versepc_wallpaper_fit', 'cover');
         await window.electronAPI.store.delete('versepc_custom_image');
         await window.electronAPI.store.delete('versepc_custom_video');
+        await window.electronAPI.store.set('versepc_panorama_theme', 'overworld');
         await window.electronAPI.store.set('versepc_glass_effect', '1');
         _updateCustomImagePreview(null);
         const nameEl = document.getElementById('custom-wallpaper-file-name');

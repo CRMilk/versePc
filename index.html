@@ -2716,6 +2716,44 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="form-group" id="panorama-theme-group" style="display:none;">
+                                <label>全景主题</label>
+                                <div class="wallpaper-picker-grid wallpaper-picker-text-only">
+                                    <div class="panorama-theme-option active" data-theme="overworld" onclick="selectPanoramaTheme(this)">
+                                        <span class="wallpaper-name">主世界</span>
+                                    </div>
+                                    <div class="panorama-theme-option" data-theme="nether" onclick="selectPanoramaTheme(this)">
+                                        <span class="wallpaper-name">下界</span>
+                                    </div>
+                                    <div class="panorama-theme-option" data-theme="wild" onclick="selectPanoramaTheme(this)">
+                                        <span class="wallpaper-name">荒野</span>
+                                    </div>
+                                    <div class="panorama-theme-option" data-theme="end" onclick="selectPanoramaTheme(this)">
+                                        <span class="wallpaper-name">末地</span>
+                                    </div>
+                                    <div class="panorama-theme-option" data-theme="snowy" onclick="selectPanoramaTheme(this)">
+                                        <span class="wallpaper-name">雪原</span>
+                                    </div>
+                                    <div class="panorama-theme-option" data-theme="darkforest" onclick="selectPanoramaTheme(this)">
+                                        <span class="wallpaper-name">黑森林</span>
+                                    </div>
+                                    <div class="panorama-theme-option" data-theme="ocean" onclick="selectPanoramaTheme(this)">
+                                        <span class="wallpaper-name">海洋</span>
+                                    </div>
+                                    <div class="panorama-theme-option" data-theme="desert" onclick="selectPanoramaTheme(this)">
+                                        <span class="wallpaper-name">沙漠</span>
+                                    </div>
+                                    <div class="panorama-theme-option" data-theme="mountains" onclick="selectPanoramaTheme(this)">
+                                        <span class="wallpaper-name">山脉</span>
+                                    </div>
+                                    <div class="panorama-theme-option" data-theme="cherry" onclick="selectPanoramaTheme(this)">
+                                        <span class="wallpaper-name">樱花</span>
+                                    </div>
+                                    <div class="panorama-theme-option" data-theme="deep_dark" onclick="selectPanoramaTheme(this)">
+                                        <span class="wallpaper-name">深暗之域</span>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="form-group" id="custom-wallpaper-file-group" style="display:none;">
                                 <label id="custom-wallpaper-file-label">选择文件</label>
                                 <div class="custom-wallpaper-file-row">
@@ -2726,11 +2764,11 @@
                                     拖放图片到此处
                                 </div>
                             </div>
-                            <div class="form-group" id="wallpaper-opacity-group">
+                            <div class="form-group" id="wallpaper-opacity-group" style="display:none;">
                                 <label>不透明度 <span id="wallpaper-opacity-value">100%</span></label>
                                 <input type="range" id="wallpaper-opacity-slider" min="0" max="100" value="100" class="wallpaper-slider" oninput="onWallpaperOpacityChange(this.value)">
                             </div>
-                            <div class="form-group" id="wallpaper-blur-group">
+                            <div class="form-group" id="wallpaper-blur-group" style="display:none;">
                                 <label>背景模糊 <span id="wallpaper-blur-value">0px</span></label>
                                 <input type="range" id="wallpaper-blur-slider" min="0" max="40" value="0" class="wallpaper-slider" oninput="onWallpaperBlurChange(this.value)">
                             </div>

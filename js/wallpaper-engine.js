@@ -249,17 +249,43 @@ function drawFitMode(ctx, source, sourceW, sourceH, canvasW, canvasH, fitMode) {
 class PanoramaRenderer {
     constructor(engine) {
         this.engine = engine;
+        this.threeRenderer = null;
         this.threeScene = null;
         this.threeCamera = null;
-        this.threeRenderer = null;
         this.cube = null;
         this.loaded = false;
         this.autoRotation = 0;
-        this.ROTATION_SPEED = 0.0003;
-        this._initThree();
+        this.ROTATION_SPEED = 0.03;
+        this.currentTheme = 'overworld';
+        this.init();
     }
 
-    setTheme() {}
+    setTheme(theme) {
+        if (this.currentTheme === theme) return;
+        this.currentTheme = theme;
+        this.loaded = false;
+        this._loadTextures();
+    }
+
+    _loadTextures() {
+        if (!this.cube) return;
+        const loader = new THREE.TextureLoader();
+        const basePath = 'img/panorama/' + this.currentTheme + '/';
+        const faceOrder = [1, 3, 4, 5, 0, 2];
+        this.cube.material.forEach((mat, i) => {
+            loader.load(basePath + 'panorama_' + faceOrder[i] + '.png', (texture) => {
+                texture.colorSpace = THREE.SRGBColorSpace;
+                texture.minFilter = THREE.LinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                mat.map = texture;
+                mat.color = new THREE.Color(0xffffff);
+                mat.needsUpdate = true;
+                this.loaded = true;
+            });
+        });
+    }
+
+    init() { this._initThree(); }
     onResize() { this._onThreeResize(); }
 
     _initThree() {
@@ -279,26 +305,16 @@ class PanoramaRenderer {
             this.threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             this.threeRenderer.setClearColor(0x0a0a0a);
 
-            const loader = new THREE.TextureLoader();
-            const basePath = 'img/panorama/';
             const faceOrder = [1, 3, 4, 5, 0, 2];
-            const materials = faceOrder.map(i => {
-                const mat = new THREE.MeshBasicMaterial({ side: THREE.BackSide, color: 0x0a0a0a });
-                loader.load(basePath + 'panorama_' + i + '.png', (texture) => {
-                    texture.colorSpace = THREE.SRGBColorSpace;
-                    texture.minFilter = THREE.LinearFilter;
-                    texture.magFilter = THREE.LinearFilter;
-                    mat.map = texture;
-                    mat.color = new THREE.Color(0xffffff);
-                    mat.needsUpdate = true;
-                    this.loaded = true;
-                });
-                return mat;
+            const materials = faceOrder.map(() => {
+                return new THREE.MeshBasicMaterial({ side: THREE.BackSide, color: 0x0a0a0a });
             });
 
             const geometry = new THREE.BoxGeometry(10, 10, 10);
             this.cube = new THREE.Mesh(geometry, materials);
             this.threeScene.add(this.cube);
+
+            this._loadTextures();
         } catch (e) {
             console.error('[PanoramaRenderer] Three.js init error:', e);
         }
@@ -599,6 +615,12 @@ function setWallpaperBlur(value) {
 
 function setWallpaperFitMode(mode) {
     if (wallpaperEngine) wallpaperEngine.wallpaperFitMode = mode;
+}
+
+function setPanoramaTheme(theme) {
+    if (wallpaperEngine && wallpaperEngine.renderer instanceof PanoramaRenderer) {
+        wallpaperEngine.renderer.setTheme(theme);
+    }
 }
 
 function onWallpaperBrightnessChange(callback) {
