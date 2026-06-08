@@ -288,6 +288,18 @@ const API = {
     getModDependencies: (versionId, source = 'modrinth', gameVersion = '', loader = '') =>
         apiPost('/api/mods/get-dependencies', { versionId, source, gameVersion, loader }),
 
+    // === 收藏夹管理 ===
+    getFavorites: () => apiGet('/api/favorites'),
+    createFavorite: (name) => apiPost('/api/favorites/create', { name }),
+    renameFavorite: (id, name) => apiPost('/api/favorites/rename', { id, name }),
+    deleteFavorite: (id) => apiPost('/api/favorites/delete', { id }),
+    addToFavorite: (favId, projectId) => apiPost('/api/favorites/add', { favId, projectId }),
+    removeFromFavorite: (favId, projectId) => apiPost('/api/favorites/remove', { favId, projectId }),
+    updateFavNote: (favId, projectId, note) => apiPost('/api/favorites/note', { favId, projectId, note }),
+    exportFavorite: (id) => apiGet(`/api/favorites/export${id ? '?id=' + id : ''}`),
+    importFavorite: (data, targetFavId) => apiPost('/api/favorites/import', { data, targetFavId }),
+    checkFavorite: (projectId) => apiGet(`/api/favorites/check?projectId=${projectId}`),
+
     // === 模组加载器（Fabric/Forge/NeoForge/OptiFine）===
     getModLoaderVersions: async (gameVersion, loaderType) => {
         try {

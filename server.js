@@ -181,6 +181,33 @@ function getSafeJavaDir() {
 const JAVA_DIR = getSafeJavaDir();
 const LOGS_DIR = path.join(DATA_DIR, 'logs');
 const ICON_CACHE_DIR = path.join(DATA_DIR, 'cache', 'mod-icons');
+const FAVORITES_FILE = path.join(DATA_DIR, 'favorites.json');
+
+function generateUUID() {
+    return crypto.randomUUID();
+}
+
+function loadFavorites() {
+    try {
+        if (fs.existsSync(FAVORITES_FILE)) {
+            const data = JSON.parse(fs.readFileSync(FAVORITES_FILE, 'utf8'));
+            if (Array.isArray(data)) {
+                if (data.length === 0) return [{ name: '默认', id: generateUUID(), favs: [], notes: {} }];
+                return data;
+            }
+            if (typeof data === 'object' && data !== null) {
+                return [{ name: '默认', id: generateUUID(), favs: Object.keys(data).filter(k => data[k]), notes: {} }];
+            }
+        }
+    } catch (e) {}
+    return [{ name: '默认', id: generateUUID(), favs: [], notes: {} }];
+}
+
+function saveFavorites(favorites) {
+    try {
+        fs.writeFileSync(FAVORITES_FILE, JSON.stringify(favorites, null, 2));
+    } catch (e) {}
+}
 
 const MOJANG_API = 'https://piston-meta.mojang.com';
 const VERSION_MANIFEST_URL = `${MOJANG_API}/mc/game/version_manifest_v2.json`;
@@ -8402,40 +8429,73 @@ function setGameLanguage(gameDir, versionJson, settings) {
         }
     }
 
-    if (!settings.fullscreen) {
-        if (optionsContent.match(/^fullscreen:/m)) {
-            optionsContent = optionsContent.replace(/^fullscreen:.+$/m, 'fullscreen:false');
-        } else if (optionsContent) {
-            optionsContent += '\nfullscreen:false';
-        } else {
-            optionsContent = 'fullscreen:false\n';
-        }
-        console.log('[Options] 已设置 fullscreen:false (窗口化模式)');
-    }
-
-    if (settings.resolution) {
-        const [w, h] = settings.resolution.split('x');
-        if (w && h) {
-            if (optionsContent.match(/^overrideWidth:/m)) {
-                optionsContent = optionsContent.replace(/^overrideWidth:.+$/m, `overrideWidth:${w}`);
-            } else {
-                optionsContent += `\noverrideWidth:${w}`;
-            }
-            if (optionsContent.match(/^overrideHeight:/m)) {
-                optionsContent = optionsContent.replace(/^overrideHeight:.+$/m, `overrideHeight:${h}`);
-            } else {
-                optionsContent += `\noverrideHeight:${h}`;
-            }
-            console.log(`[Options] 已设置窗口大小: ${w}x${h}`);
-        }
-    }
-
     const dir = path.dirname(optionsPath);
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
 
     fs.writeFileSync(optionsPath, optionsContent, 'utf-8');
+}
+
+function applyWindowSettings(gameDir, settings) {
+    try {
+        let optionsPath = path.join(gameDir, 'options.txt');
+        const yosbrPath = path.join(gameDir, 'config', 'yosbr', 'options.txt');
+        if (!fs.existsSync(optionsPath) && fs.existsSync(yosbrPath)) {
+            optionsPath = yosbrPath;
+        }
+
+        let optionsContent = '';
+        if (fs.existsSync(optionsPath)) {
+            optionsContent = fs.readFileSync(optionsPath, 'utf-8');
+        }
+
+        if (!settings.fullscreen) {
+            if (optionsContent.match(/^fullscreen:/m)) {
+                optionsContent = optionsContent.replace(/^fullscreen:.+$/m, 'fullscreen:false');
+            } else if (optionsContent) {
+                optionsContent += '\nfullscreen:false';
+            } else {
+                optionsContent = 'fullscreen:false\n';
+            }
+            console.log('[Options] 已设置 fullscreen:false (窗口化模式)');
+        } else {
+            if (optionsContent.match(/^fullscreen:/m)) {
+                optionsContent = optionsContent.replace(/^fullscreen:.+$/m, 'fullscreen:true');
+            } else if (optionsContent) {
+                optionsContent += '\nfullscreen:true';
+            } else {
+                optionsContent = 'fullscreen:true\n';
+            }
+            console.log('[Options] 已设置 fullscreen:true (全屏模式)');
+        }
+
+        if (settings.resolution) {
+            const [w, h] = settings.resolution.split('x');
+            if (w && h) {
+                if (optionsContent.match(/^overrideWidth:/m)) {
+                    optionsContent = optionsContent.replace(/^overrideWidth:.+$/m, `overrideWidth:${w}`);
+                } else {
+                    optionsContent += `\noverrideWidth:${w}`;
+                }
+                if (optionsContent.match(/^overrideHeight:/m)) {
+                    optionsContent = optionsContent.replace(/^overrideHeight:.+$/m, `overrideHeight:${h}`);
+                } else {
+                    optionsContent += `\noverrideHeight:${h}`;
+                }
+                console.log(`[Options] 已设置窗口大小: ${w}x${h}`);
+            }
+        }
+
+        const dir = path.dirname(optionsPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        fs.writeFileSync(optionsPath, optionsContent, 'utf-8');
+    } catch (e) {
+        console.error('[Options] 写入窗口设置失败:', e.message);
+    }
 }
 
 function escapeRegExp(str) {
@@ -8960,6 +9020,8 @@ async function doLaunch(versionId, versionJson, settings, account, externalVersi
         } catch (langErr) {
             console.error('[Language] 设置游戏语言失败:', langErr.message);
         }
+
+        applyWindowSettings(gameDir, settings);
 
         const mainClass = versionJson.mainClass || 'net.minecraft.client.main.Main';
         
@@ -17169,6 +17231,129 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 } catch (e) {
                     sendJSON({ hits: [] });
                 }
+                break;
+            }
+
+            case '/api/favorites': {
+                sendJSON(loadFavorites());
+                break;
+            }
+
+            case '/api/favorites/create': {
+                const body = await readBody();
+                if (!body.name) { sendError('Missing name', 400); break; }
+                const favorites = loadFavorites();
+                const newFav = { name: body.name, id: generateUUID(), favs: [], notes: {} };
+                favorites.push(newFav);
+                saveFavorites(favorites);
+                sendJSON({ success: true, favorite: newFav });
+                break;
+            }
+
+            case '/api/favorites/rename': {
+                const body = await readBody();
+                if (!body.id || !body.name) { sendError('Missing id or name', 400); break; }
+                const favorites = loadFavorites();
+                const fav = favorites.find(f => f.id === body.id);
+                if (!fav) { sendError('收藏夹不存在', 404); break; }
+                fav.name = body.name;
+                saveFavorites(favorites);
+                sendJSON({ success: true });
+                break;
+            }
+
+            case '/api/favorites/delete': {
+                const body = await readBody();
+                if (!body.id) { sendError('Missing id', 400); break; }
+                const favorites = loadFavorites();
+                if (favorites.length <= 1) { sendError('至少保留一个收藏夹', 400); break; }
+                const idx = favorites.findIndex(f => f.id === body.id);
+                if (idx < 0) { sendError('收藏夹不存在', 404); break; }
+                favorites.splice(idx, 1);
+                saveFavorites(favorites);
+                sendJSON({ success: true });
+                break;
+            }
+
+            case '/api/favorites/add': {
+                const body = await readBody();
+                if (!body.favId || !body.projectId) { sendError('Missing favId or projectId', 400); break; }
+                const favorites = loadFavorites();
+                const fav = favorites.find(f => f.id === body.favId);
+                if (!fav) { sendError('收藏夹不存在', 404); break; }
+                if (!fav.favs.includes(body.projectId)) fav.favs.push(body.projectId);
+                saveFavorites(favorites);
+                sendJSON({ success: true });
+                break;
+            }
+
+            case '/api/favorites/remove': {
+                const body = await readBody();
+                if (!body.favId || !body.projectId) { sendError('Missing favId or projectId', 400); break; }
+                const favorites = loadFavorites();
+                const fav = favorites.find(f => f.id === body.favId);
+                if (!fav) { sendError('收藏夹不存在', 404); break; }
+                fav.favs = fav.favs.filter(id => id !== body.projectId);
+                saveFavorites(favorites);
+                sendJSON({ success: true });
+                break;
+            }
+
+            case '/api/favorites/note': {
+                const body = await readBody();
+                if (!body.favId || !body.projectId) { sendError('Missing favId or projectId', 400); break; }
+                const favorites = loadFavorites();
+                const fav = favorites.find(f => f.id === body.favId);
+                if (!fav) { sendError('收藏夹不存在', 404); break; }
+                if (!fav.notes) fav.notes = {};
+                if (body.note) fav.notes[body.projectId] = body.note;
+                else delete fav.notes[body.projectId];
+                saveFavorites(favorites);
+                sendJSON({ success: true });
+                break;
+            }
+
+            case '/api/favorites/export': {
+                const exportId = parsedUrl.query.id;
+                const favorites = loadFavorites();
+                if (exportId) {
+                    const fav = favorites.find(f => f.id === exportId);
+                    if (fav) sendJSON({ success: true, data: fav.favs });
+                    else sendError('收藏夹不存在', 404);
+                } else {
+                    sendJSON({ success: true, data: favorites });
+                }
+                break;
+            }
+
+            case '/api/favorites/import': {
+                const body = await readBody();
+                if (!body.data) { sendError('Missing data', 400); break; }
+                const favorites = loadFavorites();
+                let ids = [];
+                if (Array.isArray(body.data)) ids = body.data;
+                else if (typeof body.data === 'string') {
+                    try {
+                        const parsed = JSON.parse(body.data);
+                        ids = Array.isArray(parsed) ? parsed : Object.keys(parsed).filter(k => parsed[k]);
+                    } catch (e) {}
+                }
+                if (ids.length === 0) { sendError('无有效数据', 400); break; }
+                let target = body.targetFavId ? favorites.find(f => f.id === body.targetFavId) : favorites[0];
+                if (!target) target = favorites[0];
+                ids.forEach(id => { if (!target.favs.includes(id)) target.favs.push(id); });
+                saveFavorites(favorites);
+                sendJSON({ success: true, imported: ids.length });
+                break;
+            }
+
+            case '/api/favorites/check': {
+                const checkId = parsedUrl.query.projectId;
+                if (!checkId) { sendError('Missing projectId', 400); break; }
+                const favorites = loadFavorites();
+                const result = {};
+                favorites.forEach(f => { result[f.id] = f.favs.includes(checkId); });
+                sendJSON({ success: true, result });
                 break;
             }
 
