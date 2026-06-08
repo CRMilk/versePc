@@ -1081,7 +1081,10 @@ async function handleAPIRequest(request, reqUrl) {
             try { responseHeaders.set(key, value); } catch (e) {}
         });
 
-        return new Response(result.body, {
+        const body = result.body instanceof Buffer
+            ? new Uint8Array(result.body.buffer, result.body.byteOffset, result.body.byteLength)
+            : result.body;
+        return new Response(body, {
             status: result.status,
             headers: responseHeaders
         });
@@ -1147,7 +1150,10 @@ async function handleStaticFile(pathname) {
         const data = await fs.promises.readFile(filePath);
         const ext = path.extname(filePath).toLowerCase();
         const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-        return new Response(data, {
+        const body = data instanceof Buffer
+            ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+            : data;
+        return new Response(body, {
             status: 200,
             headers: { 'Content-Type': contentType }
         });

@@ -3704,11 +3704,17 @@ async function proceedModInstall(projectId, source, versionId, fileId, savePath,
         if (result.success) {
             showModDownloadModal(result.fileName, result.sessionId, savePath);
         } else {
+            const taskId = 'mod-' + Date.now();
+            dlManager.add(taskId, '模组下载', 'mod', '', currentModDetailData?.icon || '');
+            dlManager.update(taskId, { status: 'failed', message: result.error || '下载失败' });
             showToast(result.error || '下载失败', 'error');
         }
     } catch (e) {
         console.error('Mod install error:', e);
-        showToast('下载请求失败', 'error');
+        const taskId = 'mod-' + Date.now();
+        dlManager.add(taskId, '模组下载', 'mod', '', currentModDetailData?.icon || '');
+        dlManager.update(taskId, { status: 'failed', message: e.message || '请求失败' });
+        showToast('下载请求失败: ' + (e.message || '未知错误'), 'error');
     }
 }
 
@@ -3742,11 +3748,17 @@ async function quickInstallMod(projectId, source, versionId, fileId) {
         if (result.success) {
             showModDownloadModal(result.fileName, result.sessionId);
         } else {
+            const taskId = 'mod-' + Date.now();
+            dlManager.add(taskId, '模组下载', 'mod', '', currentModDetailData?.icon || '');
+            dlManager.update(taskId, { status: 'failed', message: result.error || '下载失败' });
             showToast(result.error || '下载失败', 'error');
         }
     } catch (e) {
         console.error('quickInstallMod error:', e);
-        showToast('下载请求失败', 'error');
+        const taskId = 'mod-' + Date.now();
+        dlManager.add(taskId, '模组下载', 'mod', '', currentModDetailData?.icon || '');
+        dlManager.update(taskId, { status: 'failed', message: e.message || '请求失败' });
+        showToast('下载请求失败: ' + (e.message || '未知错误'), 'error');
     }
 }
 
@@ -9122,9 +9134,30 @@ function browseJavaPath() {
 
 
 
+const SPONSORS = [
+    '赞助者A',
+    '赞助者B',
+    '赞助者C'
+];
+
+function renderSponsors() {
+    const container = document.getElementById('sponsor-list');
+    if (!container) return;
+
+    if (SPONSORS.length === 0) {
+        container.innerHTML = '<span class="sponsor-empty">暂无赞助者</span>';
+        return;
+    }
+
+    container.innerHTML = SPONSORS.map(name =>
+        `<span class="sponsor-tag">${escapeHtml(name)}</span>`
+    ).join('');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     init();
     setTimeout(initSettingsPages, 500);
+    renderSponsors();
 });
 
 document.addEventListener('keydown', (e) => {

@@ -1679,9 +1679,7 @@
                             <div class="onboard-step" data-step="provider">
                                 <div class="onboard-provider">
                                     <div class="onboard-msg">
-                                        <div class="onboard-msg-avatar">
-                                            <img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7&offline=1" alt="" onerror="this.src='img/icon.png'">
-                                        </div>
+                                        <div class="onboard-msg-avatar onboard-msg-avatar-steve"></div>
                                         <div class="onboard-msg-bubble">由于 API 功能需要大量经费，只能由小伙伴们自行接入。请选择你的 API 接入商：</div>
                                     </div>
                                     <div class="onboard-provider-list" id="onboard-provider-list"></div>
@@ -1693,9 +1691,7 @@
                             <div class="onboard-step" data-step="tutorial">
                                 <div class="onboard-tutorial">
                                     <div class="onboard-msg">
-                                        <div class="onboard-msg-avatar">
-                                            <img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7&offline=1" alt="" onerror="this.src='img/icon.png'">
-                                        </div>
+                                        <div class="onboard-msg-avatar onboard-msg-avatar-steve"></div>
                                         <div class="onboard-msg-bubble" id="onboard-tutorial-text">注册与接入教程：</div>
                                     </div>
                                     <div class="onboard-tutorial-card" id="onboard-tutorial-card">
@@ -1710,9 +1706,7 @@
                             <div class="onboard-step" data-step="apikey">
                                 <div class="onboard-apikey">
                                     <div class="onboard-msg">
-                                        <div class="onboard-msg-avatar">
-                                            <img src="/api/avatar?uuid=8667ba71-b85a-4004-af54-457a9734eed7&offline=1" alt="" onerror="this.src='img/icon.png'">
-                                        </div>
+                                        <div class="onboard-msg-avatar onboard-msg-avatar-steve"></div>
                                         <div class="onboard-msg-bubble" id="onboard-apikey-msg">请输入你的 API Key 与模型：</div>
                                     </div>
                                     <div class="onboard-apikey-form">
@@ -2779,6 +2773,24 @@
                         <h2>其他设置</h2>
                     </div>
                     <div class="settings-container">
+                        <div class="card sponsor-card" id="sponsor-card">
+                            <h3>💕 赞助者</h3>
+                            <p class="form-hint" style="margin-bottom: 12px;">感谢以下用户对 VersePC 的支持与赞助</p>
+                            <div class="sponsor-list" id="sponsor-list">
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3>反馈</h3>
+                            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">如果你遇到了问题或有建议，欢迎通过邮件反馈</p>
+                            <div class="form-group">
+                                <label>反馈邮箱</label>
+                                <div class="input-with-btn">
+                                    <input type="text" class="text-input" value="doujie2978166201@163.com" readonly>
+                                    <button class="btn btn-primary btn-sm" onclick="copyFeedbackEmail(this)">复制</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card">
                             <h3>下载</h3>
                             <div class="form-group">
@@ -3038,18 +3050,6 @@
                                     </svg>
                                     安装并重启
                                 </button>
-                            </div>
-                        </div>
-
-                        <div class="card">
-                            <h3>反馈</h3>
-                            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">如果你遇到了问题或有建议，欢迎通过邮件反馈</p>
-                            <div class="form-group">
-                                <label>反馈邮箱</label>
-                                <div class="input-with-btn">
-                                    <input type="text" class="text-input" value="doujie2978166201@163.com" readonly>
-                                    <button class="btn btn-primary btn-sm" onclick="copyFeedbackEmail(this)">复制</button>
-                                </div>
                             </div>
                         </div>
 

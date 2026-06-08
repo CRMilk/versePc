@@ -11985,6 +11985,12 @@ body.dark-theme .rc-context-sep { background:#222; }
     display: block;
     image-rendering: pixelated;
 }
+.onboard-msg-avatar-steve {
+    background-image: var(--steve-skin);
+    background-size: 160px;
+    background-position: -20px -20px;
+    image-rendering: pixelated;
+}
 .onboard-msg-bubble {
     background: var(--bg-secondary, #141414);
     border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
@@ -13448,3 +13454,37 @@ body.dark-theme .rc-context-sep { background:#222; }
 .mcp-cloud-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:80px 20px; text-align:center; }
 .mcp-cloud-title { font-size:14px; font-weight:500; color:var(--ai-text-secondary, #9d9d9d); margin-bottom:6px; }
 .mcp-cloud-desc { font-size:12px; color:var(--ai-text-muted, #6e6e6e); }
+
+.sponsor-card {
+    border-left: 3px solid var(--purple);
+}
+
+.sponsor-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.sponsor-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.sponsor-tag:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent);
+}
+
+.sponsor-empty {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-style: italic;
+}
