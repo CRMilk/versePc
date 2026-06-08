@@ -15,8 +15,6 @@
         "protect": "node obfuscate.js",
         "protect:dry": "node obfuscate.js --dry-run",
         "protect:restore": "node obfuscate.js --restore",
-        "proof": "node ownership-proof.js --author",
-        "proof:verify": "node ownership-proof.js --verify",
         "ai-protect": "node ai-protection.js",
         "ai-protect:check": "node ai-protection.js --check",
         "ai-protect:dry": "node ai-protection.js --dry-run",

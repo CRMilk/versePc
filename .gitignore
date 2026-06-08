@@ -95,3 +95,9 @@ docs/
 # ─── 工具脚本 ───
 do_replace.ps1
 push-api.ps1
+generate_docs.js
+generate_docs.py
+print_to_pdf.js
+ownership-manifest.json
+ownership-proof.js
+*鉴别材料*
