@@ -1616,9 +1616,7 @@ let javaDownloadProgressHistory = [];
 
 async function downloadJava(majorVersion) {
     try {
-        const mirrorSelect = document.getElementById('java-mirror-select');
-        const mirrorIndex = mirrorSelect ? parseInt(mirrorSelect.value, 10) : 0;
-        const result = await API.downloadJava(majorVersion, mirrorIndex);
+        const result = await API.downloadJava(majorVersion);
         javaDownloadSessionId = result.sessionId;
         javaDownloadProgressHistory = [];
         

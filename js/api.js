@@ -397,7 +397,7 @@ const API = {
     autoInstallJava: (requiredVersion = 17) =>
         apiPost('/api/java/auto-install', { requiredVersion }),
     getJavaDownloadSources: () => apiGet('/api/java/download-sources'),
-    downloadJava: (majorVersion, mirrorIndex) => apiPost('/api/java/download', { majorVersion, mirrorIndex }),
+    downloadJava: (majorVersion) => apiPost('/api/java/download', { majorVersion }),
     getJavaDownloadStatus: (sessionId) =>
         apiGet('/api/java/download-status', { sessionId }),
     configureJavaEnv: (javaHome, majorVersion) =>
