@@ -7694,8 +7694,8 @@ function buildLaunchArguments(versionJson, settings, account, versionId, customG
         auth_access_token: accessToken,
         user_type: userType,
         version_type: `VersePC - ${actualVersionId}`,
-        resolution_width: settings.resolution?.split('x')[0] || '1920',
-        resolution_height: settings.resolution?.split('x')[1] || '1080',
+        resolution_width: settings.resolution?.split('x')[0] || '854',
+        resolution_height: settings.resolution?.split('x')[1] || '480',
         library_directory: isExternal && externalRoot ? path.join(externalRoot, 'libraries') : LIBRARIES_DIR,
         classpath_separator: process.platform === 'win32' ? ';' : ':',
         natives_directory: nativesDir,
@@ -12783,12 +12783,16 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 const settings = loadSettingsCached();
 
                 try {
-                    const launchSettingsPath = path.join(DATA_DIR, 'store', 'versepc-launch-settings.json');
-                    if (fs.existsSync(launchSettingsPath)) {
-                        const lsData = JSON.parse(fs.readFileSync(launchSettingsPath, 'utf-8'));
-                        if (lsData.windowSize && lsData.windowSize !== 'default') {
-                            settings.resolution = lsData.windowSize;
-                            console.log(`[Launch] 使用启动设置窗口大小: ${settings.resolution}`);
+                    const storePath = path.join(require('os').homedir(), '.versepc', 'app-store.json');
+                    if (fs.existsSync(storePath)) {
+                        const store = JSON.parse(fs.readFileSync(storePath, 'utf8'));
+                        const launchStr = store['versepc_launch_settings'];
+                        if (launchStr) {
+                            const lsData = JSON.parse(launchStr);
+                            if (lsData.windowSize && lsData.windowSize !== 'default') {
+                                settings.resolution = lsData.windowSize;
+                                console.log(`[Launch] 使用启动设置窗口大小: ${settings.resolution}`);
+                            }
                         }
                     }
                 } catch (e) {
