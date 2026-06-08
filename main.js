@@ -1052,10 +1052,12 @@ app.whenReady().then(async () => {
 
         // 创建窗口
         createWindow();
-        if (serverModule.setMainWindow) {
-            serverModule.setMainWindow(mainWindow);
+        if (serverModuleCache && serverModuleCache.setMainWindow) {
+            serverModuleCache.setMainWindow(mainWindow);
         }
-        setImmediate(() => serverModule.logStartupInfo());
+        if (serverModuleCache) {
+            setImmediate(() => serverModuleCache.logStartupInfo());
+        }
 
     } catch (e) {
         console.error('Failed to start:', e);
