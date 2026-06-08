@@ -7364,9 +7364,15 @@ Call attempt_completion when all operations are done and verified.
         const modelId = this.model || 'glm-5-flash';
         let displayName = modelId;
         let isFree = false;
-        for (const p of this.providers) {
-            const m = p.models.find(m => m.id === modelId);
-            if (m) { displayName = m.name; isFree = m.free; break; }
+        if (this.addedModels) {
+            const am = this.addedModels.find(m => m.modelId === modelId);
+            if (am) { displayName = am.modelName || am.modelId; isFree = am.free; }
+        }
+        if (displayName === modelId) {
+            for (const p of this.providers) {
+                const m = p.models.find(m => m.id === modelId);
+                if (m) { displayName = m.name; isFree = m.free; break; }
+            }
         }
         if (label) label.textContent = displayName;
         if (settingsName) settingsName.textContent = displayName;
@@ -7538,7 +7544,7 @@ Call attempt_completion when all operations are done and verified.
         container.innerHTML = this.addedModels.map(m => `
             <div class="rc-model-item ${m.modelId === this.model ? 'active' : ''}" onclick="AIChat.useModel('${m.modelId}')">
                 <div class="rc-model-item-info">
-                    <span class="rc-model-item-name">${this._escapeHtml(m.customName || m.modelId)}</span>
+                    <span class="rc-model-item-name">${this._escapeHtml(m.modelName || m.modelId)}</span>
                     <span class="rc-model-item-provider">${this._escapeHtml(m.provider || '')}</span>
                 </div>
                 <button class="rc-model-item-remove" onclick="event.stopPropagation();AIChat.removeAddedModel('${m.modelId}')">✕</button>
