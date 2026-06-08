@@ -6364,15 +6364,27 @@ function registerUpdaterIPC() {
     ipcMain.handle('updater:check-for-updates', async () => {
         try {
             updateAvailableInfo = null;
+            sendToUpdateUI('checking-for-update');
             const updateInfo = await fetchUpdateJson();
-            if (!updateInfo) return { available: false };
+            if (!updateInfo) {
+                sendToUpdateUI('update-not-available', { version: app.getVersion() });
+                return { available: false };
+            }
             const currentVersion = app.getVersion();
             if (compareVersions(updateInfo.version, currentVersion) > 0) {
                 updateAvailableInfo = updateInfo;
+                sendToUpdateUI('update-available', {
+                    version: updateInfo.version,
+                    releaseDate: updateInfo.releaseDate,
+                    releaseName: updateInfo.releaseName,
+                    releaseNotes: updateInfo.releaseNotes,
+                });
                 return { available: true, version: updateInfo.version };
             }
+            sendToUpdateUI('update-not-available', { version: currentVersion });
             return { available: false, version: currentVersion };
         } catch (e) {
+            sendToUpdateUI('update-error', { message: e.message });
             return { available: false, error: e.message };
         }
     });
