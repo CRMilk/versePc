@@ -5639,6 +5639,7 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
         } catch (e) {}
     };
 
+    let lastPct = 10;
     try {
         updateStatus('fetching', 5, '正在获取JDK下载信息...');
         
@@ -5742,28 +5743,44 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
 
         updateStatus('downloading', 10, `正在下载Temurin JDK ${majorVersion}...`);
 
+        let peakBytes = 0;
         const calcPct = (progress) => {
             const tb = progress.totalBytes > 0 ? progress.totalBytes : totalSize;
-            return tb > 0 ? Math.min(80, Math.floor((progress.bytesDownloaded / tb) * 70) + 10) : 10;
+            if (tb > 0) {
+                const pct = Math.min(80, Math.floor((progress.bytesDownloaded / tb) * 70) + 10);
+                lastPct = Math.max(lastPct, pct);
+            } else {
+                peakBytes = Math.max(peakBytes, progress.bytesDownloaded);
+                const estimatedTotal = peakBytes * 1.15;
+                if (estimatedTotal > 0) {
+                    const pct = Math.min(79, Math.floor((progress.bytesDownloaded / estimatedTotal) * 70) + 10);
+                    lastPct = Math.max(lastPct, pct);
+                }
+            }
+            return lastPct;
         };
         const formatProgress = (progress) => {
             const tb = progress.totalBytes > 0 ? progress.totalBytes : totalSize;
-            const dlMB = Math.floor(progress.bytesDownloaded / 1024 / 1024);
-            const totalMB = Math.ceil(tb / 1024 / 1024);
-            return `正在下载Temurin JDK ${majorVersion}... ${dlMB}MB / ${totalMB}MB`;
+            const dlMB = (progress.bytesDownloaded / 1024 / 1024).toFixed(1);
+            if (tb > 0) {
+                const totalMB = (tb / 1024 / 1024).toFixed(1);
+                return `正在下载Temurin JDK ${majorVersion}... ${dlMB}MB / ${totalMB}MB`;
+            }
+            return `正在下载Temurin JDK ${majorVersion}... ${dlMB}MB 已下载`;
         };
-        let _lastDlBytes = 0, _lastDlTime = Date.now();
+        let _lastDlBytes = 0, _lastDlTime = Date.now(), _smoothSpeed = 0;
         const onDlProgress = (progress) => {
             const now = Date.now();
             const dt = (now - _lastDlTime) / 1000;
             let speed = progress.speed || 0;
             if (dt >= 0.5) {
                 const localSpeed = (progress.bytesDownloaded - _lastDlBytes) / dt;
-                speed = speed > 0 ? speed : localSpeed;
+                speed = speed > 0 ? Math.max(speed, localSpeed) : localSpeed;
                 _lastDlBytes = progress.bytesDownloaded;
                 _lastDlTime = now;
             }
-            updateStatus('downloading', calcPct(progress), formatProgress(progress), speed, progress.bytesDownloaded, progress.totalBytes || totalSize);
+            _smoothSpeed = _smoothSpeed > 0 ? _smoothSpeed * 0.7 + speed * 0.3 : speed;
+            updateStatus('downloading', calcPct(progress), formatProgress(progress), Math.max(_smoothSpeed, speed), progress.bytesDownloaded, progress.totalBytes || totalSize);
         };
 
         await downloadFileChunked(downloadMirrors.length > 0 ? downloadMirrors[0] : downloadUrl, tempFile, { onProgress: onDlProgress, timeout: 600000, retries: 3, mirrors: downloadMirrors.length > 0 ? downloadMirrors : null }).catch(async (err) => {
@@ -5872,7 +5889,7 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
         
     } catch (e) {
         console.error('[Java] 下载失败:', e.message);
-        updateStatus('error', 0, `安装失败: ${e.message}`);
+        updateStatus('error', lastPct, `安装失败: ${e.message}`);
     }
 }
 
@@ -13586,18 +13603,31 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                             } catch (e) { stat = { size: 0 }; }
                             const id = name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
 
+                            let icon = '', author = '', description = '', version = '', projectId = '';
+                            const jarPath = path.join(modsDir, f);
+                            if (realName.endsWith('.jar') && fs.existsSync(jarPath)) {
+                                try {
+                                    const parsed = parseModJar(jarPath);
+                                    if (parsed.icon) icon = `/api/mod-icon?hash=${parsed.icon}`;
+                                    if (parsed.author) author = parsed.author;
+                                    if (parsed.description) description = parsed.description.substring(0, 200);
+                                    if (parsed.version) version = parsed.version;
+                                    if (parsed.id) projectId = parsed.id;
+                                } catch (e) { /* fallback to empty */ }
+                            }
+
                             mods.push({
                                 id: id,
                                 name: name,
                                 fileName: f,
                                 disabled: isDisabled,
-                                description: isDisabled ? '已禁用' : '已安装的模组',
-                                version: '1.0',
+                                description: description || (isDisabled ? '已禁用' : '已安装的模组'),
+                                version: version || '1.0',
                                 size: stat.size || 0,
                                 source: '本地',
-                                icon: '',
-                                author: '',
-                                projectId: ''
+                                icon: icon,
+                                author: author,
+                                projectId: projectId
                             });
 
                             if (i % 30 === 29) {
