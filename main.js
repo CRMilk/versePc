@@ -1081,10 +1081,10 @@ async function handleAPIRequest(request, reqUrl) {
             try { responseHeaders.set(key, value); } catch (e) {}
         });
 
-        const body = result.body instanceof Buffer
+        const responseBody = result.body instanceof Buffer
             ? new Uint8Array(result.body.buffer, result.body.byteOffset, result.body.byteLength)
             : result.body;
-        return new Response(body, {
+        return new Response(responseBody, {
             status: result.status,
             headers: responseHeaders
         });
