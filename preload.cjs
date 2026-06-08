@@ -93,8 +93,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
         getVersion: () => ipcRenderer.invoke('updater:get-version'),
         skipVersion: (version) => ipcRenderer.invoke('updater:skip-version', version),
         openReleasePage: () => ipcRenderer.invoke('updater:open-release-page'),
-        toggleMirror: (enabled, url) => ipcRenderer.invoke('updater:toggle-mirror', enabled, url),
-        getMirrorConfig: () => ipcRenderer.invoke('updater:get-mirror-config'),
         onStatusChanged: (callback) => {
             if (updaterStatusCallbackWrapper) {
                 ipcRenderer.removeListener('updater-status', updaterStatusCallbackWrapper);

@@ -3034,20 +3034,12 @@
                         <div class="card">
                             <h3>关于 VersePC</h3>
                             <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;" id="updater-version-info">当前版本：加载中...</p>
-                            <div id="updater-mirror-bar" style="margin-bottom:12px;display:none;padding:8px;background:rgba(251,191,36,0.08);border-radius:8px;border:1px solid rgba(251,191,36,0.2);font-size:12px;">
-                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text-secondary);">
-                                    <input type="checkbox" id="updater-mirror-toggle" style="cursor:pointer;">
-                                    <span>使用 GitHub 加速镜像（解决国内访问慢/连接失败的问题）</span>
-                                </label>
-                                <div id="updater-mirror-select-wrap" style="display:none;margin-top:6px;">
-                                    <select id="updater-mirror-select" style="width:100%;padding:4px 8px;border-radius:4px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:12px;outline:none;">
-                                        <option value="https://mirror.ghproxy.com">ghproxy.com 镜像（推荐）</option>
-                                        <option value="https://gh-proxy.com">gh-proxy.com 镜像</option>
-                                        <option value="https://gh.api.99988866.xyz">99988866 镜像</option>
-                                        <option value="https://github.moeyy.xyz">moeyy 镜像</option>
-                                        <option value="">直接连接 GitHub（不使用镜像）</option>
-                                    </select>
+                            <div style="margin-bottom:12px;padding:10px 14px;background:var(--bg-secondary,rgba(255,255,255,0.03));border:1px solid var(--border-color,rgba(255,255,255,0.06));border-radius:8px;">
+                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                                    <span style="font-size:13px;color:var(--text-primary);">更新加速</span>
+                                    <span style="font-size:11px;padding:1px 8px;background:rgba(76,175,80,0.15);color:#4caf50;border-radius:10px;">多源自动</span>
                                 </div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;">GitHub Raw → ghproxy → jsDelivr，按顺序自动尝试，无需手动配置</div>
                             </div>
                             <div id="updater-status-area" style="margin-bottom:12px;"></div>
                             <div id="updater-release-notes" style="margin-bottom:12px;display:none;">
@@ -3310,18 +3302,7 @@
                     let hintHtml = '';
                     if (hint) hintHtml = '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">💡 ' + hint + '</div>';
 
-                    // 网络错误时显示镜像切换选项
                     let mirrorBar = '';
-                    if (errorType === 'network' || errorType === 'ssl') {
-                        mirrorBar = '<div id="updater-mirror-inline" style="margin-top:8px;padding:8px;background:rgba(251,191,36,0.08);border-radius:8px;border:1px solid rgba(251,191,36,0.2);">' +
-                            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
-                            '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:var(--text-secondary);font-size:12px;">' +
-                            '<input type="checkbox" id="updater-mirror-quick-toggle" style="cursor:pointer;">' +
-                            '<span>🚀 使用加速镜像重试</span></label>' +
-                            '<button class="btn btn-sm btn-accent" style="padding:2px 10px;font-size:11px;margin-left:auto;" onclick="handleEnableMirrorAndRetry()">启用并重试</button>' +
-                            '</div></div>';
-                        document.getElementById('updater-mirror-bar').style.display = '';
-                    }
 
                     statusArea.innerHTML =
                         '<div style="display:flex;align-items:flex-start;gap:6px;color:#ef4444;padding:10px;background:rgba(239,68,68,0.06);border-radius:8px;border:1px solid rgba(239,68,68,0.15);">' +
@@ -3398,45 +3379,7 @@
             }
         };
 
-        window.handleEnableMirrorAndRetry = async function() {
-            const toggle = document.getElementById('updater-mirror-quick-toggle');
-            const enabled = toggle && toggle.checked;
-            await api.updater.toggleMirror(enabled, 'https://mirror.ghproxy.com');
-            handleCheckUpdate();
-        };
 
-        // 镜像切换初始化
-        (async function initMirrorBar() {
-            try {
-                const cfg = await api.updater.getMirrorConfig();
-                const bar = document.getElementById('updater-mirror-bar');
-                const toggle = document.getElementById('updater-mirror-toggle');
-                const selectWrap = document.getElementById('updater-mirror-select-wrap');
-                const select = document.getElementById('updater-mirror-select');
-
-                if (!bar || !toggle) return;
-
-                bar.style.display = '';
-                toggle.checked = !!cfg.useMirror;
-
-                if (select && selectWrap) {
-                    select.value = cfg.mirrorUrl || 'https://mirror.ghproxy.com';
-                    selectWrap.style.display = toggle.checked ? '' : 'none';
-
-                    toggle.addEventListener('change', async () => {
-                        selectWrap.style.display = toggle.checked ? '' : 'none';
-                        const url = toggle.checked ? select.value : '';
-                        await api.updater.toggleMirror(toggle.checked, url);
-                    });
-
-                    select.addEventListener('change', async () => {
-                        await api.updater.toggleMirror(toggle.checked, select.value);
-                    });
-                }
-            } catch (e) {
-                console.error('[Updater] Mirror init failed:', e);
-            }
-        })();
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initUpdaterUI);

@@ -33,7 +33,7 @@
 // ============================================================================
 // 模块导入
 // ============================================================================
-const { app, BrowserWindow, Menu, shell, ipcMain, dialog, screen, protocol, clipboard } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog, screen, protocol, clipboard, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -1611,8 +1611,117 @@ function matchPattern(filename, pattern) {
 }
 
 // ============================================================================
+// 多源更新检测与下载
+// ============================================================================
+
+const UPDATE_JSON_SOURCES = [
+    'https://raw.githubusercontent.com/doujie081231/versePc/main/update.json',
+    'https://mirror.ghproxy.com/https://raw.githubusercontent.com/doujie081231/versePc/main/update.json',
+    'https://cdn.jsdelivr.net/gh/doujie081231/versePc@main/update.json',
+];
+
+async function fetchUpdateJson() {
+    for (const url of UPDATE_JSON_SOURCES) {
+        try {
+            console.log('[Updater] Trying source:', url);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000);
+            const response = await net.fetch(url, { signal: controller.signal });
+            clearTimeout(timeout);
+            if (!response.ok) continue;
+            const data = await response.json();
+            if (data && data.version && data.files) {
+                console.log('[Updater] Got update info from:', url);
+                return data;
+            }
+        } catch (e) {
+            console.log('[Updater] Source failed:', url, e.message);
+        }
+    }
+    return null;
+}
+
+function compareVersions(a, b) {
+    const pa = a.split('.').map(Number);
+    const pb = b.split('.').map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const na = pa[i] || 0;
+        const nb = pb[i] || 0;
+        if (na > nb) return 1;
+        if (na < nb) return -1;
+    }
+    return 0;
+}
+
+const DOWNLOAD_MIRRORS = [
+    (url) => url,
+    (url) => url.replace('https://github.com/', 'https://mirror.ghproxy.com/https://github.com/'),
+    (url) => {
+        const match = url.match(/https:\/\/github\.com\/([^/]+)\/([^/]+)\/releases\/download\/([^/]+)\/(.+)/);
+        if (match) {
+            return `https://cdn.jsdelivr.net/gh/${match[1]}/${match[2]}@${match[3]}/${match[4]}`;
+        }
+        return url;
+    },
+];
+
+async function downloadWithFallback(fileInfo, targetPath, onProgress) {
+    const crypto = require('crypto');
+
+    for (const getMirrorUrl of DOWNLOAD_MIRRORS) {
+        const downloadUrl = getMirrorUrl(fileInfo.url);
+        try {
+            console.log('[Updater] Downloading from:', downloadUrl);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000);
+            const response = await net.fetch(downloadUrl, { signal: controller.signal });
+            clearTimeout(timeout);
+
+            if (!response.ok) {
+                console.log('[Updater] Download failed, status:', response.status);
+                continue;
+            }
+
+            const totalSize = parseInt(response.headers.get('content-length') || fileInfo.size || '0');
+            const reader = response.body.getReader();
+            const chunks = [];
+            let received = 0;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                received += value.length;
+                if (onProgress && totalSize > 0) {
+                    onProgress({ percent: (received / totalSize) * 100, transferred: received, total: totalSize });
+                }
+            }
+
+            const buffer = Buffer.concat(chunks);
+
+            if (fileInfo.sha256) {
+                const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+                if (hash !== fileInfo.sha256) {
+                    console.error('[Updater] SHA256 mismatch:', hash, 'expected:', fileInfo.sha256);
+                    throw new Error('SHA256 校验失败');
+                }
+            }
+
+            fs.writeFileSync(targetPath, buffer);
+            console.log('[Updater] Download complete:', targetPath);
+            return true;
+        } catch (e) {
+            console.log('[Updater] Download source failed:', downloadUrl, e.message);
+        }
+    }
+    return false;
+}
+
+// ============================================================================
 // 自动更新模块 - 基于 electron-updater
 // ============================================================================
+
+let updateDownloadedPath = null;
 
 const UPDATE_CONFIG_PATH = path.join(require('os').homedir(), '.versepc', 'update-config.json');
 
@@ -1636,104 +1745,43 @@ function saveUpdateConfig(config) {
 /**
  * 初始化自动更新器
  * 启动时静默检查，发现新版本后弹出通知
- * 支持国内镜像加速
+ * 基于多源 update.json 检测，支持国内 CDN 加速
  */
 function initAutoUpdater() {
-    autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = true;
-
     const config = loadUpdateConfig();
 
-    // 配置 GitHub 镜像（解决国内访问 GitHub 不稳定的问题）
-    if (config.useMirror) {
-        const mirrorUrl = config.mirrorUrl || 'https://mirror.ghproxy.com';
-        console.log('[Updater] Using mirror:', mirrorUrl);
-        autoUpdater.setFeedURL({
-            provider: 'github',
-            owner: 'doujie081231',
-            repo: 'versePc',
-            host: mirrorUrl.replace('https://', ''),
-            protocol: 'https',
-        });
-    }
+    setTimeout(async () => {
+        try {
+            sendToUpdateUI('checking-for-update');
+            const updateInfo = await fetchUpdateJson();
+            if (!updateInfo) {
+                console.log('[Updater] No update info available');
+                return;
+            }
 
-    autoUpdater.on('checking-for-update', () => {
-        sendToUpdateUI('checking-for-update');
-    });
+            const currentVersion = app.getVersion();
+            if (compareVersions(updateInfo.version, currentVersion) <= 0) {
+                sendToUpdateUI('update-not-available', { version: currentVersion });
+                return;
+            }
 
-    autoUpdater.on('update-available', (info) => {
-        const cfg = loadUpdateConfig();
-        if (cfg.skippedVersion === info.version) {
-            sendToUpdateUI('update-skipped', { version: info.version });
-            return;
+            const cfg = loadUpdateConfig();
+            if (cfg.skippedVersion === updateInfo.version) {
+                sendToUpdateUI('update-skipped', { version: updateInfo.version });
+                return;
+            }
+
+            updateAvailableInfo = updateInfo;
+            sendToUpdateUI('update-available', {
+                version: updateInfo.version,
+                releaseDate: updateInfo.releaseDate,
+                releaseName: updateInfo.releaseName,
+                releaseNotes: updateInfo.releaseNotes,
+            });
+            showUpdateNotification(updateInfo);
+        } catch (e) {
+            console.error('[Updater] Check failed:', e.message);
         }
-        updateAvailableInfo = info;
-        sendToUpdateUI('update-available', {
-            version: info.version,
-            releaseDate: info.releaseDate,
-            releaseName: info.releaseName,
-            releaseNotes: info.releaseNotes,
-        });
-        showUpdateNotification(info);
-    });
-
-    autoUpdater.on('update-not-available', (info) => {
-        sendToUpdateUI('update-not-available', { version: info.version });
-    });
-
-    autoUpdater.on('error', (err) => {
-        console.error('[Updater] Error:', err);
-        const errMsg = err.message || err.toString() || '未知错误';
-        const statusCode = err.statusCode || err.status || 0;
-
-        // 判断错误类型，给用户更友好的提示
-        let errorType = 'unknown';
-        let hint = '';
-
-        if (errMsg.includes('net::') || errMsg.includes('ECONNREFUSED') ||
-            errMsg.includes('ENOTFOUND') || errMsg.includes('ETIMEDOUT') ||
-            errMsg.includes('ECONNRESET') || errMsg.includes('socket hang up')) {
-            errorType = 'network';
-            hint = '网络连接失败，请检查网络或尝试使用加速镜像';
-        } else if (statusCode === 404 || errMsg.includes('404')) {
-            errorType = 'no_release';
-            hint = '尚未发布任何版本，请先构建并发布 Release';
-        } else if (statusCode === 403 || errMsg.includes('403')) {
-            errorType = 'auth';
-            hint = '仓库可能是私有的或访问受限';
-        } else if (statusCode >= 500) {
-            errorType = 'server';
-            hint = 'GitHub 服务暂时不可用，请稍后重试';
-        } else if (errMsg.includes('certificate') || errMsg.includes('SSL') || errMsg.includes('CERT')) {
-            errorType = 'ssl';
-            hint = 'SSL 证书验证失败';
-        }
-
-        sendToUpdateUI('update-error', { message: errMsg, errorType: errorType, hint: hint, statusCode: statusCode });
-    });
-
-    autoUpdater.on('download-progress', (progressObj) => {
-        sendToUpdateUI('download-progress', {
-            bytesPerSecond: progressObj.bytesPerSecond,
-            percent: progressObj.percent,
-            transferred: progressObj.transferred,
-            total: progressObj.total,
-        });
-    });
-
-    autoUpdater.on('update-downloaded', (info) => {
-        updateDownloaded = true;
-        sendToUpdateUI('update-downloaded', {
-            version: info.version,
-            releaseName: info.releaseName,
-        });
-        showUpdateReadyDialog(info);
-    });
-
-    setTimeout(() => {
-        autoUpdater.checkForUpdates().catch(err => {
-            console.error('[Updater] Initial check failed:', err);
-        });
     }, 3000);
 }
 
@@ -1766,13 +1814,46 @@ function showUpdateNotification(info) {
                 shell.openExternal('https://github.com/doujie081231/versePc/releases/latest');
                 break;
             case 2:
-                mainWindow.webContents.send('updater-status', { channel: 'start-download', data: {} });
-                autoUpdater.downloadUpdate().catch(e => {
-                    sendToUpdateUI('update-error', { message: e.message || '下载失败' });
-                });
+                doDownloadUpdate(info);
                 break;
         }
     }).catch(() => {});
+}
+
+async function doDownloadUpdate(updateInfo) {
+    const fileInfo = updateInfo.files?.['win-x64'];
+    if (!fileInfo) {
+        sendToUpdateUI('update-error', { message: '未找到适用于当前平台的安装包' });
+        return;
+    }
+
+    sendToUpdateUI('start-download', {});
+
+    const targetPath = path.join(app.getPath('temp'), `VersePC-Setup-${updateInfo.version}.exe`);
+
+    try {
+        const success = await downloadWithFallback(fileInfo, targetPath, (progress) => {
+            sendToUpdateUI('download-progress', {
+                percent: progress.percent,
+                transferred: progress.transferred,
+                total: progress.total,
+            });
+        });
+
+        if (success) {
+            updateDownloadedPath = targetPath;
+            updateDownloaded = true;
+            sendToUpdateUI('update-downloaded', {
+                version: updateInfo.version,
+                releaseName: updateInfo.releaseName,
+            });
+            showUpdateReadyDialog(updateInfo);
+        } else {
+            sendToUpdateUI('update-error', { message: '所有下载源均失败，请稍后重试或手动下载' });
+        }
+    } catch (e) {
+        sendToUpdateUI('update-error', { message: e.message || '下载失败' });
+    }
 }
 
 function showUpdateReadyDialog(info) {
@@ -3756,6 +3837,9 @@ function registerAIChatIPC() {
                                         info.type = data.type || 'release';
                                         info.baseVersion = d.name.replace(/-?(fabric|forge|neoforge|optifine|liteloader|quilt)[\s\S]*/i, '').trim();
                                         info.loader = /fabric/i.test(d.name) ? 'Fabric' : /forge/i.test(d.name) ? 'Forge' : /neoforge/i.test(d.name) ? 'NeoForge' : /optifine/i.test(d.name) ? 'OptiFine' : /quilt/i.test(d.name) ? 'Quilt' : 'Vanilla';
+                                        info.isForge = info.loader === 'Forge';
+                                        info.isFabric = info.loader === 'Fabric';
+                                        info.isNeoForge = info.loader === 'NeoForge';
                                         if (data.inheritsFrom) info.inheritsFrom = data.inheritsFrom;
                                         if (data.javaVersion) info.javaVersion = data.javaVersion.majorVersion || '';
                                         const modsDir = pathMod.join(vDir, 'mods');
@@ -3944,6 +4028,9 @@ function registerAIChatIPC() {
                                         const data = JSON.parse(await fs.promises.readFile(vJson, 'utf8'));
                                         info.type = data.type || 'release';
                                         info.loader = /fabric/i.test(d.name) ? 'Fabric' : /forge/i.test(d.name) ? 'Forge' : /neoforge/i.test(d.name) ? 'NeoForge' : /optifine/i.test(d.name) ? 'OptiFine' : /quilt/i.test(d.name) ? 'Quilt' : 'Vanilla';
+                                        info.isForge = info.loader === 'Forge';
+                                        info.isFabric = info.loader === 'Fabric';
+                                        info.isNeoForge = info.loader === 'NeoForge';
                                         const modsDir = pathMod.join(vDir, 'mods');
                                         if (fs.existsSync(modsDir)) {
                                             const modFiles = await fs.promises.readdir(modsDir);
@@ -6277,11 +6364,14 @@ function registerUpdaterIPC() {
     ipcMain.handle('updater:check-for-updates', async () => {
         try {
             updateAvailableInfo = null;
-            const result = await autoUpdater.checkForUpdates();
-            return {
-                available: result.updateInfo && result.updateInfo.version !== app.getVersion(),
-                version: result.updateInfo ? result.updateInfo.version : null,
-            };
+            const updateInfo = await fetchUpdateJson();
+            if (!updateInfo) return { available: false };
+            const currentVersion = app.getVersion();
+            if (compareVersions(updateInfo.version, currentVersion) > 0) {
+                updateAvailableInfo = updateInfo;
+                return { available: true, version: updateInfo.version };
+            }
+            return { available: false, version: currentVersion };
         } catch (e) {
             return { available: false, error: e.message };
         }
@@ -6289,7 +6379,8 @@ function registerUpdaterIPC() {
 
     ipcMain.handle('updater:download-update', async () => {
         try {
-            await autoUpdater.downloadUpdate();
+            if (!updateAvailableInfo) return { success: false, error: '没有可用的更新信息' };
+            await doDownloadUpdate(updateAvailableInfo);
             return { success: true };
         } catch (e) {
             return { success: false, error: e.message };
@@ -6320,19 +6411,6 @@ function registerUpdaterIPC() {
     ipcMain.handle('updater:open-release-page', async () => {
         shell.openExternal('https://github.com/doujie081231/versePc/releases/latest');
         return { success: true };
-    });
-
-    ipcMain.handle('updater:toggle-mirror', async (event, enabled, url) => {
-        const config = loadUpdateConfig();
-        config.useMirror = enabled;
-        if (url) config.mirrorUrl = url;
-        saveUpdateConfig(config);
-        return { success: true };
-    });
-
-    ipcMain.handle('updater:get-mirror-config', async () => {
-        const config = loadUpdateConfig();
-        return { useMirror: !!config.useMirror, mirrorUrl: config.mirrorUrl || '' };
     });
 }
 

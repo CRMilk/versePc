@@ -66,3 +66,50 @@ jobs:
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Update update.json
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          $exePath = Get-ChildItem -Path dist -Filter "VersePC-Setup-*.exe" | Select-Object -First 1
+          if (-not $exePath) {
+            Write-Error "Installer exe not found in dist/"
+            exit 1
+          }
+          $hash = (Get-FileHash -Path $exePath.FullName -Algorithm SHA256).Hash.ToLower()
+          $size = $exePath.Length
+          $releaseDate = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+          $updateJson = @{
+            version = $version
+            releaseDate = $releaseDate
+            releaseName = "VersePC v$version"
+            releaseNotes = ""
+            files = @{
+              "win-x64" = @{
+                url = "https://github.com/doujie081231/versePc/releases/download/v$version/VersePC-Setup-$version.exe"
+                sha256 = $hash
+                size = $size
+              }
+            }
+            minSupportedVersion = $version
+            force = $false
+          } | ConvertTo-Json -Depth 4
+          Set-Content -Path update.json -Value $updateJson -NoNewline
+          Write-Host "update.json generated for version $version"
+
+      - name: Push update.json to main
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          cp "${{ github.workspace }}/update.json" update.json
+          git add update.json
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: update update.json for v${{ github.ref_name }}"
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}

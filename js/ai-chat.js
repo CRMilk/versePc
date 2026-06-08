@@ -2111,16 +2111,57 @@ const AIChat = {
             window.electronAPI.ai.selectVersionResponse(selId, versionId);
         }
         const card = document.querySelector('.ai-version-select-card[data-sel-id="' + selId + '"]');
-        if (card) {
-            const header = card.querySelector('.ai-version-select-header');
-            const list = card.querySelector('.ai-version-select-list');
-            if (list) list.remove();
-            if (header) {
-                header.innerHTML = '<span class="ai-version-select-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg></span><span class="ai-version-select-title" style="color:#22c55e">已选择 ' + this._escapeHtml(versionId) + '</span>';
-            }
-            card.style.opacity = '0.8';
-            card.style.pointerEvents = 'none';
+        if (!card) return;
+        const header = card.querySelector('.ai-version-select-header');
+        const list = card.querySelector('.ai-version-select-list');
+        if (list) {
+            list.style.transition = 'max-height 0.3s ease, opacity 0.2s ease, padding 0.3s ease';
+            list.style.maxHeight = list.scrollHeight + 'px';
+            list.offsetHeight;
+            list.style.maxHeight = '0';
+            list.style.opacity = '0';
+            list.style.overflow = 'hidden';
+            list.style.paddingTop = '0';
+            list.style.paddingBottom = '0';
+            setTimeout(() => list.remove(), 300);
         }
+        if (header) {
+            header.innerHTML = '<span class="ai-version-select-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg></span><span class="ai-version-select-title" style="color:#22c55e">已选择 ' + this._escapeHtml(versionId) + '</span>';
+            header.style.borderBottom = 'none';
+        }
+        card.style.transition = 'opacity 0.3s ease';
+        card.style.opacity = '0.6';
+        card.style.pointerEvents = 'none';
+        setTimeout(() => {
+            const outerMsg = card.closest('[data-version-sel]');
+            if (outerMsg) {
+                outerMsg.style.transition = 'max-height 0.4s ease, opacity 0.3s ease, margin 0.4s ease, padding 0.4s ease';
+                outerMsg.style.maxHeight = outerMsg.scrollHeight + 'px';
+                outerMsg.offsetHeight;
+                outerMsg.style.maxHeight = '0';
+                outerMsg.style.opacity = '0';
+                outerMsg.style.overflow = 'hidden';
+                outerMsg.style.marginTop = '0';
+                outerMsg.style.marginBottom = '0';
+                outerMsg.style.paddingTop = '0';
+                outerMsg.style.paddingBottom = '0';
+                setTimeout(() => outerMsg.remove(), 400);
+            }
+            const toolContent = card.closest('.ai-file-ops-content');
+            if (toolContent) {
+                toolContent.style.transition = 'max-height 0.4s ease, opacity 0.3s ease, padding 0.4s ease';
+                toolContent.style.maxHeight = '0';
+                toolContent.style.opacity = '0';
+                toolContent.style.paddingTop = '0';
+                toolContent.style.paddingBottom = '0';
+                toolContent.classList.remove('open');
+                const toolRow = toolContent.previousElementSibling;
+                if (toolRow && toolRow.classList.contains('ai-tool-call-row')) {
+                    const chevron = toolRow.querySelector('.ai-tool-call-chevron');
+                    if (chevron) chevron.classList.remove('open');
+                }
+            }
+        }, 1200);
     },
 
     _handleAIAddDownloadTask(data) {
