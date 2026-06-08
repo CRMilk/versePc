@@ -188,17 +188,21 @@ const dlManager = {
                 : svgIcons[t.type] || svgIcons.other;
             const fillClass = t.status === 'completed' ? 'dl-task-progress-fill--completed' : t.status === 'failed' ? 'dl-task-progress-fill--failed' : '';
             const statusText = t.status === 'completed' ? '下载完成' : t.status === 'failed' ? '下载失败' : (t.message || '下载中...');
-            const expandedClass = t.expanded ? 'dl-task--expanded' : '';
+            const isExpandable = t.type !== 'mod';
+            const expandedClass = t.expanded && isExpandable ? 'dl-task--expanded' : '';
             let filesHtml = '';
-            if (t.files && t.files.length > 0) {
+            if (isExpandable && t.files && t.files.length > 0) {
                 filesHtml = this.buildFilesHtml(t.files);
             }
             let actionsHtml = '';
             if (t.status === 'completed' || t.status === 'failed') {
                 actionsHtml = '<div class="dl-task-actions"><button class="btn btn-secondary btn-sm dl-task-remove-btn" data-task-id="' + escapeHtml(id) + '">移除</button></div>';
             }
+            const arrowHtml = isExpandable ? '<svg class="dl-task-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>' : '';
+            const detailHtml = isExpandable ? '<div class="dl-task-detail">' + filesHtml + '</div>' : '';
+            const headerClass = isExpandable ? 'dl-task-header dl-task-toggle-btn' : 'dl-task-header';
             return '<div class="dl-task ' + expandedClass + '" data-task-id="' + escapeHtml(id) + '">' +
-                '<div class="dl-task-header dl-task-toggle-btn" data-task-id="' + escapeHtml(id) + '">' +
+                '<div class="' + headerClass + '" data-task-id="' + escapeHtml(id) + '">' +
                 '<div class="dl-task-icon ' + iconClass + '">' + iconHtml + '</div>' +
                 '<div class="dl-task-info">' +
                 '<div class="dl-task-name">' + escapeHtml(t.name) + '</div>' +
@@ -208,9 +212,9 @@ const dlManager = {
                 '<div class="dl-task-progress-bar"><div class="dl-task-progress-fill ' + fillClass + '" style="width:' + t.progress + '%"></div></div>' +
                 '<span class="dl-task-percent">' + Math.round(t.progress) + '%</span>' +
                 '</div>' +
-                '<svg class="dl-task-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>' +
+                arrowHtml +
                 '</div>' +
-                '<div class="dl-task-detail">' + filesHtml + '</div>' +
+                detailHtml +
                 actionsHtml +
                 '</div>';
         }).join('');
@@ -1075,6 +1079,22 @@ async function init() {
                 const launchName = document.getElementById('launch-player-name');
                 if (homeName) homeName.textContent = cachedName;
                 if (launchName) launchName.textContent = cachedName;
+            }
+            const cachedAvatarData = localStorage.getItem('cachedAvatarData');
+            if (cachedAvatarData) {
+                const homeAvatar = document.getElementById('home-avatar');
+                const launchAvatar = document.getElementById('launch-avatar');
+                if (homeAvatar) {
+                    homeAvatar.innerHTML = '<img src="' + cachedAvatarData + '" class="account-avatar-img" width="64" height="64">';
+                }
+                if (launchAvatar) {
+                    launchAvatar.innerHTML = '<img src="' + cachedAvatarData + '" class="account-avatar-img">';
+                }
+            }
+            const cachedAccountType = localStorage.getItem('cachedAccountType');
+            if (cachedAccountType) {
+                const homeType = document.getElementById('home-account-type');
+                if (homeType) homeType.textContent = cachedAccountType;
             }
         } catch(e) {}
 
@@ -3688,24 +3708,24 @@ function showDependencyDialog(projectId, source, versionId, fileId, savePath, de
 
 
 async function proceedModInstall(projectId, source, versionId, fileId, savePath, includeDeps, deps, gameVersion, loader) {
-    showToast('正在安装模组...', 'info');
+    const pendingTaskId = 'mod-' + Date.now();
+    const iconUrl = currentModDetailData?.icon || '';
+    dlManager.add(pendingTaskId, '准备下载...', 'mod', '', iconUrl);
+    dlManager.update(pendingTaskId, { progress: 0, status: 'downloading', message: '正在获取下载信息...' });
     try {
         const currentGameVersion = gameVersion || getCustomSelectValue('mod-filter-version') || '';
         const currentLoader = loader || getCustomSelectValue('mod-filter-loader') || '';
         const result = await API.downloadModVersion(versionId || '', projectId, source, fileId || '', currentGameVersion, currentLoader, savePath, includeDeps);
         if (result.success) {
+            dlManager.remove(pendingTaskId);
             showModDownloadModal(result.fileName, result.sessionId, savePath);
         } else {
-            const taskId = 'mod-' + Date.now();
-            dlManager.add(taskId, '模组下载', 'mod', '', currentModDetailData?.icon || '');
-            dlManager.update(taskId, { status: 'failed', message: result.error || '下载失败' });
+            dlManager.update(pendingTaskId, { status: 'failed', message: result.error || '下载失败' });
             showToast(result.error || '下载失败', 'error');
         }
     } catch (e) {
         console.error('Mod install error:', e);
-        const taskId = 'mod-' + Date.now();
-        dlManager.add(taskId, '模组下载', 'mod', '', currentModDetailData?.icon || '');
-        dlManager.update(taskId, { status: 'failed', message: e.message || '请求失败' });
+        dlManager.update(pendingTaskId, { status: 'failed', message: e.message || '请求失败' });
         showToast('下载请求失败: ' + (e.message || '未知错误'), 'error');
     }
 }
@@ -3732,24 +3752,24 @@ function openModSourceUrl() {
 }
 
 async function quickInstallMod(projectId, source, versionId, fileId) {
-    showToast('正在安装模组...', 'info');
+    const pendingTaskId = 'mod-' + Date.now();
+    const iconUrl = currentModDetailData?.icon || '';
+    dlManager.add(pendingTaskId, '准备下载...', 'mod', '', iconUrl);
+    dlManager.update(pendingTaskId, { progress: 0, status: 'downloading', message: '正在获取下载信息...' });
     try {
         const currentGameVersion = getCustomSelectValue('mod-filter-version') || '';
         const currentLoader = getCustomSelectValue('mod-filter-loader') || '';
         const result = await API.downloadModVersion(versionId || '', projectId, source, fileId || '', currentGameVersion, currentLoader);
         if (result.success) {
+            dlManager.remove(pendingTaskId);
             showModDownloadModal(result.fileName, result.sessionId);
         } else {
-            const taskId = 'mod-' + Date.now();
-            dlManager.add(taskId, '模组下载', 'mod', '', currentModDetailData?.icon || '');
-            dlManager.update(taskId, { status: 'failed', message: result.error || '下载失败' });
+            dlManager.update(pendingTaskId, { status: 'failed', message: result.error || '下载失败' });
             showToast(result.error || '下载失败', 'error');
         }
     } catch (e) {
         console.error('quickInstallMod error:', e);
-        const taskId = 'mod-' + Date.now();
-        dlManager.add(taskId, '模组下载', 'mod', '', currentModDetailData?.icon || '');
-        dlManager.update(taskId, { status: 'failed', message: e.message || '请求失败' });
+        dlManager.update(pendingTaskId, { status: 'failed', message: e.message || '请求失败' });
         showToast('下载请求失败: ' + (e.message || '未知错误'), 'error');
     }
 }
@@ -4073,6 +4093,9 @@ function terracottaHide() {
 
 async function terracottaStartHost() {
     try {
+        const agreed = await terracottaShowAgreement();
+        if (!agreed) return;
+
         const gameStatus = await API.getGameStatus();
         if (!gameStatus.running) {
             showToast('请先启动游戏，然后在游戏内开放局域网联机', 'error');
@@ -4086,9 +4109,10 @@ async function terracottaStartHost() {
         const gamePort = gameStatus.lanPort;
         document.getElementById('terracotta-host-port').value = gamePort;
         
+        const playerName = localStorage.getItem('cachedPlayerName') || 'Player';
         showToast('正在初始化陶瓦联机...', 'info');
         
-        const result = await API.easytierHost(gamePort);
+        const result = await API.easytierHost(gamePort, playerName);
         if (result.success) {
             terracottaState = { mode: 'host', connected: true };
             
@@ -4118,9 +4142,13 @@ async function terracottaJoinRoom() {
     }
     
     try {
+        const agreed = await terracottaShowAgreement();
+        if (!agreed) return;
+
         showToast('正在初始化陶瓦联机...', 'info');
         
-        const result = await API.easytierGuest(codeText);
+        const playerName = localStorage.getItem('cachedPlayerName') || 'Player';
+        const result = await API.easytierGuest(codeText, playerName);
         if (result.success) {
             terracottaState = { mode: 'guest', connected: true };
             
@@ -4171,65 +4199,162 @@ function terracottaCopyAddr() {
     });
 }
 
+function terracottaShowAgreement() {
+    const agreementSeen = localStorage.getItem('terracotta_agreement_v2');
+    if (agreementSeen) return true;
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `<div class="modal-content" style="max-width:500px">
+        <h3 style="margin-bottom:12px">陶瓦联机使用须知</h3>
+        <div style="color:var(--text-secondary);font-size:13px;line-height:1.7;margin-bottom:16px">
+            <p>陶瓦联机基于 <a href="https://github.com/EasyTier/EasyTier" style="color:var(--primary)">EasyTier</a> 开源项目，由第三方提供公共节点。</p>
+            <p style="margin-top:8px">• 联机质量取决于网络环境，可能有延迟</p>
+            <p>• 公共节点由社区维护，不保证100%可用</p>
+            <p>• 游戏数据通过P2P加密传输，不经过服务器</p>
+            <p>• 遇到问题可在反馈页面提交</p>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+            <a href="https://docs.hmcl.net/multiplayer/feedback.html" target="_blank" style="color:var(--primary);font-size:13px;align-self:center">反馈问题</a>
+            <button class="btn btn-primary" id="terracotta-agree-btn">我已了解，开始使用</button>
+        </div>
+    </div>`;
+    document.body.appendChild(modal);
+    return new Promise(resolve => {
+        document.getElementById('terracotta-agree-btn').onclick = () => {
+            localStorage.setItem('terracotta_agreement_v2', '1');
+            modal.remove();
+            resolve(true);
+        };
+        modal.onclick = (e) => { if (e.target === modal) { modal.remove(); resolve(false); } };
+    });
+}
+
+async function terracottaExportLog() {
+    try {
+        const result = await API.easytierLog();
+        if (result && result.log) {
+            const blob = new Blob([result.log], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `terracotta-log-${new Date().toISOString().slice(0,10)}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('日志已导出', 'success');
+        } else {
+            showToast('暂无日志', 'info');
+        }
+    } catch (e) {
+        showToast('导出日志失败: ' + e.message, 'error');
+    }
+}
+
+let _lastTerracottaStateIndex = -1;
+
 function terracottaStartPolling() {
     if (terracottaPollTimer) clearInterval(terracottaPollTimer);
-    terracottaPollTimer = setInterval(async () => {
+    _lastTerracottaStateIndex = -1;
+    let pollInterval = 3000;
+    let idleCount = 0;
+
+    const doPoll = async () => {
         try {
             const result = await API.easytierStatus();
-            if (result.running && result.state) {
-                const state = result.state;
-                const stateType = state.state;
-
-                if (terracottaState.mode === 'host') {
-                    if (stateType === 'host-scanning') {
-                        document.getElementById('terracotta-conn-status').textContent = '正在扫描局域网游戏...';
-                        document.getElementById('terracotta-conn-status').style.color = 'var(--blue)';
-                    } else if (stateType === 'host-starting') {
-                        document.getElementById('terracotta-conn-status').textContent = '正在启动房间...';
-                        document.getElementById('terracotta-conn-status').style.color = 'var(--blue)';
-                    } else if (stateType === 'host-ok') {
-                        const roomCode = state.room || result.roomCode || '';
-                        document.getElementById('terracotta-roomcode').textContent = roomCode;
-                        document.getElementById('terracotta-conn-status').textContent = '房间已创建 (P2P)';
-                        document.getElementById('terracotta-conn-status').style.color = 'var(--green)';
-                        document.getElementById('terracotta-hint').textContent = '将房间码发送给朋友即可联机';
-                        document.getElementById('terracotta-hint').style.background = 'rgba(16,185,129,0.1)';
-                        document.getElementById('terracotta-hint').style.color = 'var(--green)';
-                        updateTerracottaStatus('陶瓦联机 - 主机', `房间码: ${roomCode}`, 'connected');
-                    } else if (stateType === 'exception') {
-                        document.getElementById('terracotta-conn-status').textContent = '连接异常';
-                        document.getElementById('terracotta-conn-status').style.color = 'var(--red)';
-                    }
-                } else if (terracottaState.mode === 'guest') {
-                    if (stateType === 'guest-connecting') {
-                        document.getElementById('terracotta-conn-status').textContent = '正在连接...';
-                        document.getElementById('terracotta-conn-status').style.color = 'var(--blue)';
-                    } else if (stateType === 'guest-starting') {
-                        document.getElementById('terracotta-conn-status').textContent = '正在建立P2P连接...';
-                        document.getElementById('terracotta-conn-status').style.color = 'var(--blue)';
-                    } else if (stateType === 'guest-ok') {
-                        const connectUrl = state.url || result.virtualIP || '';
-                        document.getElementById('terracotta-roomcode').textContent = connectUrl;
-                        document.getElementById('terracotta-connect-addr').textContent = connectUrl;
-                        document.getElementById('terracotta-conn-status').textContent = '已连接 (P2P)';
-                        document.getElementById('terracotta-conn-status').style.color = 'var(--green)';
-                        document.getElementById('terracotta-hint').textContent = `在Minecraft多人游戏中添加服务器地址: ${connectUrl}`;
-                        document.getElementById('terracotta-hint').style.background = 'rgba(16,185,129,0.1)';
-                        document.getElementById('terracotta-hint').style.color = 'var(--green)';
-                        updateTerracottaStatus('陶瓦联机 - 客户端', `连接地址: ${connectUrl}`, 'connected');
-                    } else if (stateType === 'exception') {
-                        document.getElementById('terracotta-conn-status').textContent = '连接异常';
-                        document.getElementById('terracotta-conn-status').style.color = 'var(--red)';
-                    }
-                }
-            } else if (!result.running) {
+            if (!result.running) {
                 document.getElementById('terracotta-conn-status').textContent = '已断开';
                 document.getElementById('terracotta-conn-status').style.color = 'var(--red)';
+                clearInterval(terracottaPollTimer);
+                terracottaPollTimer = null;
+                return;
+            }
+            if (!result.state) return;
+
+            const state = result.state;
+            const stateType = state.state;
+            const stateIndex = result.stateIndex || state.index || -1;
+
+            if (stateIndex > 0 && stateIndex === _lastTerracottaStateIndex) {
+                idleCount++;
+                if (idleCount > 5) pollInterval = 5000;
+                return;
+            }
+            _lastTerracottaStateIndex = stateIndex;
+            idleCount = 0;
+            pollInterval = 1500;
+
+            const profiles = result.profiles || state.profiles || [];
+            const difficulty = result.difficulty || state.difficulty || null;
+            const errorType = result.errorType || null;
+            const errorMessage = result.errorMessage || null;
+
+            if (terracottaState.mode === 'host') {
+                if (stateType === 'host-scanning') {
+                    document.getElementById('terracotta-conn-status').textContent = '正在扫描局域网游戏...';
+                    document.getElementById('terracotta-conn-status').style.color = 'var(--blue)';
+                } else if (stateType === 'host-starting') {
+                    document.getElementById('terracotta-conn-status').textContent = '正在启动房间...';
+                    document.getElementById('terracotta-conn-status').style.color = 'var(--blue)';
+                } else if (stateType === 'host-ok') {
+                    const roomCode = state.room || result.roomCode || '';
+                    document.getElementById('terracotta-roomcode').textContent = roomCode;
+                    const profileText = profiles.length > 0 ? ` (${profiles.length}人已连接)` : '';
+                    document.getElementById('terracotta-conn-status').textContent = '房间已创建 (P2P)' + profileText;
+                    document.getElementById('terracotta-conn-status').style.color = 'var(--green)';
+                    document.getElementById('terracotta-hint').textContent = '将房间码发送给朋友即可联机';
+                    document.getElementById('terracotta-hint').style.background = 'rgba(16,185,129,0.1)';
+                    document.getElementById('terracotta-hint').style.color = 'var(--green)';
+                    updateTerracottaStatus('陶瓦联机 - 主机', `房间码: ${roomCode}`, 'connected');
+                } else if (stateType === 'exception') {
+                    const errMsg = errorMessage || '连接异常';
+                    document.getElementById('terracotta-conn-status').textContent = errMsg;
+                    document.getElementById('terracotta-conn-status').style.color = 'var(--red)';
+                    document.getElementById('terracotta-hint').textContent = errorType ? `错误类型: ${errorType}` : '';
+                    document.getElementById('terracotta-hint').style.background = 'rgba(239,68,68,0.1)';
+                    document.getElementById('terracotta-hint').style.color = 'var(--red)';
+                }
+            } else if (terracottaState.mode === 'guest') {
+                if (stateType === 'guest-connecting') {
+                    document.getElementById('terracotta-conn-status').textContent = '正在连接...';
+                    document.getElementById('terracotta-conn-status').style.color = 'var(--blue)';
+                } else if (stateType === 'guest-starting') {
+                    const diffMap = { 'EASIEST': '和平', 'SIMPLE': '简单', 'MEDIUM': '普通', 'TOUGH': '困难' };
+                    const diffText = difficulty && difficulty !== 'UNKNOWN' ? ` | 难度: ${diffMap[difficulty] || difficulty}` : '';
+                    document.getElementById('terracotta-conn-status').textContent = '正在建立P2P连接...' + diffText;
+                    document.getElementById('terracotta-conn-status').style.color = 'var(--blue)';
+                } else if (stateType === 'guest-ok') {
+                    const connectUrl = state.url || result.virtualIP || '';
+                    document.getElementById('terracotta-roomcode').textContent = connectUrl;
+                    document.getElementById('terracotta-connect-addr').textContent = connectUrl;
+                    const profileText = profiles.length > 0 ? ` (${profiles.length}人在线)` : '';
+                    document.getElementById('terracotta-conn-status').textContent = '已连接 (P2P)' + profileText;
+                    document.getElementById('terracotta-conn-status').style.color = 'var(--green)';
+                    document.getElementById('terracotta-hint').textContent = `在Minecraft多人游戏中添加服务器地址: ${connectUrl}`;
+                    document.getElementById('terracotta-hint').style.background = 'rgba(16,185,129,0.1)';
+                    document.getElementById('terracotta-hint').style.color = 'var(--green)';
+                    updateTerracottaStatus('陶瓦联机 - 客户端', `连接地址: ${connectUrl}`, 'connected');
+                } else if (stateType === 'exception') {
+                    const errMsg = errorMessage || '连接异常';
+                    document.getElementById('terracotta-conn-status').textContent = errMsg;
+                    document.getElementById('terracotta-conn-status').style.color = 'var(--red)';
+                    document.getElementById('terracotta-hint').textContent = errorType ? `错误类型: ${errorType}` : '';
+                    document.getElementById('terracotta-hint').style.background = 'rgba(239,68,68,0.1)';
+                    document.getElementById('terracotta-hint').style.color = 'var(--red)';
+                }
             }
         } catch (e) {
             console.warn('[Terracotta] 状态轮询失败:', e);
         }
-    }, 3000);
+    };
+
+    doPoll();
+    terracottaPollTimer = setInterval(doPoll, pollInterval);
+
+    setInterval(() => {
+        if (terracottaPollTimer) {
+            clearInterval(terracottaPollTimer);
+            terracottaPollTimer = setInterval(doPoll, pollInterval);
+        }
+    }, 30000);
 }
 
 function updatePortmapStatus(title, desc, state) {
@@ -4808,8 +4933,9 @@ async function loadAccounts() {
             }
             
             document.getElementById('home-player-name').textContent = selectedAccount.username;
-            document.getElementById('home-account-type').textContent = selectedAccount.type === 'microsoft' ? '微软账户' : selectedAccount.type === 'thirdparty' ? '外置登录' : '离线模式';
-            try { localStorage.setItem('cachedPlayerName', selectedAccount.username); } catch(e) {}
+            const accountTypeText = selectedAccount.type === 'microsoft' ? '微软账户' : selectedAccount.type === 'thirdparty' ? '外置登录' : '离线模式';
+            document.getElementById('home-account-type').textContent = accountTypeText;
+            try { localStorage.setItem('cachedPlayerName', selectedAccount.username); localStorage.setItem('cachedAccountType', accountTypeText); } catch(e) {}
             
             const homeAvatar = document.getElementById('home-avatar');
             if (accSkinUrl) {
@@ -4821,7 +4947,18 @@ async function loadAccounts() {
                 img.width = 64;
                 img.height = 64;
                 img.onload = function() {
-                    try { localStorage.setItem('cachedAvatarUrl', accSkinUrl); localStorage.setItem('cachedAvatarId', selectedAccount.id); } catch(e) {}
+                    try {
+                        localStorage.setItem('cachedAvatarUrl', accSkinUrl);
+                        localStorage.setItem('cachedAvatarId', selectedAccount.id);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 64; canvas.height = 64;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, 64, 64);
+                        const dataUrl = canvas.toDataURL('image/png');
+                        if (dataUrl && dataUrl.length > 100) {
+                            localStorage.setItem('cachedAvatarData', dataUrl);
+                        }
+                    } catch(e) {}
                 };
                 img.onerror = function() {
                     img.style.display = 'none';
@@ -5189,7 +5326,16 @@ async function startMsAuth() {
                     } else if (pollResult.pending) {
                         document.getElementById('msauth-status-text').textContent = '等待验证...';
                     } else {
-                        document.getElementById('msauth-status-text').textContent = pollResult.error || '验证失败';
+                        let errMsg = pollResult.error || '验证失败';
+                        if (pollResult.needPurchase) errMsg = '❌ 该账号未购买Minecraft，请先购买游戏';
+                        else if (pollResult.needCreateProfile) errMsg = '❌ 未找到档案，请先在 Minecraft.net 创建角色名';
+                        else if (pollResult.isRateLimit) errMsg = `⏳ 请求过于频繁，请等待 ${pollResult.retryAfter || 5} 秒后重试`;
+                        else if (pollResult.xerr) errMsg = `❌ Xbox认证失败 (${pollResult.xerr})`;
+                        document.getElementById('msauth-status-text').textContent = errMsg;
+                        if (pollResult.needPurchase || pollResult.needCreateProfile) {
+                            clearInterval(msAuthPollInterval);
+                            msAuthPollInterval = null;
+                        }
                     }
                 } catch (e) {
                     console.warn('[Auth] 微软登录轮询失败:', e);
@@ -9028,18 +9174,31 @@ const SPONSORS = [
     '竹雾', '爱发电用户_979a9'
 ];
 
-function renderSponsors() {
+function renderSponsors(filter) {
     const container = document.getElementById('sponsor-list');
     if (!container) return;
 
-    if (SPONSORS.length === 0) {
-        container.innerHTML = '<span class="sponsor-empty">暂无赞助者</span>';
+    const keyword = (filter || '').toLowerCase().trim();
+    const filtered = keyword
+        ? SPONSORS.filter(name => name.toLowerCase().includes(keyword))
+        : SPONSORS;
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<span class="sponsor-empty">' + (keyword ? '未找到匹配的赞助者' : '暂无赞助者') + '</span>';
         return;
     }
 
-    container.innerHTML = SPONSORS.map(name =>
-        `<span class="sponsor-tag">${escapeHtml(name)}</span>`
-    ).join('');
+    container.innerHTML = filtered.map(name => {
+        const initial = name.charAt(0).toUpperCase();
+        return `<div class="sponsor-tag">
+            <div class="sponsor-tag-icon">${initial}</div>
+            <span class="sponsor-tag-name">${escapeHtml(name)}</span>
+        </div>`;
+    }).join('');
+}
+
+function filterSponsors(keyword) {
+    renderSponsors(keyword);
 }
 
 document.addEventListener('DOMContentLoaded', () => {

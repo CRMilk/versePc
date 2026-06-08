@@ -2781,7 +2781,10 @@
                         <div class="card sponsor-card" id="sponsor-card">
                             <h3>💕 赞助者</h3>
                             <p class="form-hint" style="margin-bottom: 12px;">感谢以下用户对 VersePC 的支持与赞助</p>
-                            <div class="sponsor-list" id="sponsor-list">
+                            <div class="sponsor-search">
+                                <input type="text" id="sponsor-search-input" class="sponsor-search-input" placeholder="搜索赞助者..." oninput="filterSponsors(this.value)">
+                            </div>
+                            <div class="sponsor-grid" id="sponsor-list">
                             </div>
                         </div>
                         <div class="card">

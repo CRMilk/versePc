@@ -1095,6 +1095,38 @@ function isTerracottaInstalled() {
     return fs.existsSync(getTerracottaBinaryPath());
 }
 
+async function ensureTerracottaInstalled() {
+    if (isTerracottaInstalled()) return true;
+    const TERRACOTTA_URLS = [
+        'https://terracotta.glavo.site/download/latest/terracotta.exe',
+        'https://ghfast.top/https://github.com/HMCL-dev/HMCL/releases/download/terracotta-v0.4.2/terracotta.exe',
+        'https://mirror.ghproxy.com/https://github.com/HMCL-dev/HMCL/releases/download/terracotta-v0.4.2/terracotta.exe'
+    ];
+    const binPath = getTerracottaBinaryPath();
+    const binDir = path.dirname(binPath);
+    if (!fs.existsSync(binDir)) fs.mkdirSync(binDir, { recursive: true });
+    for (const url of TERRACOTTA_URLS) {
+        try {
+            console.log(`[Terracotta] Downloading from ${url}...`);
+            const resp = await fetch(url);
+            if (!resp.ok) continue;
+            const buffer = Buffer.from(await resp.arrayBuffer());
+            if (buffer.length < 10000) continue;
+            const tmpPath = binPath + '.tmp';
+            fs.writeFileSync(tmpPath, buffer);
+            fs.renameSync(tmpPath, binPath);
+            if (process.platform !== 'win32') {
+                fs.chmodSync(binPath, 0o755);
+            }
+            console.log(`[Terracotta] Installed successfully (${buffer.length} bytes)`);
+            return true;
+        } catch (e) {
+            console.warn(`[Terracotta] Download failed from ${url}: ${e.message}`);
+        }
+    }
+    return false;
+}
+
 async function fetchTerracottaPublicNodes() {
     if (terracottaPublicNodes) return terracottaPublicNodes;
     try {
@@ -1213,6 +1245,11 @@ async function startTerracotta() {
         terracottaStatus.running = false;
         terracottaHttpPort = 0;
         terracottaProcess = null;
+        stopTerracottaDaemon();
+        if (code !== 0 && code !== null && _terracottaSavedMode) {
+            console.warn('[Terracotta] Non-zero exit, attempting auto-recovery...');
+            setTimeout(() => recoverTerracotta(), 2000);
+        }
     });
 
     terracottaProcess.on('error', (err) => {
@@ -1237,6 +1274,19 @@ async function startTerracotta() {
     }
 }
 
+function getPlayerName() {
+    try {
+        const accountsPath = path.join(DATA_DIR, 'accounts.json');
+        if (fs.existsSync(accountsPath)) {
+            const accounts = JSON.parse(fs.readFileSync(accountsPath, 'utf-8'));
+            if (Array.isArray(accounts) && accounts.length > 0) {
+                return accounts[0].username || accounts[0].name || 'Player';
+            }
+        }
+    } catch (e) {}
+    return 'Player';
+}
+
 async function terracottaStartHost(gamePort) {
     const port = await startTerracotta();
     const nodes = await fetchTerracottaPublicNodes();
@@ -1244,13 +1294,19 @@ async function terracottaStartHost(gamePort) {
     terracottaStatus.mode = 'host';
     terracottaStatus.gamePort = gamePort;
 
+    const playerName = getPlayerName();
     const params = {
-        player: 'VersePC',
+        player: playerName,
         public_nodes: nodes,
         game_port: gamePort
     };
 
     await terracottaHttpGet('/state/scanning', params);
+
+    _terracottaSavedMode = 'host';
+    _terracottaSavedGamePort = gamePort;
+    _terracottaCrashCount = 0;
+    startTerracottaDaemon();
 
     return { success: true, httpPort: port };
 }
@@ -1261,24 +1317,81 @@ async function terracottaStartGuest(roomCode) {
 
     terracottaStatus.mode = 'guest';
 
+    const playerName = getPlayerName();
     const params = {
         room: roomCode,
-        player: 'VersePC',
+        player: playerName,
         public_nodes: nodes
     };
 
     await terracottaHttpGet('/state/guesting', params);
 
+    _terracottaSavedMode = 'guest';
+    _terracottaSavedRoomCode = roomCode;
+    _terracottaCrashCount = 0;
+    startTerracottaDaemon();
+
     return { success: true, httpPort: port };
 }
 
+let _terracottaDaemonTimer = null;
+let _terracottaCrashCount = 0;
+let _terracottaSavedMode = null;
+let _terracottaSavedGamePort = 0;
+let _terracottaSavedRoomCode = '';
+const TERRACOTTA_MAX_CRASH_RECOVERY = 3;
+
+function startTerracottaDaemon() {
+    if (_terracottaDaemonTimer) clearInterval(_terracottaDaemonTimer);
+    _terracottaDaemonTimer = setInterval(async () => {
+        if (!terracottaHttpPort) return;
+        try {
+            await getTerracottaState();
+        } catch (e) {}
+    }, 500);
+}
+
+function stopTerracottaDaemon() {
+    if (_terracottaDaemonTimer) { clearInterval(_terracottaDaemonTimer); _terracottaDaemonTimer = null; }
+}
+
+async function recoverTerracotta() {
+    if (_terracottaCrashCount >= TERRACOTTA_MAX_CRASH_RECOVERY) {
+        console.error('[Terracotta] Max crash recovery attempts reached');
+        stopTerracotta();
+        _terracottaCrashCount = 0;
+        return false;
+    }
+    _terracottaCrashCount++;
+    console.warn(`[Terracotta] Attempting recovery (${_terracottaCrashCount}/${TERRACOTTA_MAX_CRASH_RECOVERY})...`);
+    try {
+        terracottaProcess = null;
+        terracottaHttpPort = 0;
+        if (_terracottaSavedMode === 'host' && _terracottaSavedGamePort) {
+            await terracottaStartHost(_terracottaSavedGamePort);
+            return true;
+        } else if (_terracottaSavedMode === 'guest' && _terracottaSavedRoomCode) {
+            await terracottaStartGuest(_terracottaSavedRoomCode);
+            return true;
+        }
+    } catch (e) {
+        console.error('[Terracotta] Recovery failed:', e.message);
+    }
+    return false;
+}
+
 function stopTerracotta() {
+    stopTerracottaDaemon();
     if (terracottaProcess) {
         try { terracottaProcess.kill(); } catch (e) {}
         terracottaProcess = null;
     }
     terracottaHttpPort = 0;
-    terracottaStatus = { running: false, mode: null, roomCode: '', virtualIP: '', gamePort: 0, state: null, stateIndex: -1 };
+    _terracottaCrashCount = 0;
+    _terracottaSavedMode = null;
+    _terracottaSavedGamePort = 0;
+    _terracottaSavedRoomCode = '';
+    terracottaStatus = { running: false, mode: null, roomCode: '', virtualIP: '', gamePort: 0, state: null, stateIndex: -1, profiles: [], difficulty: null, errorType: null, errorMessage: null };
 
     if (terracottaPortFilePath) {
         try {
@@ -1290,6 +1403,23 @@ function stopTerracotta() {
 
     return { success: true };
 }
+
+const TERRACOTTA_ERROR_MAP = {
+    0: { key: 'PING_HOST_FAIL', msg: '无法连接到主机，请检查网络' },
+    1: { key: 'PING_HOST_RST', msg: '主机连接被重置，可能NAT类型不兼容' },
+    2: { key: 'GUEST_ET_CRASH', msg: '客户端网络组件崩溃' },
+    3: { key: 'HOST_ET_CRASH', msg: '主机网络组件崩溃' },
+    4: { key: 'PING_SERVER_RST', msg: '公共节点连接被重置' },
+    5: { key: 'SCAFFOLDING_INVALID_RESPONSE', msg: '服务器返回无效响应' }
+};
+
+const TERRACOTTA_FATAL_MAP = {
+    'OS': '当前系统不支持陶瓦联机',
+    'NETWORK': '网络连接失败，请检查网络设置',
+    'INSTALL': '陶瓦组件安装失败',
+    'TERRACOTTA': '陶瓦组件运行异常',
+    'UNKNOWN': '发生未知错误'
+};
 
 async function getTerracottaState() {
     if (!terracottaHttpPort) return null;
@@ -1304,6 +1434,21 @@ async function getTerracottaState() {
             }
             if (state.state === 'guest-ok' && state.url) {
                 terracottaStatus.virtualIP = state.url;
+            }
+
+            if (state.state === 'exception' && state.type !== undefined) {
+                const errInfo = TERRACOTTA_ERROR_MAP[state.type];
+                if (errInfo) {
+                    terracottaStatus.errorType = errInfo.key;
+                    terracottaStatus.errorMessage = errInfo.msg;
+                }
+            }
+
+            if (state.profiles) {
+                terracottaStatus.profiles = state.profiles;
+            }
+            if (state.difficulty !== undefined) {
+                terracottaStatus.difficulty = state.difficulty;
             }
         }
         return state;
@@ -2190,14 +2335,61 @@ async function checkModUpdates(versionId) {
 function loadAccounts() {
     try {
         if (fs.existsSync(ACCOUNTS_FILE)) {
-            return JSON.parse(fs.readFileSync(ACCOUNTS_FILE, 'utf-8'));
+            const raw = JSON.parse(fs.readFileSync(ACCOUNTS_FILE, 'utf-8'));
+            return raw.map(acc => {
+                if (acc.accessToken && acc.accessToken.startsWith('enc:')) {
+                    try { acc.accessToken = decryptToken(acc.accessToken.slice(4)); } catch (e) {}
+                }
+                if (acc.refreshToken && acc.refreshToken.startsWith('enc:')) {
+                    try { acc.refreshToken = decryptToken(acc.refreshToken.slice(4)); } catch (e) {}
+                }
+                return acc;
+            });
         }
     } catch (e) {}
     return [];
 }
 
+const TOKEN_ENC_ALGO = 'aes-256-cbc';
+let _tokenEncKey = null;
+function getTokenEncKey() {
+    if (_tokenEncKey) return _tokenEncKey;
+    const machineId = require('os').hostname() + require('os').userInfo().username + DATA_DIR;
+    _tokenEncKey = crypto.createHash('sha256').update(machineId).digest();
+    return _tokenEncKey;
+}
+function encryptToken(text) {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(TOKEN_ENC_ALGO, getTokenEncKey(), iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return iv.toString('hex') + ':' + encrypted;
+}
+function decryptToken(data) {
+    const [ivHex, encrypted] = data.split(':');
+    const iv = Buffer.from(ivHex, 'hex');
+    const decipher = crypto.createDecipheriv(TOKEN_ENC_ALGO, getTokenEncKey(), iv);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+}
+
 function saveAccounts(accounts) {
-    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2));
+    const toSave = accounts.map(acc => {
+        const copy = { ...acc };
+        if (copy.accessToken) copy.accessToken = 'enc:' + encryptToken(copy.accessToken);
+        if (copy.refreshToken) copy.refreshToken = 'enc:' + encryptToken(copy.refreshToken);
+        return copy;
+    });
+    const json = JSON.stringify(toSave, null, 2);
+    const tmpFile = ACCOUNTS_FILE + '.tmp';
+    try {
+        fs.writeFileSync(tmpFile, json);
+        fs.renameSync(tmpFile, ACCOUNTS_FILE);
+    } catch (e) {
+        try { fs.writeFileSync(ACCOUNTS_FILE, json); } catch (e2) {}
+        try { if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile); } catch (e3) {}
+    }
 }
 
 const VERSIONS_DATA_FILE = path.join(DATA_DIR, 'versions-data.json');
@@ -5120,8 +5312,38 @@ function getVersionModsDir(versionId) {
         versionId = settings.selectedVersion || '';
     }
     if (!versionId) return null;
+    if (versionId.includes('[外部]')) {
+        const installed = getInstalledVersions();
+        const ext = installed.find(v => v.id === versionId && v.isExternal);
+        if (ext && ext.externalVersionDir) {
+            const extMods = path.join(ext.externalVersionDir, 'mods');
+            return extMods;
+        }
+        const cleanId = versionId.replace(/\s*\[外部\]/, '');
+        const ext2 = installed.find(v => v.id === cleanId && v.isExternal);
+        if (ext2 && ext2.externalVersionDir) {
+            return path.join(ext2.externalVersionDir, 'mods');
+        }
+    }
     const modsPath = path.join(VERSIONS_DIR, versionId, 'mods');
     return modsPath;
+}
+
+function getVersionSubDir(versionId, subfolder) {
+    if (!versionId) {
+        const settings = loadSettingsCached();
+        versionId = settings.selectedVersion || '';
+    }
+    if (!versionId) return null;
+    if (versionId.includes('[外部]')) {
+        const installed = getInstalledVersions();
+        const ext = installed.find(v => v.id === versionId && v.isExternal);
+        if (ext && ext.externalVersionDir) return path.join(ext.externalVersionDir, subfolder);
+        const cleanId = versionId.replace(/\s*\[外部\]/, '');
+        const ext2 = installed.find(v => v.id === cleanId && v.isExternal);
+        if (ext2 && ext2.externalVersionDir) return path.join(ext2.externalVersionDir, subfolder);
+    }
+    return path.join(VERSIONS_DIR, versionId, subfolder);
 }
 
 const modIconCache = new Map();
@@ -13784,7 +14006,8 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 const { versionId, filePath: mifFilePath } = mifData;
                 if (!versionId || !mifFilePath) { sendError('Missing params', 400); break; }
                 try {
-                    const modsDir = path.join(VERSIONS_DIR, versionId, 'mods');
+                    const modsDir = getVersionSubDir(versionId, 'mods');
+                    if (!modsDir) { sendError('无法确定模组目录'); break; }
                     if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir, { recursive: true });
                     const destPath = path.join(modsDir, path.basename(mifFilePath));
                     fs.copyFileSync(mifFilePath, destPath);
@@ -14073,7 +14296,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         { name: '用户主目录', path: homeDir, type: 'home' },
                     ];
                     if (settings.selectedVersion) {
-                        const vDir = path.join(VERSIONS_DIR, settings.selectedVersion);
+                        const vDir = getVersionSubDir(settings.selectedVersion, '') || path.join(VERSIONS_DIR, settings.selectedVersion);
                         if (fs.existsSync(vDir)) {
                             defaultPaths.push({ name: `版本: ${settings.selectedVersion}`, path: vDir, type: 'version' });
                             const modsDir = path.join(vDir, 'mods');
@@ -14732,9 +14955,33 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         break;
                     }
 
-                    const profileResult = await fetchJSONWithAuth('https://api.minecraftservices.com/minecraft/profile', mcAccessToken);
+                    try {
+                        const entitlements = await fetchJSONWithAuth('https://api.minecraftservices.com/entitlements/mcstore', mcAccessToken);
+                        if (entitlements && Array.isArray(entitlements.items)) {
+                            const hasGame = entitlements.items.some(item =>
+                                item.name === 'product_minecraft' || item.name === 'game_minecraft'
+                            );
+                            if (!hasGame) {
+                                sendJSON({ success: false, error: '该账号未购买Minecraft，请先购买游戏', needPurchase: true });
+                                break;
+                            }
+                        }
+                    } catch (entErr) {
+                        console.warn('[MSAuth] 游戏所有权验证跳过:', entErr.message);
+                    }
+
+                    let profileResult;
+                    try {
+                        profileResult = await fetchJSONWithAuth('https://api.minecraftservices.com/minecraft/profile', mcAccessToken);
+                    } catch (profileErr) {
+                        if (profileErr.message && profileErr.message.includes('404')) {
+                            sendJSON({ success: false, error: '未找到Minecraft档案，请先在 Minecraft.net 创建角色名', needCreateProfile: true });
+                            break;
+                        }
+                        throw profileErr;
+                    }
                     if (!profileResult || !profileResult.id) {
-                        sendJSON({ success: false, error: '未找到Minecraft档案，请确认是否已购买游戏' });
+                        sendJSON({ success: false, error: '未找到Minecraft档案，请先在 Minecraft.net 创建角色名', needCreateProfile: true });
                         break;
                     }
 
@@ -14767,7 +15014,11 @@ async function handleAPI(pathname, req, res, parsedUrl) {
 
                     sendJSON({ success: true, account: newAccount });
                 } catch (e) {
-                    sendError('微软登录失败: ' + e.message);
+                    if (e.isRateLimit) {
+                        sendJSON({ success: false, error: e.message, isRateLimit: true, retryAfter: e.retryAfter });
+                    } else {
+                        sendError('微软登录失败: ' + e.message);
+                    }
                 }
                 break;
             }
@@ -14853,9 +15104,18 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         break;
                     }
 
-                    const profileResult = await fetchJSONWithAuth('https://api.minecraftservices.com/minecraft/profile', mcAccessToken);
+                    let profileResult;
+                    try {
+                        profileResult = await fetchJSONWithAuth('https://api.minecraftservices.com/minecraft/profile', mcAccessToken);
+                    } catch (profileErr) {
+                        if (profileErr.message && profileErr.message.includes('404')) {
+                            sendJSON({ success: false, error: '未找到Minecraft档案，请先在 Minecraft.net 创建角色名', needCreateProfile: true });
+                            break;
+                        }
+                        throw profileErr;
+                    }
                     if (!profileResult || !profileResult.id) {
-                        sendJSON({ success: false, error: '未找到Minecraft档案' });
+                        sendJSON({ success: false, error: '未找到Minecraft档案，请先在 Minecraft.net 创建角色名', needCreateProfile: true });
                         break;
                     }
 
@@ -14869,7 +15129,11 @@ async function handleAPI(pathname, req, res, parsedUrl) {
 
                     sendJSON({ success: true, account });
                 } catch (e) {
-                    sendError('令牌刷新失败: ' + e.message);
+                    if (e.isRateLimit) {
+                        sendJSON({ success: false, error: e.message, isRateLimit: true, retryAfter: e.retryAfter });
+                    } else {
+                        sendError('令牌刷新失败: ' + e.message);
+                    }
                 }
                 break;
             }
@@ -16226,7 +16490,11 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     roomCode: terracottaStatus.roomCode,
                     virtualIP: terracottaStatus.virtualIP,
                     gamePort: terracottaStatus.gamePort,
-                    state: terracottaState
+                    state: terracottaState,
+                    profiles: terracottaStatus.profiles || [],
+                    difficulty: terracottaStatus.difficulty || null,
+                    errorType: terracottaStatus.errorType || null,
+                    errorMessage: terracottaStatus.errorMessage || null
                 });
                 break;
             }
@@ -16274,6 +16542,17 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 break;
             }
 
+            case '/api/easytier/log': {
+                if (!terracottaHttpPort) { sendJSON({ log: '' }); break; }
+                try {
+                    const logData = await terracottaHttpGet('/log?fetch=true');
+                    sendJSON({ log: typeof logData === 'string' ? logData : JSON.stringify(logData) });
+                } catch (e) {
+                    sendJSON({ log: '', error: e.message });
+                }
+                break;
+            }
+
             case '/api/open-folder': {
                 const data = await readBody();
                 const folder = data.folder || 'data';
@@ -16291,46 +16570,41 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     case 'logs': targetPath = LOGS_DIR; break;
                     case 'crash-reports': targetPath = path.join(MINECRAFT_DIR, 'crash-reports'); break;
                     case 'shaderpacks': {
-                        const spSettings = loadSettingsCached();
-                        const spVerId = spSettings.selectedVersion || '';
-                        if (spVerId) {
-                            const spDir = path.join(VERSIONS_DIR, spVerId, 'shaderpacks');
-                            if (fs.existsSync(spDir)) targetPath = spDir;
-                            else { fs.mkdirSync(spDir, { recursive: true }); targetPath = spDir; }
+                        const spDir = getVersionSubDir(null, 'shaderpacks');
+                        if (spDir) {
+                            if (!fs.existsSync(spDir)) fs.mkdirSync(spDir, { recursive: true });
+                            targetPath = spDir;
                         } else {
                             targetPath = path.join(DATA_DIR, 'shaderpacks');
                         }
                         break;
                     }
                     case 'resourcepacks': {
-                        const rpSettings = loadSettingsCached();
-                        const rpVerId = rpSettings.selectedVersion || '';
-                        if (rpVerId) {
-                            const rpDir = path.join(VERSIONS_DIR, rpVerId, 'resourcepacks');
-                            if (fs.existsSync(rpDir)) targetPath = rpDir;
-                            else { fs.mkdirSync(rpDir, { recursive: true }); targetPath = rpDir; }
+                        const rpDir = getVersionSubDir(null, 'resourcepacks');
+                        if (rpDir) {
+                            if (!fs.existsSync(rpDir)) fs.mkdirSync(rpDir, { recursive: true });
+                            targetPath = rpDir;
                         } else {
                             targetPath = path.join(DATA_DIR, 'resourcepacks');
                         }
                         break;
                     }
                     case 'datapacks': {
-                        const dpSettings = loadSettingsCached();
-                        const dpVerId = dpSettings.selectedVersion || '';
-                        if (dpVerId) {
-                            const dpDir = path.join(VERSIONS_DIR, dpVerId, 'datapacks');
-                            if (fs.existsSync(dpDir)) targetPath = dpDir;
-                            else { fs.mkdirSync(dpDir, { recursive: true }); targetPath = dpDir; }
+                        const dpDir = getVersionSubDir(null, 'datapacks');
+                        if (dpDir) {
+                            if (!fs.existsSync(dpDir)) fs.mkdirSync(dpDir, { recursive: true });
+                            targetPath = dpDir;
                         } else {
                             targetPath = path.join(DATA_DIR, 'datapacks');
                         }
                         break;
                     }
                     case 'game': {
-                        const settings = loadSettingsCached();
-                        if (settings.selectedVersion) {
-                            targetPath = path.join(VERSIONS_DIR, settings.selectedVersion);
+                        const gameDir = getVersionSubDir(null, '');
+                        if (gameDir) {
+                            targetPath = gameDir;
                         } else {
+                            const settings = loadSettingsCached();
                             targetPath = settings.gameDir || DATA_DIR;
                         }
                         break;
@@ -16553,6 +16827,9 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 if (!dvVersionId && !dvProjectId) { sendError('Missing versionId or projectId', 400); break; }
 
                 let destDir = dvSavePath;
+                if (!destDir && dvVersionId) {
+                    destDir = getVersionModsDir(dvVersionId);
+                }
                 if (!destDir) {
                     const settings = loadSettingsCached();
                     destDir = getVersionModsDir(settings.selectedVersion);
@@ -18714,15 +18991,11 @@ async function handleAPI(pathname, req, res, parsedUrl) {
 
             case '/api/filesystem/default-mod-path': {
                 try {
-                    const settings = loadSettingsCached();
-                    let defaultPath;
-                    
-                    if (settings.selectedVersion) {
-                        defaultPath = path.join(VERSIONS_DIR, settings.selectedVersion, 'mods');
-                    } else {
+                    let defaultPath = getVersionSubDir(null, 'mods');
+                    if (!defaultPath) {
                         const installedVersions = getInstalledVersions();
                         if (installedVersions.length > 0) {
-                            defaultPath = path.join(VERSIONS_DIR, installedVersions[0].id, 'mods');
+                            defaultPath = getVersionSubDir(installedVersions[0].id, 'mods') || path.join(MINECRAFT_DIR, 'mods');
                         } else {
                             defaultPath = path.join(MINECRAFT_DIR, 'mods');
                         }
@@ -18746,15 +19019,11 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     const folderName = folderMap[drpType];
                     if (!folderName) { sendError('Invalid resource type', 400); break; }
 
-                    const settings = loadSettingsCached();
-                    let defaultPath;
-
-                    if (settings.selectedVersion) {
-                        defaultPath = path.join(VERSIONS_DIR, settings.selectedVersion, folderName);
-                    } else {
+                    let defaultPath = getVersionSubDir(null, folderName);
+                    if (!defaultPath) {
                         const installedVersions = getInstalledVersions();
                         if (installedVersions.length > 0) {
-                            defaultPath = path.join(VERSIONS_DIR, installedVersions[0].id, folderName);
+                            defaultPath = getVersionSubDir(installedVersions[0].id, folderName) || path.join(DATA_DIR, folderName);
                         } else {
                             defaultPath = path.join(DATA_DIR, folderName);
                         }
@@ -18935,10 +19204,26 @@ function fetchJSONWithMethod(urlStr, method, body, headers, _redirectCount) {
                 fetchJSONWithMethod(redirectUrl, method, body, headers, _redirectCount + 1).then(resolve).catch(reject);
                 return;
             }
+            if (res.statusCode === 429) {
+                let errData = '';
+                res.on('data', chunk => errData += chunk);
+                res.on('end', () => {
+                    const retryAfter = parseInt(res.headers['retry-after'] || '5', 10);
+                    const err = new Error(`HTTP 429: 请求过于频繁，请等待 ${retryAfter} 秒后重试`);
+                    err.isRateLimit = true;
+                    err.retryAfter = retryAfter;
+                    reject(err);
+                });
+                return;
+            }
             if (res.statusCode >= 400) {
                 let errData = '';
                 res.on('data', chunk => errData += chunk);
-                res.on('end', () => reject(new Error(`HTTP ${res.statusCode}: ${errData.substring(0, 200)}`)));
+                res.on('end', () => {
+                    const err = new Error(`HTTP ${res.statusCode}: ${errData.substring(0, 200)}`);
+                    err.httpStatus = res.statusCode;
+                    reject(err);
+                });
                 return;
             }
             let data = '';
@@ -18960,6 +19245,28 @@ function fetchJSONWithAuth(urlStr, token) {
         const req = https.get(urlStr, {
             headers: { 'Authorization': `Bearer ${token}`, 'User-Agent': 'VersePC/1.0' }
         }, (res) => {
+            if (res.statusCode === 429) {
+                let errData = '';
+                res.on('data', chunk => errData += chunk);
+                res.on('end', () => {
+                    const retryAfter = parseInt(res.headers['retry-after'] || '5', 10);
+                    const err = new Error(`HTTP 429: 请求过于频繁，请等待 ${retryAfter} 秒后重试`);
+                    err.isRateLimit = true;
+                    err.retryAfter = retryAfter;
+                    reject(err);
+                });
+                return;
+            }
+            if (res.statusCode >= 400) {
+                let errData = '';
+                res.on('data', chunk => errData += chunk);
+                res.on('end', () => {
+                    const err = new Error(`HTTP ${res.statusCode}: ${errData.substring(0, 200)}`);
+                    err.httpStatus = res.statusCode;
+                    reject(err);
+                });
+                return;
+            }
             let data = '';
             res.on('data', chunk => data += chunk);
             res.on('end', () => {

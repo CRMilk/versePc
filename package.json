@@ -5,8 +5,8 @@
     "main": "main.js",
     "scripts": {
         "start": "electron .",
-        "build": "electron-builder --win --linux --mac --publish never",
-        "build:win": "electron-builder --win --publish never",
+        "build": "npm run protect && node generate-integrity.js && electron-builder --win --linux --mac --publish never",
+        "build:win": "npm run protect && node generate-integrity.js && electron-builder --win --publish never",
         "build:linux": "electron-builder --linux --publish never",
         "build:mac": "electron-builder --mac --publish never",
         "build:dir": "electron-builder --win --dir",
@@ -66,6 +66,7 @@
             "resources/**/*",
             "plugins/**/*",
             "node_modules/monaco-editor/**/*",
+            "integrity.json",
             "package.json",
             "node_modules/adm-zip/**/*",
             "node_modules/ws/**/*",
@@ -222,7 +223,13 @@
             "packElevateHelper": true,
             "perMachine": false
         },
-        "asar": false,
+        "asar": true,
+        "asarUnpack": [
+            "node_modules/sharp/**/*",
+            "node_modules/@img/**/*",
+            "node_modules/canvas/**/*",
+            "node_modules/detect-libc/**/*"
+        ],
         "releaseInfo": {
             "releaseNotes": "鏌ョ湅 GitHub Releases 鑾峰彇鏇存柊鏃ュ織锛歨ttps://github.com/doujie081231/versePc/releases"
         }

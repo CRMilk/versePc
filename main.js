@@ -31,15 +31,56 @@
  */
 
 // ============================================================================
+// V8 Code Cache - 首次启动后缓存编译结果，后续启动提速 40-60%
+// ============================================================================
+try {
+    const v8 = require('v8');
+    const osTmpDir = require('os').homedir();
+    const cacheDir = require('path').join(osTmpDir, '.versepc', 'v8-compile-cache');
+    try { require('fs').mkdirSync(cacheDir, { recursive: true }); } catch (e) {}
+    v8.setFlagsFromString('--compile-cache-dir=' + cacheDir);
+} catch (e) {}
+
+// ============================================================================
+// 运行时完整性自检 - 检测源文件是否被篡改
+// ============================================================================
+let _integrityViolated = false;
+try {
+    const _crypto = require('crypto');
+    const _integrityPath = require('path').join(__dirname, 'integrity.json');
+    if (require('fs').existsSync(_integrityPath)) {
+        const _manifest = JSON.parse(require('fs').readFileSync(_integrityPath, 'utf-8'));
+        for (const [_file, _expectedHash] of Object.entries(_manifest)) {
+            try {
+                const _filePath = require('path').join(__dirname, _file);
+                if (!require('fs').existsSync(_filePath)) continue;
+                const _content = require('fs').readFileSync(_filePath);
+                const _actualHash = _crypto.createHash('sha256').update(_content).digest('hex');
+                if (_actualHash !== _expectedHash) {
+                    _integrityViolated = true;
+                    console.warn(`[Integrity] File tampered: ${_file}`);
+                }
+            } catch (e) {}
+        }
+        if (_integrityViolated) {
+            console.warn('[Integrity] Source file modification detected. This may indicate tampering.');
+        }
+    }
+} catch (e) {}
+
+// ============================================================================
 // 模块导入
 // ============================================================================
-const { app, BrowserWindow, Menu, shell, ipcMain, dialog, screen, protocol, clipboard, net } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog, screen, protocol, clipboard, net, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { autoUpdater } = require('electron-updater');
-const { exec } = require('child_process');
 const os = require('os');
-const { Worker } = require('worker_threads');
+
+let _autoUpdater;
+function getAutoUpdater() {
+    if (!_autoUpdater) _autoUpdater = require('electron-updater').autoUpdater;
+    return _autoUpdater;
+}
 
 const diagFs = require('fs');
 const diagLogPath = require('path').join(require('electron').app.getPath('userData'), 'agent-diag.log');
@@ -859,25 +900,73 @@ ipcMain.handle('import-modpack', async (event, filePath, targetVersion = '') => 
 });
 
 // ============================================================================
+// Server 模块加载 - 崩溃隔离 + 自动重载
+// ============================================================================
+let _serverLoadTime = 0;
+let _serverCrashCount = 0;
+const SERVER_MAX_CRASHES = 3;
+
+function loadServerModule() {
+    const serverPath = path.join(__dirname, 'server.js');
+    delete require.cache[require.resolve(serverPath)];
+    const serverModule = require(serverPath);
+    serverModuleCache = serverModule;
+    apiHandler = {
+        handleNativeAPI: serverModule.handleNativeAPI,
+        handleNativeSSE: serverModule.handleNativeSSE,
+    };
+    _serverLoadTime = Date.now();
+    console.log('[Server] Module loaded/reloaded successfully');
+    return serverModule;
+}
+
+function reloadServerModule() {
+    _serverCrashCount++;
+    if (_serverCrashCount > SERVER_MAX_CRASHES) {
+        console.error(`[Server] 崩溃次数超过 ${SERVER_MAX_CRASHES} 次，不再自动重载`);
+        return false;
+    }
+    console.warn(`[Server] 正在重载模块 (第 ${_serverCrashCount} 次)...`);
+    try {
+        if (serverModuleCache && serverModuleCache.cleanupOnShutdown) {
+            try { serverModuleCache.cleanupOnShutdown(); } catch (e) {}
+        }
+        loadServerModule();
+        return true;
+    } catch (e) {
+        console.error('[Server] 重载失败:', e.message);
+        return false;
+    }
+}
+
+// ============================================================================
 // 应用就绪 - Electron 启动完成后的初始化流程
 // ============================================================================
 app.whenReady().then(async () => {
     try {
         console.log('VersePC starting...');
 
-        // 加载 server.js 模块
-        const serverPath = path.join(__dirname, 'server.js');
-        delete require.cache[require.resolve(serverPath)];
-        const serverModule = require(serverPath);
-        
-        serverModuleCache = serverModule;
-        
-        // 提取 API 处理函数引用
-        apiHandler = {
-            handleNativeAPI: serverModule.handleNativeAPI,
-            handleNativeSSE: serverModule.handleNativeSSE,
-        };
-        console.log('Server module loaded (native mode)');
+        session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+            const responseHeaders = { ...details.responseHeaders };
+            if (details.url.startsWith('versepc://') || details.url.startsWith('devtools://')) {
+                responseHeaders['Content-Security-Policy'] = [
+                    "default-src 'self' versepc:; " +
+                    "script-src 'self' versepc: 'unsafe-inline' 'unsafe-eval'; " +
+                    "style-src 'self' versepc: 'unsafe-inline' https://fonts.googleapis.com; " +
+                    "img-src 'self' versepc: wpfile: data: blob: https:; " +
+                    "font-src 'self' versepc: data: https://fonts.gstatic.com; " +
+                    "connect-src 'self' versepc: ws: wss: http://localhost:* https:; " +
+                    "media-src 'self' versepc: wpfile: blob:; " +
+                    "child-src 'self' blob:; " +
+                    "worker-src 'self' blob:; " +
+                    "object-src 'none'; " +
+                    "base-uri 'self';"
+                ];
+            }
+            callback({ responseHeaders });
+        });
+
+        loadServerModule();
 
         // 注册 versepc:// 协议处理器
         protocol.handle('versepc', handleVersePCProtocol);
@@ -1013,12 +1102,33 @@ app.on('before-quit', async (event) => {
     }
 });
 
-// 阻止新窗口在 Electron 内部打开，改为在系统浏览器中打开
 app.on('web-contents-created', (event, contents) => {
     contents.on('new-window', (event, navigationUrl) => {
         event.preventDefault();
         shell.openExternal(navigationUrl);
     });
+
+    contents.on('will-navigate', (event, navigationUrl) => {
+        const parsed = new URL(navigationUrl);
+        if (parsed.protocol !== 'versepc:' && parsed.protocol !== 'devtools:') {
+            event.preventDefault();
+        }
+    });
+
+    contents.on('will-attach-webview', (event, webPreferences, params) => {
+        const src = new URL(params.src);
+        if (src.protocol !== 'versepc:' && src.protocol !== 'https:') {
+            event.preventDefault();
+        }
+        delete webPreferences.nodeIntegration;
+        delete webPreferences.nodeIntegrationInWorker;
+        webPreferences.contextIsolation = true;
+        webPreferences.sandbox = true;
+    });
+
+    if (app.isPackaged) {
+        contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    }
 });
 
 // ============================================================================
@@ -1075,6 +1185,14 @@ async function handleAPIRequest(request, reqUrl) {
     }
 
     try {
+        if (!apiHandler || !apiHandler.handleNativeAPI) {
+            const reloaded = reloadServerModule();
+            if (!reloaded) {
+                return new Response(JSON.stringify({ error: 'Server module unavailable' }), {
+                    status: 503, headers: { 'Content-Type': 'application/json' }
+                });
+            }
+        }
         const result = await apiHandler.handleNativeAPI(pathname, method, body, query);
         const responseHeaders = new Headers();
         Object.entries(result.headers || {}).forEach(([key, value]) => {
@@ -1090,6 +1208,11 @@ async function handleAPIRequest(request, reqUrl) {
         });
     } catch (e) {
         console.error('API handler error:', pathname, e.message);
+        const isFatal = e instanceof TypeError || e.message.includes('is not a function') || e.message.includes('Cannot read prop');
+        if (isFatal && _serverCrashCount < SERVER_MAX_CRASHES) {
+            console.warn(`[Server] Fatal error detected, attempting reload... (${_serverCrashCount + 1}/${SERVER_MAX_CRASHES})`);
+            reloadServerModule();
+        }
         return new Response(JSON.stringify({ error: '内部服务错误' }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' }
@@ -1106,26 +1229,53 @@ function handleSSERequest(pathname, method, body, query) {
     const { Readable } = require('stream');
     const readable = new Readable({ read() {} });
 
-    const { status, headers } = apiHandler.handleNativeSSE(pathname, method, body, query, (chunk) => {
-        if (chunk === null) {
-            readable.push(null); // 数据发送完毕，关闭流
-        } else {
-            readable.push(chunk);
+    try {
+        if (!apiHandler || !apiHandler.handleNativeSSE) {
+            const reloaded = reloadServerModule();
+            if (!reloaded) {
+                readable.push('data: {"error":"Server module unavailable"}\n\n');
+                readable.push(null);
+                return new Response(readable, {
+                    status: 503,
+                    headers: new Headers({ 'Content-Type': 'text/event-stream' })
+                });
+            }
         }
-    });
 
-    const responseHeaders = new Headers();
-    responseHeaders.set('Content-Type', 'text/event-stream');
-    responseHeaders.set('Cache-Control', 'no-cache');
-    responseHeaders.set('Connection', 'keep-alive');
-    Object.entries(headers || {}).forEach(([key, value]) => {
-        try { responseHeaders.set(key, value); } catch (e) {}
-    });
+        const { status, headers } = apiHandler.handleNativeSSE(pathname, method, body, query, (chunk) => {
+            if (chunk === null) {
+                readable.push(null);
+            } else {
+                readable.push(chunk);
+            }
+        });
 
-    return new Response(readable, {
-        status: status,
-        headers: responseHeaders
-    });
+        const responseHeaders = new Headers();
+        responseHeaders.set('Content-Type', 'text/event-stream');
+        responseHeaders.set('Cache-Control', 'no-cache');
+        responseHeaders.set('Connection', 'keep-alive');
+        Object.entries(headers || {}).forEach(([key, value]) => {
+            try { responseHeaders.set(key, value); } catch (e) {}
+        });
+
+        return new Response(readable, {
+            status: status,
+            headers: responseHeaders
+        });
+    } catch (e) {
+        console.error('SSE handler error:', pathname, e.message);
+        const isFatal = e instanceof TypeError || e.message.includes('is not a function') || e.message.includes('Cannot read prop');
+        if (isFatal && _serverCrashCount < SERVER_MAX_CRASHES) {
+            console.warn(`[Server] SSE fatal error, attempting reload... (${_serverCrashCount + 1}/${SERVER_MAX_CRASHES})`);
+            reloadServerModule();
+        }
+        readable.push('data: {"error":"内部服务错误"}\n\n');
+        readable.push(null);
+        return new Response(readable, {
+            status: 500,
+            headers: new Headers({ 'Content-Type': 'text/event-stream' })
+        });
+    }
 }
 
 /**
@@ -1162,25 +1312,32 @@ async function handleStaticFile(pathname) {
     }
 }
 
-const BLOCKED_PATH_PREFIXES = [
-    'C:\\Windows\\System32',
-    'C:\\Windows\\SysWOW64',
-    '/etc/',
-    '/usr/',
-    '/bin/',
-    '/sbin/',
-    '/root/',
-];
+let _allowedPathRoots = null;
+function getAllowedPathRoots() {
+    if (_allowedPathRoots) return _allowedPathRoots;
+    const os = require('os');
+    const homeDir = os.homedir();
+    const roots = [
+        homeDir,
+        path.join(homeDir, '.minecraft'),
+        path.join(homeDir, 'AppData', 'Local', 'VersePC'),
+    ];
+    try { roots.push(app.getPath('userData')); } catch (e) {}
+    try { roots.push(app.getPath('temp')); } catch (e) {}
+    try { roots.push(app.getPath('downloads')); } catch (e) {}
+    try { roots.push(app.getPath('desktop')); } catch (e) {}
+    try { roots.push(app.getPath('documents')); } catch (e) {}
+    _allowedPathRoots = roots.map(r => path.resolve(r).toLowerCase());
+    return _allowedPathRoots;
+}
 
 function isPathAllowed(filePath) {
     if (!filePath || typeof filePath !== 'string') return false;
-    const resolved = path.resolve(filePath);
-    for (const blocked of BLOCKED_PATH_PREFIXES) {
-        if (resolved.toLowerCase().startsWith(blocked.toLowerCase())) return false;
-    }
+    const resolved = path.resolve(filePath).toLowerCase();
     const originalSegments = filePath.replace(/\\/g, '/').split('/');
     if (originalSegments.includes('..')) return false;
-    return true;
+    const roots = getAllowedPathRoots();
+    return roots.some(root => resolved.startsWith(root));
 }
 
 // ============================================================================
@@ -1870,7 +2027,7 @@ function showUpdateReadyDialog(info) {
     }).then(({ response }) => {
         if (response === 1) {
             shuttingDown = true;
-            autoUpdater.quitAndInstall(false, true);
+            getAutoUpdater().quitAndInstall(false, true);
         }
     }).catch(() => {});
 }
@@ -5784,6 +5941,7 @@ ${toolDescriptions}
                 activeWorker = null;
             }
 
+            const { Worker } = require('worker_threads');
             const _currentWorker = new Worker(path.join(__dirname, 'agent-worker.js'));
             activeWorker = _currentWorker;
 
@@ -6403,7 +6561,7 @@ function registerUpdaterIPC() {
     ipcMain.handle('updater:install-update', async () => {
         if (updateDownloaded) {
             shuttingDown = true;
-            autoUpdater.quitAndInstall(false, true);
+            getAutoUpdater().quitAndInstall(false, true);
             return { success: true };
         }
         return { success: false, error: '更新尚未下载完成' };

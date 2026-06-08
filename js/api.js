@@ -467,10 +467,11 @@ const API = {
 
     // === EasyTier 虚拟组网 ===
     easytierStatus: () => apiGet('/api/easytier/status'),
-    easytierHost: (gamePort) => apiPost('/api/easytier/host', { gamePort }),
-    easytierGuest: (roomCode) => apiPost('/api/easytier/guest', { roomCode }),
+    easytierHost: (gamePort, playerName) => apiPost('/api/easytier/host', { gamePort, playerName }),
+    easytierGuest: (roomCode, playerName) => apiPost('/api/easytier/guest', { roomCode, playerName }),
     easytierStop: () => apiPost('/api/easytier/stop', {}),
     easytierPeers: () => apiGet('/api/easytier/peers'),
+    easytierLog: () => apiGet('/api/easytier/log'),
 
     checkModUpdates: (versionId) => apiPost('/api/mods/check-updates', { versionId }),
 
