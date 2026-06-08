@@ -11987,8 +11987,8 @@ body.dark-theme .rc-context-sep { background:#222; }
 }
 .onboard-msg-avatar-steve {
     background-image: var(--steve-skin);
-    background-size: 160px;
-    background-position: -20px -20px;
+    background-size: 320px;
+    background-position: -40px -40px;
     image-rendering: pixelated;
 }
 .onboard-msg-bubble {
