@@ -1,6 +1,6 @@
 {
     "name":  "versepc",
-    "version": "1.0.12",
+    "version": "1.0.13",
     "description":  "VersePC - Minecraft Launcher",
     "license":  "VPSVL-1.0",
     "main":  "main.js",

@@ -130,6 +130,51 @@
             from { opacity:0; transform:translateY(10px); }
             to { opacity:1; transform:translateY(0); }
         }
+        .update-dot {
+            position: absolute; top: 6px; right: 6px; width: 8px; height: 8px;
+            background: #ef4444; border-radius: 50%; border: 2px solid var(--bg-primary);
+            animation: dot-pulse 2s ease-in-out infinite;
+        }
+        @keyframes dot-pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.7; }
+        }
+        .update-toast-popup {
+            position: fixed; top: 20px; right: 20px; z-index: 99999;
+            background: var(--bg-card, #fff); border: 1px solid var(--border, rgba(0,0,0,0.1));
+            border-radius: 12px; padding: 16px 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            max-width: 360px; animation: slideInRight 0.4s ease-out;
+            display: flex; align-items: flex-start; gap: 12px;
+        }
+        @keyframes slideInRight {
+            from { transform: translateX(120%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .update-toast-popup .update-popup-icon {
+            width: 36px; height: 36px; border-radius: 8px;
+            background: var(--accent-rgb, 76,175,80); background: rgba(var(--accent-rgb,76,175,80), 0.15);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .update-toast-popup .update-popup-content { flex: 1; min-width: 0; }
+        .update-toast-popup .update-popup-title { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+        .update-toast-popup .update-popup-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+        .update-toast-popup .update-popup-actions { display: flex; gap: 8px; margin-top: 10px; }
+        .update-toast-popup .update-popup-btn {
+            padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500;
+            cursor: pointer; border: none; transition: all 0.2s;
+        }
+        .update-toast-popup .update-popup-btn-primary {
+            background: var(--text-primary); color: var(--bg-page, #fff);
+        }
+        .update-toast-popup .update-popup-btn-secondary {
+            background: transparent; color: var(--text-secondary);
+            border: 1px solid var(--border, rgba(0,0,0,0.15));
+        }
+        .update-toast-popup .update-popup-close {
+            position: absolute; top: 8px; right: 8px; background: none; border: none;
+            color: var(--text-secondary); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px;
+        }
+        .update-toast-popup .update-popup-close:hover { color: var(--text-primary); }
     </style>
     
     <div id="wallpaper-bg" style="position:fixed;inset:0;z-index:0;background:var(--bg-primary,#0a0a0a);"></div>
@@ -3339,8 +3384,49 @@
                 } else if (notesEl) {
                     notesEl.style.display = 'none';
                 }
+                showUpdatePopup(data);
+                addUpdateDots();
             }
         });
+
+        function showUpdatePopup(data) {
+            if (document.querySelector('.update-toast-popup')) return;
+            const popup = document.createElement('div');
+            popup.className = 'update-toast-popup';
+            popup.innerHTML = `
+                <button class="update-popup-close" onclick="this.parentElement.remove()">&times;</button>
+                <div class="update-popup-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent,#4caf50)" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </div>
+                <div class="update-popup-content">
+                    <div class="update-popup-title">发现新版本 v${data.version}</div>
+                    <div class="update-popup-desc">${data.releaseNotes ? data.releaseNotes.split('\n').slice(0, 3).join('<br>') : '点击查看详情'}</div>
+                    <div class="update-popup-actions">
+                        <button class="update-popup-btn update-popup-btn-primary" onclick="navigateToPage('settings-other');this.closest('.update-toast-popup').remove();">查看详情</button>
+                        <button class="update-popup-btn update-popup-btn-secondary" onclick="this.closest('.update-toast-popup').remove();">稍后提醒</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(popup);
+            setTimeout(() => { if (popup.parentElement) popup.remove(); }, 15000);
+        }
+
+        function addUpdateDots() {
+            const settingsBtn = document.querySelector('#settings-submenu-group > .nav-btn');
+            if (settingsBtn && !settingsBtn.querySelector('.update-dot')) {
+                const dot = document.createElement('div');
+                dot.className = 'update-dot';
+                settingsBtn.style.position = 'relative';
+                settingsBtn.appendChild(dot);
+            }
+            const updateBtn = document.getElementById('updater-check-btn');
+            if (updateBtn && !updateBtn.querySelector('.update-dot')) {
+                const dot = document.createElement('div');
+                dot.className = 'update-dot';
+                updateBtn.style.position = 'relative';
+                updateBtn.appendChild(dot);
+            }
+        }
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initUpdaterUI);

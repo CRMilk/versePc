@@ -1,13 +1,13 @@
 {
-  "version": "1.0.12",
+  "version": "1.0.13",
   "releaseDate": "2026-06-10T00:00:00Z",
-  "releaseName": "VersePC v1.0.12",
-  "releaseNotes": "## 更新内容\n- 修复运行30分钟后崩溃的问题\n- 修复崩溃后无法重启的问题（端口占用）\n- 退出时正确清理所有子进程\n- 日志文件自动轮转，防止磁盘爆满\n- 修复皮肤上传JSON解析错误\n- 优化AI对话内存管理\n- 更新卡片黑白配色优化",
+  "releaseName": "VersePC v1.0.13",
+  "releaseNotes": "## 更新内容\n- 新增更新检测弹窗通知，检测到更新自动弹出提示\n- 设置按钮新增红点提示，提醒有可用更新\n- 修复运行30分钟后崩溃的问题\n- 修复崩溃后无法重启的问题\n- 修复皮肤上传JSON解析错误\n- 优化AI对话内存管理\n- 更新卡片黑白配色优化",
   "files": {
     "win-x64": {
-      "url": "https://github.com/doujie081231/versePc/releases/download/v1.0.12/VersePC-Setup-1.0.12.exe",
-      "sha256": "15DA9858A47DF81811058EFFB02BDE4493ADCB7977FA515D334BEC72A4D15FAD",
-      "size": 162782154
+      "url": "https://github.com/doujie081231/versePc/releases/download/v1.0.13/VersePC-Setup-1.0.13.exe",
+      "sha256": "7F12144430774BD1C0D441F56B75F2B73458BBDCE8D92F4D9A42A82F53C8EE66",
+      "size": 162783036
     }
   },
   "minSupportedVersion": "1.0.0",
