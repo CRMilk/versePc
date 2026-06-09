@@ -3301,8 +3301,6 @@ function cachedFetchJSON(urlStr, cacheTTL, retriesOrHeaders, timeoutMs) {
     });
 }
 
-const zlib = require('zlib');
-const { pipeline } = require('stream');
 
 function _fetchOnce(url, headers, timeout) {
     const mod = url.startsWith('https') ? https : http;
