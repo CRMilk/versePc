@@ -11097,14 +11097,13 @@ async function performInstallation(sessionId, versionDetails) {
                         }
                     }
                     processedCount++;
+                    session.completedFiles = Math.min(processedCount, totalAssets);
+                    session.progress = 68 + (processedCount / totalAssets) * 25;
+                    session.currentFile = `资源 ${processedCount}/${totalAssets}`;
                 });
 
                 await Promise.all(downloadPromises);
-
-                session.completedFiles = Math.min(processedCount, totalAssets);
-                session.progress = 68 + (processedCount / totalAssets) * 25;
                 session.message = `下载资源文件 (${processedCount}/${totalAssets})...`;
-                session.currentFile = `资源 ${processedCount}/${totalAssets}`;
             }
 
             if (assetIndexData.map_to_resources) {
@@ -14241,7 +14240,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     if (pvGameVersion) verParams.push(`game_versions=["${pvGameVersion}"]`);
                     if (pvLoader) verParams.push(`loaders=["${pvLoader}"]`);
                     if (verParams.length) verUrl += '?' + verParams.join('&');
-                    const rawVersions = await cachedFetchJSON(verUrl, 120000);
+                    const rawVersions = await cachedFetchJSON(verUrl, 600000);
                     const versions = (rawVersions || []).map(v => ({
                         versionId: v.id,
                         versionNumber: v.version_number,
@@ -16985,7 +16984,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
 
                         let versions;
                         try {
-                            versions = await cachedFetchJSON(versionUrl, 120000, 3, 25000);
+                            versions = await cachedFetchJSON(versionUrl, 600000, 3, 25000);
                         } catch (mirrorErr) {
                             console.warn(`[Modrinth] 镜像请求失败，直接请求官方API: ${mirrorErr.message}`);
                             const officialUrl = `https://api.modrinth.com/v2/project/${encodedId}/version${params.length > 0 ? '?' + params.join('&') : ''}`;
@@ -17631,7 +17630,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     if (rvGameVer) params.push(`game_versions=["${rvGameVer}"]`);
                     if (params.length > 0) versionUrl += '?' + params.join('&');
 
-                    const versions = await cachedFetchJSON(versionUrl, 120000);
+                    const versions = await cachedFetchJSON(versionUrl, 600000);
                     const result = (versions || []).map(v => ({
                         id: v.id, versionNumber: v.version_number || '',
                         versionName: v.name || v.version_number || '',

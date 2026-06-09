@@ -2789,7 +2789,7 @@ async function loadMods() {
             container.innerHTML = hits.map(function (mod) {
                 var isSelected = modSelectedIds.has(mod.id);
                 var isFav = _favorites.some(function(f) { return f.favs.includes(mod.id); });
-                return '<div class="mod-item mod-item-clickable' + (modMultiSelectMode ? ' mod-multiselect-active' : '') + '" onclick="openModDetail(\'' + mod.id + '\', \'' + mod.source + '\')">' +
+                return '<div class="mod-item mod-item-clickable' + (modMultiSelectMode ? ' mod-multiselect-active' : '') + '" onclick="openModDetail(\'' + mod.id + '\', \'' + mod.source + '\')" onmouseenter="preloadModVersions(\'' + mod.id + '\', \'' + mod.source + '\')">' +
                     (modMultiSelectMode ? '<div class="mod-checkbox' + (isSelected ? ' checked' : '') + '" data-mod-id="' + mod.id + '" onclick="event.stopPropagation();toggleModSelect(\'' + mod.id + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : '') +
                     '<div class="mod-icon"><img src="' + escapeHtml(mod.icon || '') + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.parentElement.classList.add(\'mod-icon--fallback\')"></div>' +
                     '<div class="mod-info">' +
@@ -3493,6 +3493,18 @@ let mdDepsResolved = {};
 let mdDepsVersionInfo = {};
 let _modDetailSeq = 0;
 const _projectDataCache = new Map();
+const _versionPreloadCache = new Map();
+let _versionPreloadInFlight = new Set();
+
+function preloadModVersions(projectId, source) {
+    if (_versionPreloadCache.has(projectId) || _versionPreloadInFlight.has(projectId)) return;
+    _versionPreloadInFlight.add(projectId);
+    API.getModVersions(projectId, source || 'modrinth').then(data => {
+        _versionPreloadCache.set(projectId, data);
+        _versionPreloadInFlight.delete(projectId);
+        console.log('[Preload] Versions cached for', projectId);
+    }).catch(() => { _versionPreloadInFlight.delete(projectId); });
+}
 
 async function getInstalledVersionInfo() {
     try {
@@ -3585,7 +3597,10 @@ async function openModDetail(projectId, source) {
     if (mdVersionTabs) mdVersionTabs.innerHTML = '';
 
     try {
-        const versionsPromise = API.getModVersions(projectId, source).catch(e => { console.error('[ModDetail] getModVersions failed:', e); return null; });
+        const versionsPromise = _versionPreloadCache.has(projectId)
+            ? Promise.resolve(_versionPreloadCache.get(projectId))
+            : API.getModVersions(projectId, source).catch(e => { console.error('[ModDetail] getModVersions failed:', e); return null; });
+        _versionPreloadCache.delete(projectId);
         const detailPromise = cached ? Promise.resolve(cached) : API.getModDetail(projectId, source).catch(e => { console.error('[ModDetail] getModDetail failed:', e); return null; });
 
         const [detail, versionsData] = await Promise.all([detailPromise, versionsPromise]);
@@ -4086,7 +4101,7 @@ function _buildVersionItemHtml(v, idx) {
                 <svg class="mdv-expand-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
             </div>
         </div>
-        <div class="mdv-files" style="display:none">
+        <div class="mdv-files">
             ${files.map(f => {
                 const fname = f.filename || f.name || f.id;
                 const size = formatNumber(Math.round((f.size || 1024) / 1024)) + ' KB';
@@ -8002,7 +8017,7 @@ async function loadResourceList(type) {
             }
         } else {
             container.innerHTML = hits.map(item => `
-                <div class="mod-item mod-item-clickable" onclick="openResourceDetail('${item.id}', '${type}')">
+                <div class="mod-item mod-item-clickable" onclick="openResourceDetail('${item.id}', '${type}')" onmouseenter="preloadModVersions('${item.id}', 'modrinth')">
                     ${item.icon ? `<div class="mod-icon"><img src="${item.icon}" alt="" onerror="this.parentElement.remove()"></div>` : ''}
                     <div class="mod-info">
                         <div class="mod-name">${escapeHtml(formatModNameWithChinese(item.id || item.slug, item.title))}</div>
@@ -8083,7 +8098,10 @@ async function openResourceDetail(projectId, type) {
     if (mdVersionTabs) mdVersionTabs.innerHTML = '';
 
     try {
-        const versionsPromise = API.getModVersions(projectId, 'modrinth').catch(e => { console.error('[ResDetail] getModVersions failed:', e); return null; });
+        const versionsPromise = _versionPreloadCache.has(projectId)
+            ? Promise.resolve(_versionPreloadCache.get(projectId))
+            : API.getModVersions(projectId, 'modrinth').catch(e => { console.error('[ResDetail] getModVersions failed:', e); return null; });
+        _versionPreloadCache.delete(projectId);
         const detailPromise = cached ? Promise.resolve(cached) : API.getModDetail(projectId, 'modrinth').catch(e => { console.error('[ResDetail] getModDetail failed:', e); return null; });
 
         const [detail, data] = await Promise.all([detailPromise, versionsPromise]);
