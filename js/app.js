@@ -1776,6 +1776,57 @@ async function exportGameLog() {
     }
 }
 
+async function exportLogAndAskAI() {
+    try {
+        if (!localStorage.getItem('versepc_disclaimer_accepted')) {
+            if (typeof showToast === 'function') showToast('请先完成实验性页面引导', 'info');
+            navigateToPage('explore');
+            return;
+        }
+
+        const versionId = typeof currentSettingsVersionId !== 'undefined' ? currentSettingsVersionId
+            : (typeof launchVersionCustomSelect !== 'undefined' && launchVersionCustomSelect ? launchVersionCustomSelect.getValue() : '');
+        const queryStr = versionId ? '?versionId=' + encodeURIComponent(versionId) : '';
+
+        const a = document.createElement('a');
+        a.href = `/api/game/log/export${queryStr}`;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        let logFilePath = '';
+        try {
+            const resp = await fetch(`/api/game/log/save-export${queryStr}`);
+            const data = await resp.json();
+            if (data.success && data.filePath) {
+                logFilePath = data.filePath;
+            }
+        } catch (_) {}
+
+        navigateToPage('explore');
+
+        setTimeout(() => {
+            if (typeof aiNewChat === 'function') aiNewChat();
+            setTimeout(() => {
+                const input = document.getElementById('ai-input');
+                if (!input) return;
+                const msg = logFilePath
+                    ? `日志文件路径: ${logFilePath}\n\n请查看日志并修复问题`
+                    : '请查看游戏日志并修复问题';
+                input.value = msg;
+                input.dispatchEvent(new Event('input'));
+                if (typeof aiSendMessage === 'function') aiSendMessage();
+            }, 300);
+        }, 300);
+
+        if (typeof showToast === 'function') showToast('日志已导出，正在跳转AI分析...', 'success');
+    } catch (e) {
+        console.error('[ExportLogAskAI] 失败:', e);
+        if (typeof showToast === 'function') showToast('操作失败: ' + e.message, 'error');
+    }
+}
+
 async function loadSettings() {
     try {
         const settings = await API.getSettings();
@@ -2190,7 +2241,7 @@ function navigateToPage(pageName) {
             currentPage.style.animation = '';
             target.classList.add('active');
             target.scrollTop = 0;
-            target.style.animation = 'pageIn 0.35s var(--ease-out-expo) both';
+            target.style.animation = 'pageIn 0.35s var(--ease-out-expo) backwards';
             console.log(`[PERF-NAV] page swap ${(performance.now()-_navT0).toFixed(1)}ms`);
             setTimeout(() => {
                 _pageTransitionLock = false;
@@ -2206,7 +2257,7 @@ function navigateToPage(pageName) {
     } else if (!currentPage) {
         target.classList.add('active');
         target.scrollTop = 0;
-        target.style.animation = 'pageIn 0.35s var(--ease-out-expo) both';
+        target.style.animation = 'pageIn 0.35s var(--ease-out-expo) backwards';
     }
     
     if (isDetailPage) {
@@ -6011,7 +6062,7 @@ async function loadAccounts() {
                         <div class="account-item-type ${typeClass}">${typeLabel}</div>
                     </div>
                     <div class="mod-actions">
-                        ${!isSelected ? `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); selectAccount('${acc.id}')">选择</button>` : '<span style="color: var(--accent); font-size: 12px;">当前使用</span>'}
+                        ${!isSelected ? `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); selectAccount('${acc.id}')">选择</button>` : '<span style="color: var(--accent); font-size: 12px; padding: 4px 10px; display: inline-flex; align-items: center;">当前使用</span>'}
                         <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteAccount('${acc.id}')">删除</button>
                     </div>
                 </div>`;
@@ -9219,11 +9270,11 @@ function switchPage(pageName) {
             currentPage.classList.remove('active');
             currentPage.style.animation = '';
             target.classList.add('active');
-            target.style.animation = 'pageIn 0.35s var(--ease-out-expo) both';
+            target.style.animation = 'pageIn 0.35s var(--ease-out-expo) backwards';
         }, 160);
     } else {
         target.classList.add('active');
-        target.style.animation = 'pageIn 0.35s var(--ease-out-expo) both';
+        target.style.animation = 'pageIn 0.35s var(--ease-out-expo) backwards';
     }
 
     previousPage = currentPage?.id?.replace('page-', '') || null;

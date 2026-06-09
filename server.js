@@ -46,6 +46,7 @@ const { execSync, exec, spawn } = require('child_process');
 const os = require('os');
 const zlib = require('zlib');
 const net = require('net');
+const dns = require('dns');
 const { EventEmitter } = require('events');
 
 let _mainWindow = null;
@@ -116,7 +117,8 @@ const SHARED_HTTPS_AGENT = new https.Agent({
     maxFreeSockets: 128,
     timeout: 120000,
     keepAliveMsecs: 30000,
-    scheduling: 'fifo'
+    scheduling: 'fifo',
+    lookup: cachedLookup
 });
 
 const SHARED_HTTP_AGENT = new http.Agent({
@@ -125,8 +127,32 @@ const SHARED_HTTP_AGENT = new http.Agent({
     maxFreeSockets: 128,
     timeout: 120000,
     keepAliveMsecs: 30000,
-    scheduling: 'fifo'
+    scheduling: 'fifo',
+    lookup: cachedLookup
 });
+
+const dnsCache = new Map();
+const DNS_CACHE_TTL = 60000;
+
+function cachedLookup(hostname, opts, callback) {
+    const cached = dnsCache.get(hostname);
+    if (cached && Date.now() - cached.time < DNS_CACHE_TTL) {
+        return callback(null, cached.address, cached.family);
+    }
+    dns.lookup(hostname, opts, (err, address, family) => {
+        if (!err) {
+            dnsCache.set(hostname, { address, family, time: Date.now() });
+        }
+        callback(err, address, family);
+    });
+}
+
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, val] of dnsCache) {
+        if (now - val.time > DNS_CACHE_TTL) dnsCache.delete(key);
+    }
+}, 30000);
 
 // ============================================================================
 // 工具函数
@@ -3562,8 +3588,7 @@ async function downloadFileChunked(url, destPath, options = {}) {
     const { retries = 3, onProgress = null, sha1 = null, timeout = 120000, mirrors = null, abortSignal = null } = options;
     const minChunkSize = 512 * 1024;
     const CHUNK_THRESHOLD = 8 * 1024 * 1024;
-    const dir = path.dirname(destPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
 
     const allUrls = mirrors ? [url, ...mirrors.filter(m => m !== url)] : getMirrorUrls(url);
 
@@ -3696,20 +3721,30 @@ async function downloadFileChunked(url, destPath, options = {}) {
                 };
                 try {
                 await Promise.all(chunks.map(c => dlChunk(c)));
-                const ws = fs.createWriteStream(destPath);
-                for (const c of chunks) ws.write(fs.readFileSync(c.tmp));
-                ws.end();
-                await new Promise((r, j) => { ws.on('finish', () => { ws.close(); r(); }); ws.on('error', j); });
-                for (const c of chunks) { try { fs.unlinkSync(c.tmp); } catch (e) {} }
+                await new Promise((resolve, reject) => {
+                    const ws = fs.createWriteStream(destPath);
+                    let idx = 0;
+                    const writeNext = () => {
+                        if (idx >= chunks.length) { ws.end(); return; }
+                        const rs = fs.createReadStream(chunks[idx].tmp);
+                        rs.on('end', () => { idx++; writeNext(); });
+                        rs.on('error', reject);
+                        rs.pipe(ws, { end: false });
+                    };
+                    ws.on('finish', resolve);
+                    ws.on('error', reject);
+                    writeNext();
+                });
+                for (const c of chunks) { try { await fs.promises.unlink(c.tmp); } catch (e) {} }
             } catch (e) {
-                for (const c of chunks) { try { fs.unlinkSync(c.tmp); } catch (e) {} }
+                for (const c of chunks) { try { await fs.promises.unlink(c.tmp); } catch (e) {} }
                 throw e;
             }
                 if (sha1) {
                     const actual = await calculateSHA1(destPath);
                     if (actual !== sha1) {
                         console.warn(`[MultiThread] SHA1 mismatch on ${allUrls[urlIdx]}: ${path.basename(destPath)}`);
-                        try { fs.unlinkSync(destPath); } catch (e) {}
+                        await fs.promises.unlink(destPath).catch(() => {});
                         if (urlIdx < allUrls.length - 1) {
                             console.log(`[MultiThread] Switching mirror: ${allUrls[urlIdx]} -> ${allUrls[urlIdx + 1]}`);
                             continue;
@@ -3764,8 +3799,7 @@ async function _dlSingle(urlStr, destPath, options = {}) {
                 if (abortSignal && abortSignal.aborted) { doReject(new Error('下载已中止')); return; }
                 removeAbortListener();
                 const mod = urlStr.startsWith('https') ? https : http;
-                const dir = path.dirname(destPath);
-                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                ensureDir(destPath);
                 const reqHeaders = { 'User-Agent': 'VersePC/2.0 (PCL2)', 'Connection': 'keep-alive' };
                 let ws = null;
                 let cleaned = false;
@@ -3773,7 +3807,7 @@ async function _dlSingle(urlStr, destPath, options = {}) {
                 const clean = () => {
                     if (cleaned) return; cleaned = true;
                     try { if (ws) ws.destroy(); } catch (_) {}
-                    try { fs.unlinkSync(destPath); } catch (_) {}
+                    fs.promises.unlink(destPath).catch(() => {});
                     if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
                 };
                 const resetStall = () => {
@@ -3994,20 +4028,18 @@ function getMirrorUrl(originalUrl) {
 async function downloadFileWithMirror(urlStr, destPath, onProgress, retries = 3, abortSignal = null) {
     const allUrls = getMirrorUrls(urlStr);
 
-    if (fs.existsSync(destPath)) {
-        try {
-            const stat = fs.statSync(destPath);
-            if (stat.size > 0) {
-                const isJarFile = destPath.endsWith('.jar');
-                if (isJarFile && !isJarIntact(destPath)) {
-                    console.log(`[Mirror] 已存在JAR损坏 (${path.basename(destPath)}), 重新下载`);
-                    try { fs.unlinkSync(destPath); } catch (_) {}
-                } else {
-                    return { size: stat.size, path: destPath, skipped: true };
-                }
+    try {
+        const stat = await fs.promises.stat(destPath);
+        if (stat.size > 0) {
+            const isJarFile = destPath.endsWith('.jar');
+            if (isJarFile && !isJarIntact(destPath)) {
+                console.log(`[Mirror] 已存在JAR损坏 (${path.basename(destPath)}), 重新下载`);
+                await fs.promises.unlink(destPath).catch(() => {});
+            } else {
+                return { size: stat.size, path: destPath, skipped: true };
             }
-        } catch (e) {}
-    }
+        }
+    } catch (e) {}
 
     const isSmallAsset = (destPath.includes('/assets/') || destPath.includes('\\assets\\')) && !destPath.endsWith('.jar');
     if (isSmallAsset) {
@@ -4019,7 +4051,7 @@ async function downloadFileWithMirror(urlStr, destPath, onProgress, retries = 3,
             const result = await downloadFileChunked(urlStr, destPath, { onProgress, retries, mirrors: allUrls, abortSignal });
             if (destPath.endsWith('.jar') && !isJarIntact(destPath)) {
                 console.log(`[Mirror] Chunked下载后JAR损坏 (${path.basename(destPath)}), 回退顺序下载`);
-                try { fs.unlinkSync(destPath); } catch (_) {}
+                await fs.promises.unlink(destPath).catch(() => {});
                 throw new Error('Chunked download produced invalid JAR');
             }
             return result;
@@ -4036,7 +4068,7 @@ async function downloadFileWithMirror(urlStr, destPath, onProgress, retries = 3,
             const result = await downloadFile(tryUrl, destPath, onProgress, retries, abortSignal);
             if (destPath.endsWith('.jar') && !isJarIntact(destPath)) {
                 console.log(`[Mirror] 顺序下载后JAR损坏 (${path.basename(destPath)}), 尝试下一镜像`);
-                try { fs.unlinkSync(destPath); } catch (_) {}
+                await fs.promises.unlink(destPath).catch(() => {});
                 lastError = new Error(`Downloaded JAR is corrupt: ${tryUrl}`);
                 continue;
             }

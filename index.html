@@ -2480,6 +2480,7 @@
                                     <div class="launch-chain-error-title">启动失败</div>
                                     <div class="launch-chain-error-msg" id="launch-error-msg">未知错误</div>
                                     <button class="btn btn-secondary btn-sm" onclick="exportGameLog()" style="margin-top:8px;font-size:11px">导出日志</button>
+                                    <button class="btn btn-accent btn-sm" onclick="exportLogAndAskAI()" style="margin-top:8px;font-size:11px" title="导出日志并在AI中分析修复">导出并询问AI修复</button>
                                 </div>
                             </div>
                             <div class="launch-chain-repair" id="launch-repair-guide" style="display:none">
@@ -2501,8 +2502,8 @@
                         <div class="support-modal-body">
                             <div class="support-modal-title">感谢你的支持！</div>
                             <div class="support-modal-count" id="support-modal-count">N</div>
-                            <div class="support-modal-subtitle">你已经使用 Verse 启动 次了</div>
-                            <div class="support-modal-desc">如果喜欢，可以去爱发电支持我们</div>
+                            <div class="support-modal-subtitle">你已经使用 VersePC 启动 次了</div>
+                            <div class="support-modal-desc">如果喜欢，可以去爱发电支持豆杰</div>
                             <div class="support-modal-actions">
                                 <button class="btn btn-accent" onclick="openSupportPage()">
                                     去支持
@@ -3139,27 +3140,6 @@
                         </div>
 
                         <div class="card">
-                            <h3>崩溃分析</h3>
-                            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">分析和诊断 Minecraft 崩溃问题</p>
-                            <div class="btn-group">
-                                <button class="btn btn-primary" onclick="crashAnalyzerUI.show()">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px;">
-                                        <circle cx="12" cy="12" r="10"/>
-                                        <line x1="12" y1="8" x2="12" y2="12"/>
-                                        <line x1="12" y1="16" x2="12.01" y2="16"/>
-                                    </svg>
-                                    打开崩溃分析器
-                                </button>
-                                <button class="btn btn-secondary" onclick="openFolder('crash-reports')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px;">
-                                        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
-                                    </svg>
-                                    打开崩溃报告目录
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="card">
                             <h3>关于 VersePC</h3>
                             <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;" id="updater-version-info">当前版本：加载中...</p>
                             <div style="margin-bottom:12px;padding:10px 14px;background:var(--bg-secondary,rgba(255,255,255,0.03));border:1px solid var(--border-color,rgba(255,255,255,0.06));border-radius:8px;">
@@ -3518,7 +3498,7 @@
                     实验性页面中的功能尚处于<strong>开发测试阶段</strong>，无法保证可以正常使用。
                 </p>
                 <p style="color:var(--text-secondary);line-height:1.7;font-size:13px;margin-top:8px;">
-                    若使用过程中出现问题（包括但不限于数据异常、启动失败、功能不可用等），<strong>开发团队概不负责</strong>。
+                    若使用过程中出现问题（包括但不限于数据异常、启动失败、功能不可用等），<strong>豆杰概不负责</strong>。
                 </p>
                 <p style="color:var(--text-secondary);line-height:1.7;font-size:13px;margin-top:8px;">
                     继续使用即表示您已知晓并接受上述风险。
