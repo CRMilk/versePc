@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.0.1-blue" alt="Version">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platform">
-  <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License">
+  <img src="https://img.shields.io/badge/license-Source%20Visible-red" alt="License">
 </p>
 
 ---
@@ -140,5 +140,6 @@ VersePC/
 <p align="center">
   Made with ❤️ by 豆杰
 </p>
+
 
 
