@@ -3285,65 +3285,70 @@ function saveVersionSettings(versionId, settings) {
     fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
 }
 
+const _apiCache = new Map();
+function cachedFetchJSON(urlStr, cacheTTL, retriesOrHeaders, timeoutMs) {
+    const cached = _apiCache.get(urlStr);
+    if (cached && Date.now() - cached.ts < cacheTTL) return Promise.resolve(cached.data);
+    return fetchJSON(urlStr, retriesOrHeaders, timeoutMs).then(data => {
+        _apiCache.set(urlStr, { data, ts: Date.now() });
+        if (_apiCache.size > 2000) {
+            const now = Date.now();
+            for (const [k, v] of _apiCache) {
+                if (now - v.ts > cacheTTL * 2) _apiCache.delete(k);
+            }
+        }
+        return data;
+    });
+}
+
+function _fetchOnce(url, headers, timeout) {
+    const mod = url.startsWith('https') ? https : http;
+    const agent = url.startsWith('https') ? SHARED_HTTPS_AGENT : SHARED_HTTP_AGENT;
+    return new Promise((resolve, reject) => {
+        const req = mod.get(url, { headers, agent, timeout }, (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                req.destroy();
+                return _fetchOnce(res.headers.location, headers, timeout).then(resolve).catch(reject);
+            }
+            if (res.statusCode !== 200) { req.destroy(); reject(new Error(`HTTP ${res.statusCode}`)); return; }
+            let data = '';
+            res.on('data', chunk => { data += chunk; });
+            res.on('end', () => {
+                try { resolve(JSON.parse(data)); }
+                catch (e) { reject(new Error(`JSON解析失败: ${e.message}`)); }
+            });
+        });
+        req.on('timeout', () => { req.destroy(); reject(new Error(`请求超时 (${timeout}ms)`)); });
+        req.on('error', reject);
+    });
+}
+
 async function fetchJSON(urlStr, retriesOrHeaders = 3, timeoutMs) {
-    let retries = 3;
     let extraHeaders = {};
     if (typeof retriesOrHeaders === 'object' && retriesOrHeaders !== null) {
         extraHeaders = retriesOrHeaders;
-        retries = 3;
-    } else if (typeof retriesOrHeaders === 'number') {
-        retries = retriesOrHeaders;
     }
     const reqTimeout = typeof timeoutMs === 'number' ? timeoutMs : 15000;
 
-    let actualUrl = urlStr;
-    let isMirror = false;
+    let mirrorUrl = null;
     if (urlStr.startsWith(MODRINTH_API)) {
-        actualUrl = urlStr.replace(MODRINTH_API, MODRINTH_API_MIRROR);
-        isMirror = true;
+        mirrorUrl = urlStr.replace(MODRINTH_API, MODRINTH_API_MIRROR);
     } else if (urlStr.startsWith(CURSEFORGE_API)) {
-        actualUrl = urlStr.replace(CURSEFORGE_API, CURSEFORGE_API_MIRROR);
-        isMirror = true;
+        mirrorUrl = urlStr.replace(CURSEFORGE_API, CURSEFORGE_API_MIRROR);
     }
-    const mod = actualUrl.startsWith('https') ? https : http;
-    const agent = actualUrl.startsWith('https') ? SHARED_HTTPS_AGENT : SHARED_HTTP_AGENT;
 
-    const tryUrls = actualUrl !== urlStr ? [actualUrl, urlStr] : [urlStr];
+    const headers = { 'User-Agent': 'VersePC/2.0 (PCL2)', 'Connection': 'keep-alive', ...extraHeaders };
+    const steps = mirrorUrl
+        ? [{ url: mirrorUrl, t: 5000 }, { url: urlStr, t: 5000 }, { url: mirrorUrl, t: 10000 }, { url: urlStr, t: Math.min(reqTimeout, 15000) }]
+        : [{ url: urlStr, t: Math.min(reqTimeout, 10000) }, { url: urlStr, t: reqTimeout }];
+
     let lastErr = null;
-    for (let urlIdx = 0; urlIdx < tryUrls.length; urlIdx++) {
-        const tryUrl = tryUrls[urlIdx];
-        const isMirrorUrl = urlIdx === 0 && isMirror;
-        const mirrorTimeout = isMirrorUrl ? Math.min(reqTimeout, 5000) : reqTimeout;
-        const maxAttempts = isMirrorUrl ? 1 : Math.min(retries, 2);
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            try {
-                return await new Promise((resolve, reject) => {
-                    const headers = { 'User-Agent': 'VersePC/2.0 (PCL2)', 'Connection': 'keep-alive', ...extraHeaders };
-                    const req = mod.get(tryUrl, { headers, agent, timeout: mirrorTimeout }, (res) => {
-                        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                            req.destroy();
-                            return fetchJSON(res.headers.location, retries, reqTimeout).then(resolve).catch(reject);
-                        }
-                        if (res.statusCode !== 200) {
-                            req.destroy();
-                            reject(new Error(`HTTP ${res.statusCode}`));
-                            return;
-                        }
-                        let data = '';
-                        res.on('data', chunk => { data += chunk; });
-                        res.on('end', () => {
-                            try { resolve(JSON.parse(data)); }
-                            catch (e) { reject(new Error(`JSON解析失败: ${e.message}`)); }
-                        });
-                    });
-                    req.on('timeout', () => { req.destroy(); reject(new Error(`请求超时 (${mirrorTimeout}ms)`)); });
-                    req.on('error', reject);
-                });
-            } catch (e) {
-                lastErr = e;
-                console.warn(`[fetchJSON] ${tryUrl.substring(0, 60)}... 尝试${attempt + 1}失败: ${e.message}`);
-                if (attempt >= maxAttempts - 1) break;
-            }
+    for (const step of steps) {
+        try {
+            return await _fetchOnce(step.url, headers, step.t);
+        } catch (e) {
+            lastErr = e;
+            console.warn(`[fetchJSON] ${step.url.substring(0, 60)}... 超时${step.t}ms失败: ${e.message}`);
         }
     }
     throw lastErr || new Error('fetchJSON failed: ' + urlStr.substring(0, 80));
@@ -12861,7 +12866,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         const sortField = sortMap[sort] || (query ? 'relevance' : 'downloads');
                         let searchUrl = `${MODRINTH_API}/search?query=${encodeURIComponent(query)}&index=${sortField}&limit=${limit}&offset=${offset}`;
                         searchUrl += `&facets=${encodeURIComponent(JSON.stringify(facets))}`;
-                        const result = await fetchJSON(searchUrl);
+                        const result = await cachedFetchJSON(searchUrl, 60000);
                         const hits = (result.hits || []).map(hit => ({
                             id: hit.project_id, slug: hit.slug, title: hit.title,
                             description: hit.description || '', author: (hit.author || '').replace(/_/g, ''),
@@ -15341,7 +15346,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     if (mpVersion) facets.push([`versions:${mpVersion}`]);
                     let mpSearchUrl = `${MODRINTH_API}/search?query=${encodeURIComponent(mpQuery)}&index=relevance&limit=${mpLimit}&offset=${mpOffset}`;
                     mpSearchUrl += `&facets=${encodeURIComponent(JSON.stringify(facets))}`;
-                    const mpResult = await fetchJSON(mpSearchUrl);
+                    const mpResult = await cachedFetchJSON(mpSearchUrl, 60000);
                     const mpHits = (mpResult.hits || []).map(hit => ({
                         id: hit.project_id, slug: hit.slug, title: hit.title,
                         description: hit.description || '', author: (hit.author || '').replace(/_/g, ''),
@@ -16825,7 +16830,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
 
                 try {
                     if (modSource === 'modrinth') {
-                        const project = await fetchJSON(`${MODRINTH_API}/project/${modProjectId}`);
+                        const project = await cachedFetchJSON(`${MODRINTH_API}/project/${modProjectId}`, 300000);
                         const detail = {
                             id: project.id,
                             slug: project.slug,
@@ -16914,7 +16919,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
 
                         let versions;
                         try {
-                            versions = await fetchJSON(versionUrl, 3, 25000);
+                            versions = await cachedFetchJSON(versionUrl, 120000, 3, 25000);
                         } catch (mirrorErr) {
                             console.warn(`[Modrinth] 镜像请求失败，直接请求官方API: ${mirrorErr.message}`);
                             const officialUrl = `https://api.modrinth.com/v2/project/${encodedId}/version${params.length > 0 ? '?' + params.join('&') : ''}`;
@@ -17509,7 +17514,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     let searchUrl = `${MODRINTH_API}/search?query=${encodeURIComponent(resQuery)}&index=${sortField}&limit=${resLimit}&offset=${resOffset}`;
                     searchUrl += `&facets=${encodeURIComponent(JSON.stringify(facets))}`;
 
-                    const result = await fetchJSON(searchUrl);
+                    const result = await cachedFetchJSON(searchUrl, 60000);
                     const hits = (result.hits || []).map(hit => ({
                         id: hit.project_id, slug: hit.slug, title: hit.title,
                         description: hit.description || '', author: (hit.author || '').replace(/_/g, ''),
@@ -17529,7 +17534,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 const resProjectId = parsedUrl.query.projectId;
                 if (!resProjectId) { sendError('Missing projectId', 400); break; }
                 try {
-                    const project = await fetchJSON(`${MODRINTH_API}/project/${resProjectId}`);
+                    const project = await cachedFetchJSON(`${MODRINTH_API}/project/${resProjectId}`, 300000);
                     const detail = {
                         id: project.id, slug: project.slug, title: project.title,
                         description: project.description || '', body: project.body || '',
@@ -17560,7 +17565,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     if (rvGameVer) params.push(`game_versions=["${rvGameVer}"]`);
                     if (params.length > 0) versionUrl += '?' + params.join('&');
 
-                    const versions = await fetchJSON(versionUrl);
+                    const versions = await cachedFetchJSON(versionUrl, 120000);
                     const result = (versions || []).map(v => ({
                         id: v.id, versionNumber: v.version_number || '',
                         versionName: v.name || v.version_number || '',

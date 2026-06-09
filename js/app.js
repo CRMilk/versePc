@@ -3553,8 +3553,11 @@ async function openModDetail(projectId, source) {
     if (mdVersionTabs) mdVersionTabs.innerHTML = '';
 
     try {
-        console.log('[ModDetail] Fetching mod detail...');
-        const detail = await API.getModDetail(projectId, source);
+        console.log('[ModDetail] Fetching mod detail + versions in parallel...');
+        const [detail, versionsData] = await Promise.all([
+            API.getModDetail(projectId, source),
+            API.getModVersions(projectId, source)
+        ]);
         if (mySeq !== _modDetailSeq) { console.log('[ModDetail] Aborted (stale)'); return; }
         console.log('[ModDetail] Got detail:', detail);
         currentModDetailData = detail;
@@ -3610,12 +3613,53 @@ async function openModDetail(projectId, source) {
             }
         }
 
-        await loadMdVersions(projectId, source, mySeq);
+        mdAllVersions = versionsData.versions || [];
+        if (!Array.isArray(mdAllVersions)) mdAllVersions = [];
+        loadModDependencies();
+        await renderMdVersionTabs(mySeq);
     } catch (e) {
         if (mySeq !== _modDetailSeq) return;
         console.error('[ModDetail] Error:', e);
         mdName.textContent = '加载失败';
         mdVersionList.innerHTML = `<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">无法加载模组详情: ${escapeHtml(e.message || String(e))}</p>`;
+    }
+}
+
+async function renderMdVersionTabs(detailSeq) {
+    if (detailSeq !== undefined && detailSeq !== _modDetailSeq) { console.log('[MDVersions] Aborted (stale)'); return; }
+
+    const tabsContainer = document.getElementById('md-version-tabs');
+    const currentGameVersion = getCustomSelectValue('mod-filter-version');
+    const currentLoader = getCustomSelectValue('mod-filter-loader');
+
+    if (currentGameVersion || currentLoader) {
+        const filtered = mdAllVersions.filter(v => {
+            const gv = v.gameVersions || [];
+            const loaders = (v.loaders || []).map(l => l.toLowerCase());
+            let match = true;
+            if (currentGameVersion && !gv.includes(currentGameVersion)) match = false;
+            if (currentLoader && !loaders.includes(currentLoader.toLowerCase())) match = false;
+            return match;
+        });
+        
+        if (tabsContainer) {
+            tabsContainer.innerHTML = `<button class="md-vtab active" data-ver="_filtered" onclick="switchMdVersionTab('_filtered')">筛选结果 (${filtered.length})</button><button class="md-vtab" data-ver="" onclick="switchMdVersionTab('')">全部 (${mdAllVersions.length})</button>`;
+        }
+        renderMdVersionList(filtered);
+    } else {
+        const gameVersions = new Set();
+        mdAllVersions.forEach(v => {
+            (v.gameVersions || []).forEach(gv => gameVersions.add(gv));
+        });
+
+        let tabsHtml = '<button class="md-vtab active" data-ver="" onclick="switchMdVersionTab(\'\')">全部</button>';
+        [...gameVersions].sort().reverse().forEach(gv => {
+            tabsHtml += `<button class="md-vtab" data-ver="${escapeHtml(gv)}" onclick="switchMdVersionTab('${escapeOnclick(gv)}')">${escapeHtml(gv)}</button>`;
+        });
+        tabsHtml += '<button class="md-vtab" data-ver="_snapshot" onclick="switchMdVersionTab(\'_snapshot\')">快照版</button>';
+        if (tabsContainer) tabsContainer.innerHTML = tabsHtml;
+
+        renderMdVersionList(mdAllVersions);
     }
 }
 
@@ -3627,40 +3671,7 @@ async function loadMdVersions(projectId, source, detailSeq) {
         if (!Array.isArray(mdAllVersions)) mdAllVersions = [];
 
         loadModDependencies();
-
-        const tabsContainer = document.getElementById('md-version-tabs');
-        const currentGameVersion = getCustomSelectValue('mod-filter-version');
-        const currentLoader = getCustomSelectValue('mod-filter-loader');
-
-        if (currentGameVersion || currentLoader) {
-            const filtered = mdAllVersions.filter(v => {
-                const gv = v.gameVersions || [];
-                const loaders = (v.loaders || []).map(l => l.toLowerCase());
-                let match = true;
-                if (currentGameVersion && !gv.includes(currentGameVersion)) match = false;
-                if (currentLoader && !loaders.includes(currentLoader.toLowerCase())) match = false;
-                return match;
-            });
-            
-            if (tabsContainer) {
-                tabsContainer.innerHTML = `<button class="md-vtab active" data-ver="_filtered" onclick="switchMdVersionTab('_filtered')">筛选结果 (${filtered.length})</button><button class="md-vtab" data-ver="" onclick="switchMdVersionTab('')">全部 (${mdAllVersions.length})</button>`;
-            }
-            renderMdVersionList(filtered);
-        } else {
-            const gameVersions = new Set();
-            mdAllVersions.forEach(v => {
-                (v.gameVersions || []).forEach(gv => gameVersions.add(gv));
-            });
-
-            let tabsHtml = '<button class="md-vtab active" data-ver="" onclick="switchMdVersionTab(\'\')">全部</button>';
-            [...gameVersions].sort().reverse().forEach(gv => {
-                tabsHtml += `<button class="md-vtab" data-ver="${escapeHtml(gv)}" onclick="switchMdVersionTab('${escapeOnclick(gv)}')">${escapeHtml(gv)}</button>`;
-            });
-            tabsHtml += '<button class="md-vtab" data-ver="_snapshot" onclick="switchMdVersionTab(\'_snapshot\')">快照版</button>';
-            if (tabsContainer) tabsContainer.innerHTML = tabsHtml;
-
-            renderMdVersionList(mdAllVersions);
-        }
+        await renderMdVersionTabs(detailSeq);
     } catch (e) {
         console.error('[MDVersions] Error:', e);
         document.getElementById('md-version-list').innerHTML = '<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">加载版本列表失败</p>';
@@ -7990,7 +8001,10 @@ async function openResourceDetail(projectId, type) {
     if (mdVersionTabs) mdVersionTabs.innerHTML = '';
 
     try {
-        const detail = await API.getModDetail(projectId, 'modrinth');
+        const [detail, data] = await Promise.all([
+            API.getModDetail(projectId, 'modrinth'),
+            API.getModVersions(projectId, 'modrinth')
+        ]);
         currentModDetailData = detail;
 
         mdName.textContent = formatModNameWithChinese(detail.id || detail.slug, detail.title || typeNames[type] || '未知');
@@ -8019,7 +8033,6 @@ async function openResourceDetail(projectId, type) {
             srcBadge.style.background = 'rgba(245,158,11,0.12)';
         }
 
-        const data = await API.getModVersions(projectId, 'modrinth');
         mdAllVersions = data.versions || [];
         if (!Array.isArray(mdAllVersions)) mdAllVersions = [];
 
