@@ -3323,6 +3323,28 @@ function _fetchOnce(url, headers, timeout) {
     });
 }
 
+const _mirrorHealth = { down: false, until: 0, fails: 0 };
+function _isMirrorAvailable() {
+    if (_mirrorHealth.down && Date.now() < _mirrorHealth.until) return false;
+    if (_mirrorHealth.down && Date.now() >= _mirrorHealth.until) {
+        _mirrorHealth.down = false;
+        _mirrorHealth.fails = 0;
+    }
+    return true;
+}
+function _mirrorFailed() {
+    _mirrorHealth.fails++;
+    if (_mirrorHealth.fails >= 1) {
+        _mirrorHealth.down = true;
+        _mirrorHealth.until = Date.now() + 3 * 60 * 1000;
+        console.warn(`[Mirror] 镜像连续失败${_mirrorHealth.fails}次，暂停使用3分钟`);
+    }
+}
+function _mirrorSuccess() {
+    _mirrorHealth.fails = 0;
+    _mirrorHealth.down = false;
+}
+
 async function fetchJSON(urlStr, retriesOrHeaders = 3, timeoutMs) {
     let extraHeaders = {};
     if (typeof retriesOrHeaders === 'object' && retriesOrHeaders !== null) {
@@ -3338,16 +3360,22 @@ async function fetchJSON(urlStr, retriesOrHeaders = 3, timeoutMs) {
     }
 
     const headers = { 'User-Agent': 'VersePC/2.0 (PCL2)', 'Connection': 'keep-alive', ...extraHeaders };
-    const steps = mirrorUrl
-        ? [{ url: mirrorUrl, t: 5000 }, { url: urlStr, t: 5000 }, { url: mirrorUrl, t: 10000 }, { url: urlStr, t: Math.min(reqTimeout, 15000) }]
-        : [{ url: urlStr, t: Math.min(reqTimeout, 10000) }, { url: urlStr, t: reqTimeout }];
+    const useMirror = mirrorUrl && _isMirrorAvailable();
+    const steps = useMirror
+        ? [{ url: mirrorUrl, t: 3000, isMirror: true }, { url: urlStr, t: 5000 }, { url: mirrorUrl, t: 8000, isMirror: true }, { url: urlStr, t: Math.min(reqTimeout, 15000) }]
+        : mirrorUrl
+            ? [{ url: urlStr, t: Math.min(reqTimeout, 8000) }, { url: urlStr, t: reqTimeout }]
+            : [{ url: urlStr, t: Math.min(reqTimeout, 10000) }, { url: urlStr, t: reqTimeout }];
 
     let lastErr = null;
     for (const step of steps) {
         try {
-            return await _fetchOnce(step.url, headers, step.t);
+            const result = await _fetchOnce(step.url, headers, step.t);
+            if (step.isMirror) _mirrorSuccess();
+            return result;
         } catch (e) {
             lastErr = e;
+            if (step.isMirror) _mirrorFailed();
             console.warn(`[fetchJSON] ${step.url.substring(0, 60)}... 超时${step.t}ms失败: ${e.message}`);
         }
     }
@@ -3966,12 +3994,16 @@ async function downloadFileWithMirror(urlStr, destPath, onProgress, retries = 3,
                 if (isJarFile && !isJarIntact(destPath)) {
                     console.log(`[Mirror] 已存在JAR损坏 (${path.basename(destPath)}), 重新下载`);
                     try { fs.unlinkSync(destPath); } catch (_) {}
-                    // fall through to download
                 } else {
                     return { size: stat.size, path: destPath, skipped: true };
                 }
             }
         } catch (e) {}
+    }
+
+    const isSmallAsset = destPath.includes('/assets/') && !destPath.endsWith('.jar');
+    if (isSmallAsset) {
+        return _dlSingle(urlStr, destPath, { onProgress, retries, abortSignal, timeout: 30000, stallTimeout: 15000 });
     }
 
     if (!NO_CHUNK_HOSTS.some(d => urlStr.includes(d))) {
@@ -11006,7 +11038,7 @@ async function performInstallation(sessionId, versionDetails) {
             session.completedFiles = 0;
             session.message = `下载资源文件 (�?${totalAssets} �?...`;
 
-            const batchSize = 10;
+            const batchSize = 32;
             let processedCount = 0;
 
             for (let i = 0; i < assetEntries.length; i += batchSize) {
