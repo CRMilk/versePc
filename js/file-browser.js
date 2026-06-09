@@ -750,15 +750,7 @@ class FileBrowser {
      * @returns {string} 格式: YYYY/MM/DD HH:mm
      */
     formatDate(timestamp) {
-        if (!timestamp) return '';
-        const date = new Date(timestamp);
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        
-        return `${year}/${month}/${day} ${hours}:${minutes}`;
+        return formatDate(timestamp);
     }
 
     /**
@@ -767,12 +759,7 @@ class FileBrowser {
      * @returns {string} 格式: 1.5 KB / 10 MB
      */
     formatSize(bytes) {
-        if (!bytes || bytes === 0) return '0 B';
-        const units = ['B', 'KB', 'MB', 'GB'];
-        const k = 1024;
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        const size = (bytes / Math.pow(k, i)).toFixed(i > 0 ? 1 : 0);
-        return `${size} ${units[i]}`;
+        return formatSize(bytes);
     }
 
     /**
@@ -781,9 +768,7 @@ class FileBrowser {
      * @returns {string} 安全字符串
      */
     escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+        return escapeHtml(str);
     }
 }
 
@@ -795,37 +780,6 @@ const fileBrowser = new FileBrowser();
 // ============================================================================
 if (typeof API !== 'undefined') {
     Object.assign(API, {
-        /**
-         * 浏览目录内容（获取文件和文件夹列表）
-         */
-        browseDirectory: async function(path, showHidden = false) {
-            return apiPost('/api/filesystem/browse', { path, showHidden });
-        },
-
-        /**
-         * 获取快速访问路径列表（桌面、文档、下载等）
-         */
-        getQuickAccessPaths: async function() {
-            return apiGet('/api/filesystem/quick-access');
-        },
-
-        /**
-         * 获取系统驱动器列表
-         */
-        getDrives: async function() {
-            return apiGet('/api/filesystem/drives');
-        },
-
-        /**
-         * 在指定路径下创建新目录
-         */
-        createDirectory: async function(parentPath, name) {
-            return apiPost('/api/filesystem/create-directory', { parentPath, name });
-        },
-
-        /**
-         * 获取默认模组保存路径
-         */
         getDefaultModPath: async function() {
             if (window.electronAPI && window.electronAPI.getDefaultModPath) {
                 return await window.electronAPI.getDefaultModPath();
@@ -833,16 +787,10 @@ if (typeof API !== 'undefined') {
             return apiGet('/api/filesystem/default-mod-path');
         },
 
-        /**
-         * 打开 PCL2 风格的自定义文件选择对话框
-         */
         showCustomFileDialog: function(options, callback) {
             fileBrowser.open(options, callback);
         },
 
-        /**
-         * 打开模组保存位置选择器（快捷方法）
-         */
         openModSaveLocation: function(defaultPath, callback) {
             fileBrowser.open({
                 title: '选择保存位置',

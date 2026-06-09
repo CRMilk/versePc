@@ -301,24 +301,6 @@ function throttle(fn, limit = 100) {
     };
 }
 
-// fetch 超时包装器
-async function fetchWithTimeout(url, options = {}, timeout = 30000) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
-    try {
-        const response = await fetch(url, {
-            ...options,
-            signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        return response;
-    } catch (e) {
-        clearTimeout(timeoutId);
-        throw e;
-    }
-}
-
 // 定时器管理
 const managedTimers = { intervals: new Map(), timeouts: new Map() };
 function setManagedInterval(fn, delay, key) {
@@ -877,53 +859,8 @@ function formatNumber(num) {
     return String(num);
 }
 
-function formatDate(dateStr) {
-    if (!dateStr) return '';
-    try {
-        const d = new Date(dateStr);
-        return d.toLocaleDateString('zh-CN');
-    } catch (e) { return dateStr; }
-}
 
-function formatSize(bytes) {
-    if (!bytes) return '0 B';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
 
-function formatSpeed(bytesPerSec) {
-    if (bytesPerSec >= 1024 * 1024) return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
-    if (bytesPerSec >= 1024) return (bytesPerSec / 1024).toFixed(0) + ' KB/s';
-    return bytesPerSec + ' B/s';
-}
-
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-function formatBytes(bytes) {
-    if (!bytes || bytes <= 0) return '';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-    if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
-    return (bytes / 1073741824).toFixed(2) + ' GB';
-}
-
-function formatDuration(seconds) {
-    seconds = Math.ceil(seconds);
-    if (seconds < 60) return seconds + '秒';
-    if (seconds < 3600) {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return m + '分' + (s > 0 ? s + '秒' : '');
-    }
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    return h + '时' + (m > 0 ? m + '分' : '');
-}
 
 function escapeOnclick(str) {
     return str
@@ -1866,7 +1803,7 @@ async function loadVersions(forceRefresh = false) {
         versionIconsTimestamp = Date.now();
         versionsLoadFailed = false;
 
-        updateVersionSelects();
+        await updateVersionSelects();
         renderVersions();
         updateHomeStats();
         populateModVersionFilter();
@@ -1918,9 +1855,19 @@ function retryLoadVersions() {
 // ============================================================================
 // 版本选择器 - 自定义下拉选择框的选项填充
 // ============================================================================
-function updateVersionSelects() {
+let _cachedLastLaunchVersion = null;
+async function updateVersionSelects() {
     if (!launchVersionCustomSelect && !document.getElementById('home-version-select-wrapper')) return;
-    const currentVal = launchVersionCustomSelect ? launchVersionCustomSelect.getValue() : '';
+    let currentVal = launchVersionCustomSelect ? launchVersionCustomSelect.getValue() : '';
+
+    if (!currentVal) {
+        try {
+            if (_cachedLastLaunchVersion === null) {
+                _cachedLastLaunchVersion = await window.electronAPI.store.get('versepc_last_launch_version') || '';
+            }
+            currentVal = _cachedLastLaunchVersion;
+        } catch (_) {}
+    }
 
     const versionOptions = installedVersions.map(v => {
         let text = v.isExternal ? v.id.replace(' [外部]', '') : v.id;
@@ -2100,12 +2047,12 @@ function navigateToPage(pageName) {
         const navBtn = document.querySelector('.nav-btn[data-page="explore"]');
         if (navBtn) navBtn.classList.add('active');
         const disclaimerModal = document.getElementById('experimental-disclaimer-modal');
-        if (disclaimerModal) {
+        if (disclaimerModal && !localStorage.getItem('versepc_disclaimer_accepted')) {
             disclaimerModal.style.display = 'flex';
             disclaimerModal.classList.add('modal-visible');
             console.log('[Navigate] disclaimer modal shown');
         } else {
-            console.warn('[Navigate] disclaimer modal NOT found, showing explore directly');
+            console.log('[Navigate] disclaimer already accepted, showing explore directly');
             target.classList.add('active');
             target.scrollTop = 0;
         }
@@ -2233,6 +2180,7 @@ function navigateToPage(pageName) {
 
 function acceptExperimentalDisclaimer() {
     console.log('[Disclaimer] accepted');
+    try { localStorage.setItem('versepc_disclaimer_accepted', '1'); } catch (e) {}
     const disclaimerModal = document.getElementById('experimental-disclaimer-modal');
     if (disclaimerModal) {
         disclaimerModal.classList.remove('modal-visible');
@@ -2860,9 +2808,9 @@ async function loadMods() {
                         '</div>' +
                     '</div>' +
                     '<div class="mod-actions" onclick="event.stopPropagation()">' +
+                        '<button class="fav-heart-btn' + (isFav ? ' active' : '') + '" data-project-id="' + escapeHtml(mod.id) + '" onclick="event.stopPropagation(); showFavSelectDropdown(\'' + escapeOnclick(mod.id) + '\', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></button>' +
                         '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openModDetail(\'' + mod.id + '\', \'' + mod.source + '\')">安装</button>' +
                     '</div>' +
-                    '<button class="fav-heart-btn' + (isFav ? ' active' : '') + '" data-project-id="' + escapeHtml(mod.id) + '" onclick="event.stopPropagation(); showFavSelectDropdown(\'' + escapeOnclick(mod.id) + '\', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></button>' +
                 '</div>';
             }).join('');
         }
@@ -2898,28 +2846,36 @@ async function searchMods() {
 async function loadFavoritesData() {
     try {
         _favorites = await API.getFavorites();
+        console.log('[Fav] loaded favorites:', _favorites.length, _favorites);
         if (_favorites.length > 0 && !_currentFavId) {
             _currentFavId = _favorites[0].id;
         }
         renderFavFolderSelect();
     } catch (e) {
-        console.error('加载收藏夹失败:', e);
+        console.error('[Fav] 加载收藏夹失败:', e);
         _favorites = [{ name: '默认', id: 'default', favs: [], notes: {} }];
     }
 }
 
 function renderFavFolderSelect() {
     var sel = document.getElementById('fav-folder-select');
-    if (!sel) return;
-    sel.innerHTML = _favorites.map(function(f) {
-        return '<option value="' + f.id + '"' + (f.id === _currentFavId ? ' selected' : '') + '>' + escapeHtml(f.name) + ' (' + f.favs.length + ')</option>';
-    }).join('');
-    sel.onchange = function() {
-        _currentFavId = sel.value;
-        _favSelectedItems.clear();
-        _favMultiSelectMode = false;
-        renderFavPage();
-    };
+    if (sel) {
+        sel.innerHTML = _favorites.map(function(f) {
+            return '<option value="' + f.id + '"' + (f.id === _currentFavId ? ' selected' : '') + '>' + escapeHtml(f.name) + ' (' + f.favs.length + ')</option>';
+        }).join('');
+        sel.onchange = function() {
+            _currentFavId = sel.value;
+            _favSelectedItems.clear();
+            _favMultiSelectMode = false;
+            renderFavPage();
+        };
+    }
+    var subSel = document.getElementById('fav-sub-folder-select');
+    if (subSel) {
+        subSel.innerHTML = _favorites.map(function(f) {
+            return '<option value="' + escapeHtml(f.id) + '"' + (f.id === (_favSubCurrentFavId || _currentFavId) ? ' selected' : '') + '>' + escapeHtml(f.name) + ' (' + (f.favs ? f.favs.length : 0) + ')</option>';
+        }).join('');
+    }
 }
 
 async function renderFavPage() {
@@ -3020,6 +2976,190 @@ function openFavItemDetail(projectId, source) {
         return;
     }
     openModDetail(projectId, source);
+}
+
+var _favSubMultiSelect = false;
+var _favSubSelected = new Set();
+var _favSubSearchQuery = '';
+var _favSubCurrentFavId = null;
+
+function enterFavSubPage() {
+    var browseSection = document.getElementById('mod-browse-section');
+    var favSection = document.getElementById('mod-fav-section');
+    if (!browseSection || !favSection) return;
+    browseSection.style.display = 'none';
+    favSection.style.display = 'block';
+    _favSubCurrentFavId = _currentFavId;
+    populateFavSubFolderSelect();
+    renderFavSubList();
+}
+
+function exitFavSubPage() {
+    var browseSection = document.getElementById('mod-browse-section');
+    var favSection = document.getElementById('mod-fav-section');
+    if (!browseSection || !favSection) return;
+    favSection.style.display = 'none';
+    browseSection.style.display = 'block';
+    _favSubMultiSelect = false;
+    _favSubSelected.clear();
+    _favSubSearchQuery = '';
+}
+
+function populateFavSubFolderSelect() {
+    var sel = document.getElementById('fav-sub-folder-select');
+    if (!sel) return;
+    sel.innerHTML = _favorites.map(function(f) {
+        return '<option value="' + escapeHtml(f.id) + '"' + (f.id === _favSubCurrentFavId ? ' selected' : '') + '>' + escapeHtml(f.name) + ' (' + (f.favs ? f.favs.length : 0) + ')</option>';
+    }).join('');
+}
+
+function onFavSubFolderChange(favId) {
+    _favSubCurrentFavId = favId;
+    _currentFavId = favId;
+    _favSubSelected.clear();
+    renderFavSubFolderSelect();
+    renderFavSubList();
+}
+
+function renderFavSubFolderSelect() {
+    populateFavSubFolderSelect();
+}
+
+function onFavSubSearch(query) {
+    _favSubSearchQuery = query;
+    renderFavSubList();
+}
+
+async function renderFavSubList() {
+    var list = document.getElementById('fav-sub-list');
+    var empty = document.getElementById('fav-sub-empty');
+    if (!list || !empty) return;
+
+    var currentFav = _favorites.find(function(f) { return f.id === _favSubCurrentFavId; });
+    if (!currentFav || !currentFav.favs || currentFav.favs.length === 0) {
+        list.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+    }
+    list.style.display = '';
+    empty.style.display = 'none';
+    list.innerHTML = '<div class="loading-spinner"><div class="spinner"></div></div>';
+
+    try {
+        var projects = await fetchFavProjects(currentFav.favs);
+        var filtered = _favSubSearchQuery
+            ? projects.filter(function(p) {
+                return (p.title || '').toLowerCase().includes(_favSubSearchQuery.toLowerCase()) ||
+                    (p.description || '').toLowerCase().includes(_favSubSearchQuery.toLowerCase());
+              })
+            : projects;
+
+        if (filtered.length === 0) {
+            list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary)"><p>' + (_favSubSearchQuery ? '没有找到匹配的收藏' : '收藏夹为空') + '</p></div>';
+            return;
+        }
+
+        list.innerHTML = filtered.map(function(p) {
+            var isFav = _favorites.some(function(f) { return f.favs.includes(p.id); });
+            var isChecked = _favSubSelected.has(p.id);
+            var source = p.source || 'modrinth';
+            return '<div class="mod-item mod-item-clickable' + (_favSubMultiSelect ? ' mod-multiselect-active' : '') + '" onclick="openModDetail(\'' + escapeOnclick(p.id) + '\', \'' + escapeOnclick(source) + '\')">' +
+                (_favSubMultiSelect ? '<div class="mod-checkbox' + (isChecked ? ' checked' : '') + '" data-mod-id="' + escapeHtml(p.id) + '" onclick="event.stopPropagation();toggleFavSubItemSelect(\'' + escapeOnclick(p.id) + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : '') +
+                '<div class="mod-icon"><img src="' + escapeHtml(p.icon || '') + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.parentElement.classList.add(\'mod-icon--fallback\')"></div>' +
+                '<div class="mod-info">' +
+                    '<div class="mod-name">' + escapeHtml(formatModNameWithChinese(p.id || p.slug, p.title)) + '</div>' +
+                    '<div class="mod-desc">' + escapeHtml(p.description || '') + '</div>' +
+                    '<div class="mod-meta">' +
+                        '<span>\u2B07 ' + formatNumber(p.downloads || 0) + '</span>' +
+                        '<span>\u2764 ' + escapeHtml(p.author || '') + '</span>' +
+                        '<span>' + (p.categories || []).slice(0, 3).join(', ') + '</span>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="mod-actions" onclick="event.stopPropagation()">' +
+                    '<button class="fav-heart-btn active" data-project-id="' + escapeHtml(p.id) + '" onclick="event.stopPropagation(); showFavSelectDropdown(\'' + escapeOnclick(p.id) + '\', this)"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></button>' +
+                    '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openModDetail(\'' + escapeOnclick(p.id) + '\', \'' + escapeOnclick(source) + '\')">安装</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    } catch (e) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary)"><p>加载失败: ' + escapeHtml(e.message) + '</p></div>';
+    }
+}
+
+function toggleFavSubMultiSelect() {
+    _favSubMultiSelect = !_favSubMultiSelect;
+    _favSubSelected.clear();
+    var bar = document.getElementById('fav-sub-multi-bar');
+    var toggle = document.getElementById('fav-sub-multi-toggle');
+    if (bar) bar.style.display = _favSubMultiSelect ? 'flex' : 'none';
+    if (toggle) toggle.textContent = _favSubMultiSelect ? '取消多选' : '多选';
+    updateFavSubMultiBar();
+    renderFavSubList();
+}
+
+function toggleFavSubItemSelect(projectId) {
+    if (_favSubSelected.has(projectId)) {
+        _favSubSelected.delete(projectId);
+    } else {
+        _favSubSelected.add(projectId);
+    }
+    updateFavSubMultiBar();
+    var checkbox = document.querySelector('.mod-checkbox[data-mod-id="' + projectId + '"]');
+    if (checkbox) checkbox.classList.toggle('checked', _favSubSelected.has(projectId));
+}
+
+function toggleFavSubSelectAll(checked) {
+    var currentFav = _favorites.find(function(f) { return f.id === _favSubCurrentFavId; });
+    if (!currentFav) return;
+    _favSubSelected.clear();
+    if (checked) {
+        currentFav.favs.forEach(function(id) { _favSubSelected.add(id); });
+    }
+    updateFavSubMultiBar();
+    document.querySelectorAll('#fav-sub-list .mod-checkbox').forEach(function(cb) {
+        cb.classList.toggle('checked', _favSubSelected.has(cb.getAttribute('data-mod-id')));
+    });
+}
+
+function updateFavSubMultiBar() {
+    var countEl = document.getElementById('fav-sub-selected-count');
+    var removeBtn = document.getElementById('fav-sub-batch-remove');
+    var downloadBtn = document.getElementById('fav-sub-batch-download');
+    if (countEl) countEl.textContent = '已选 ' + _favSubSelected.size + ' 个';
+    if (removeBtn) removeBtn.disabled = _favSubSelected.size === 0;
+    if (downloadBtn) downloadBtn.disabled = _favSubSelected.size === 0;
+}
+
+async function batchRemoveFavSub() {
+    if (_favSubSelected.size === 0) return;
+    if (!confirm('确定取消收藏选中的 ' + _favSubSelected.size + ' 个项目？')) return;
+    try {
+        for (var projectId of _favSubSelected) {
+            await API.removeFromFavorite(_favSubCurrentFavId, projectId);
+            var fav = _favorites.find(function(f) { return f.id === _favSubCurrentFavId; });
+            if (fav) fav.favs = fav.favs.filter(function(id) { return id !== projectId; });
+        }
+        _favSubSelected.clear();
+        updateFavSubMultiBar();
+        showToast('已取消收藏', 'success');
+        renderFavSubList();
+        renderFavFolderSelect();
+    } catch (e) {
+        showToast('操作失败', 'error');
+    }
+}
+
+async function batchDownloadFavSub() {
+    if (_favSubSelected.size === 0) return;
+    try {
+        var projects = await fetchFavProjects(Array.from(_favSubSelected));
+        projects.forEach(function(p) {
+            if (p.id) quickInstallMod(p.id, p.source || 'modrinth', '', '');
+        });
+        showToast('已开始下载 ' + _favSubSelected.size + ' 个模组', 'success');
+    } catch (e) {
+        showToast('批量下载失败', 'error');
+    }
 }
 
 function toggleFavItemSelect(projectId) {
@@ -3253,6 +3393,7 @@ function updateFavHeartButtons() {
 
 function showFavSelectDropdown(projectId, anchorEl) {
     closeFavMenus();
+    console.log('[Fav] showFavSelectDropdown called:', projectId, '_favorites:', _favorites.length, _favorites);
     var rect = anchorEl.getBoundingClientRect();
     var dropdown = document.createElement('div');
     dropdown.className = 'fav-select-dropdown';
@@ -3278,6 +3419,7 @@ function showFavSelectDropdown(projectId, anchorEl) {
     });
     dropdown.innerHTML = innerHtml;
     document.body.appendChild(dropdown);
+    console.log('[Fav] dropdown appended, items:', _favorites.length, 'innerHTML length:', innerHtml.length);
     setTimeout(function() { document.addEventListener('click', closeFavMenusHandler, { once: true }); }, 0);
 }
 
@@ -3300,6 +3442,9 @@ async function toggleFavForProject(favId, projectId, isRemove) {
         if (document.getElementById('page-mod-favorites') && document.getElementById('page-mod-favorites').classList.contains('active')) {
             renderFavPage();
         }
+        if (document.getElementById('mod-fav-section') && document.getElementById('mod-fav-section').style.display !== 'none') {
+            renderFavSubList();
+        }
     } catch (e) {
         showToast('操作失败', 'error');
     }
@@ -3317,6 +3462,9 @@ async function removeFromAllFavs(projectId) {
         }
         renderFavFolderSelect();
         updateFavHeartButtons();
+        if (document.getElementById('mod-fav-section') && document.getElementById('mod-fav-section').style.display !== 'none') {
+            renderFavSubList();
+        }
         showToast('已取消所有收藏', 'success');
     } catch (e) {
         showToast('操作失败', 'error');
@@ -3697,9 +3845,16 @@ function renderDepsList(depArray, resolved, versionInfo, hasVersionFilter, curre
         const typeLabel = depType === 'required' ? '必选' : (depType === 'incompatible' ? '冲突' : '可选');
         const badgeClass = depType === 'required' ? 'required' : (depType === 'incompatible' ? 'incompatible' : 'optional');
 
-        const isInstalled = installedMods.some(m =>
-            m.id === d.projectId || m.name?.toLowerCase().includes(title.toLowerCase().substring(0, 6))
-        );
+        const isInstalled = installedMods.some(m => {
+            if (m.id === d.projectId) return true;
+            if (!m.filename) return false;
+            const fn = m.filename.toLowerCase();
+            const pid = d.projectId.toLowerCase();
+            if (fn.includes(pid)) return true;
+            const slug = (info.slug || '').toLowerCase();
+            if (slug && fn.includes(slug)) return true;
+            return false;
+        });
 
         let statusText = '';
         let statusClass = '';
@@ -3760,6 +3915,99 @@ function toggleMdDepsSection() {
     depsList.classList.toggle('expanded');
     if (arrow) {
         arrow.style.transform = depsList.classList.contains('expanded') ? 'rotate(180deg)' : '';
+    }
+}
+
+async function downloadAllDeps() {
+    if (!currentModDetailData) return;
+    const source = currentModDetailData.source || 'modrinth';
+    const versionId = currentModDetailData.selectedVersionId || currentModDetailData.versionId || '';
+    const gameVersion = currentModDetailData.selectedGameVersion || getCustomSelectValue('mod-filter-version') || '';
+    const loader = currentModDetailData.selectedLoader || getCustomSelectValue('mod-filter-loader') || '';
+
+    if (!versionId) {
+        showToast('请先选择一个版本', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('md-deps-download-all-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span>检测中...</span>'; }
+
+    showToast('正在检测前置依赖...', 'info');
+
+    try {
+        const [depResult, installedModsData] = await Promise.all([
+            API.getDependenciesRecursive(versionId, source, gameVersion, loader),
+            API.getInstalledMods().catch(() => [])
+        ]);
+        const deps = depResult.dependencies || [];
+        const installedMods = Array.isArray(installedModsData) ? installedModsData : [];
+
+        if (deps.length === 0) {
+            showToast('该模组没有前置依赖', 'info');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span>一键下载</span>'; }
+            return;
+        }
+
+        showToast('请选择保存文件夹...', 'info');
+        const defaultPath = await resolveModSavePath();
+        const folderResult = await API.selectSaveFolder(defaultPath);
+        if (folderResult.cancelled || !folderResult.path) {
+            showToast('已取消', 'info');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span>一键下载</span>'; }
+            return;
+        }
+        const savePath = folderResult.path;
+
+        const toDownload = [];
+        const seen = new Set();
+        for (const dep of deps) {
+            if (!dep.compatibleVersion) continue;
+            if (seen.has(dep.projectId)) continue;
+            seen.add(dep.projectId);
+            const alreadyInstalled = installedMods.some(m => {
+                if (m.id === dep.projectId) return true;
+                if (!m.filename) return false;
+                const fn = m.filename.toLowerCase();
+                if (fn.includes(dep.projectId.toLowerCase())) return true;
+                return false;
+            });
+            if (!alreadyInstalled) toDownload.push(dep);
+        }
+
+        if (toDownload.length === 0) {
+            showToast('所有前置依赖均已安装', 'info');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span>一键下载</span>'; }
+            return;
+        }
+
+        if (btn) { btn.innerHTML = `<span>下载中 (0/${toDownload.length})...</span>`; }
+
+        let downloaded = 0;
+        for (const dep of toDownload) {
+            try {
+                if (btn) { btn.innerHTML = `<span>下载中 (${downloaded + 1}/${toDownload.length})...</span>`; }
+                const result = await API.downloadModVersion(
+                    dep.compatibleVersion.versionId, dep.projectId, source, '',
+                    gameVersion, loader, savePath, false
+                );
+                if (result.success && result.sessionId) {
+                    showModDownloadModal(result.fileName, result.sessionId, savePath);
+                } else {
+                    showToast(`${dep.title}: ${result.error || '下载失败'}`, 'error');
+                }
+            } catch (e) {
+                showToast(`${dep.title}: ${e.message || '下载失败'}`, 'error');
+            }
+            downloaded++;
+        }
+
+        mdDepsCache.clear();
+        showToast(`已提交 ${downloaded} 个前置依赖下载`, 'success');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<span>一键下载</span>'; }
+    } catch (e) {
+        showToast('检测前置依赖失败: ' + (e.message || '未知错误'), 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<span>一键下载</span>'; }
     }
 }
 
@@ -4133,6 +4381,190 @@ async function showModInstallConfirm(projectId, source, versionId, fileId) {
     }
 }
 
+function showDepVersionSelectModal(projectId, source, gameVersion, loader, savePath) {
+    const existing = document.getElementById('dep-version-select-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'dep-version-select-modal';
+    modal.className = 'modal-overlay';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);';
+
+    const card = document.createElement('div');
+    card.className = 'ai-version-select-card';
+    card.style.cssText = 'max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);';
+
+    card.innerHTML = `
+        <div class="ai-version-select-header" style="padding:14px 16px;background:var(--bg-tertiary);border-bottom:1px solid var(--border);">
+            <span class="ai-version-select-title">选择前置模组版本</span>
+            <span class="ai-version-select-count" id="dep-ver-count">加载中...</span>
+        </div>
+        <div class="ai-version-select-list" id="dep-ver-list" style="max-height:360px;overflow-y:auto;">
+            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px;">正在获取版本列表...</div>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;">
+            <button id="dep-ver-cancel" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-primary);cursor:pointer;font-size:13px;">取消</button>
+        </div>
+    `;
+
+    modal.appendChild(card);
+    document.body.appendChild(modal);
+
+    document.getElementById('dep-ver-cancel').onclick = () => modal.remove();
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+    loadDepVersions(projectId, source, gameVersion, loader, savePath, modal);
+}
+
+async function loadDepVersions(projectId, source, gameVersion, loader, savePath, modal) {
+    try {
+        const result = await API.getProjectVersions(projectId, source, gameVersion, loader);
+        const versions = result.versions || [];
+        const listEl = document.getElementById('dep-ver-list');
+        const countEl = document.getElementById('dep-ver-count');
+        if (!listEl || !countEl) return;
+
+        countEl.textContent = versions.length + ' 个版本';
+
+        if (versions.length === 0) {
+            listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px;">未找到兼容的版本</div>';
+            return;
+        }
+
+        listEl.innerHTML = versions.map(v => {
+            const loaders = (v.loaders || []).map(l => {
+                const lc = l.toLowerCase();
+                const cls = lc === 'fabric' ? 'fabric' : lc === 'forge' ? 'forge' : lc === 'neoforge' ? 'neoforge' : 'vanilla';
+                return `<span class="ai-version-select-loader ${cls}">${escapeHtml(l)}</span>`;
+            }).join(' ');
+            const gvs = (v.gameVersions || []).slice(0, 3).join(', ') + (v.gameVersions?.length > 3 ? '...' : '');
+            const file = v.files?.find(f => f.primary) || v.files?.[0];
+            const sizeStr = file?.size ? formatBytes(file.size) : '';
+            const dateStr = v.datePublished ? formatDate(v.datePublished) : '';
+
+            return `<div class="ai-version-select-item" data-version-id="${escapeHtml(v.versionId)}" data-file-id="" data-file-name="${escapeHtml(file?.filename || '')}" data-download-url="${escapeHtml(file?.url || '')}">
+                <div class="ai-version-select-icon-wrap">
+                    <span style="font-size:16px;">📦</span>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <span class="ai-version-select-id">${escapeHtml(v.versionNumber)}</span>
+                    <div style="display:flex;gap:6px;align-items:center;margin-top:2px;flex-wrap:wrap;">
+                        ${loaders}
+                        <span style="font-size:11px;color:var(--text-muted);">${escapeHtml(gvs)}</span>
+                        ${sizeStr ? `<span style="font-size:11px;color:var(--text-muted);">${sizeStr}</span>` : ''}
+                        ${dateStr ? `<span style="font-size:11px;color:var(--text-muted);">${dateStr}</span>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+
+        listEl.querySelectorAll('.ai-version-select-item').forEach(item => {
+            item.onclick = () => {
+                const selectedVersionId = item.dataset.versionId;
+                modal.remove();
+                downloadDepWithNestedDeps(projectId, source, selectedVersionId, savePath, gameVersion, loader);
+            };
+        });
+    } catch (e) {
+        const listEl = document.getElementById('dep-ver-list');
+        if (listEl) {
+            listEl.innerHTML = `<div style="padding:24px;text-align:center;color:var(--charts-red);font-size:13px;">加载失败: ${escapeHtml(e.message)}</div>`;
+        }
+    }
+}
+
+async function downloadDepWithNestedDeps(projectId, source, versionId, savePath, gameVersion, loader) {
+    const taskId = 'dep-' + Date.now();
+    dlManager.add(taskId, '前置模组', 'mod', '', '');
+    dlManager.update(taskId, { progress: 0, status: 'downloading', message: '正在解析嵌套依赖...' });
+
+    try {
+        const recursiveDeps = await API.getDependenciesRecursive(versionId, source, gameVersion, loader);
+        const allDeps = recursiveDeps.dependencies || [];
+        const downloadableDeps = allDeps.filter(d => d.compatibleVersion);
+
+        if (downloadableDeps.length > 0) {
+            dlManager.update(taskId, { message: `发现 ${downloadableDeps.length} 个嵌套依赖，准备下载...` });
+
+            const nestedDepsHtml = downloadableDeps.map(d => {
+                const indent = '&nbsp;'.repeat(d.depth * 4);
+                const icon = d.depth > 1 ? '↳' : '•';
+                return `<div style="padding:3px 0;font-size:12px;color:var(--text-secondary);">${indent}${icon} ${escapeHtml(d.title)} <span style="color:var(--text-muted);">v${d.compatibleVersion.versionNumber}</span></div>`;
+            }).join('');
+
+            const modalId = 'nested-modal-' + Date.now();
+            const confirmed = await new Promise(resolve => {
+                const confirmModal = document.createElement('div');
+                confirmModal.id = modalId;
+                confirmModal.className = 'modal-overlay';
+                confirmModal.style.cssText = 'position:fixed;inset:0;z-index:10002;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);';
+                confirmModal.innerHTML = `<div style="background:var(--bg-primary);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+                    <h3 style="margin:0 0 8px;font-size:15px;font-weight:700;">发现嵌套依赖</h3>
+                    <p style="margin:0 0 12px;font-size:13px;color:var(--text-secondary);">该前置模组还有 ${downloadableDeps.length} 个嵌套依赖需要一起下载：</p>
+                    <div style="max-height:200px;overflow-y:auto;margin-bottom:16px;padding:8px;background:var(--bg-secondary);border-radius:8px;">${nestedDepsHtml}</div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;">
+                        <button id="${modalId}-cancel" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-primary);cursor:pointer;font-size:13px;">取消</button>
+                        <button id="${modalId}-confirm" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;font-weight:600;">确认下载全部</button>
+                    </div>
+                </div>`;
+                document.body.appendChild(confirmModal);
+                confirmModal.querySelector(`#${modalId}-cancel`).onclick = () => { confirmModal.remove(); resolve(false); };
+                confirmModal.querySelector(`#${modalId}-confirm`).onclick = () => { confirmModal.remove(); resolve(true); };
+                confirmModal.onclick = (e) => { if (e.target === confirmModal) { confirmModal.remove(); resolve(false); } };
+            });
+
+            if (!confirmed) {
+                dlManager.update(taskId, { status: 'failed', message: '用户取消' });
+                return;
+            }
+        }
+
+        const mainResult = await API.downloadModVersion(versionId, projectId, source, '', gameVersion, loader, savePath, false);
+        if (mainResult.success) {
+            const mainDlId = 'dep-main-' + Date.now();
+            dlManager.add(mainDlId, mainResult.fileName || '前置模组', 'mod', '', '');
+            dlManager.update(mainDlId, { progress: 0, status: 'downloading', message: '下载中...' });
+            dlManager.update(taskId, { progress: 10, message: '主模组下载中...' });
+            showModDownloadModal(mainResult.fileName, mainResult.sessionId, savePath);
+        } else {
+            dlManager.update(taskId, { status: 'failed', message: mainResult.error || '主模组下载失败' });
+            return;
+        }
+
+        const total = downloadableDeps.length;
+        let downloaded = 0;
+        for (const dep of downloadableDeps) {
+            downloaded++;
+            const depProgress = Math.round(10 + (downloaded / total) * 90);
+            dlManager.update(taskId, { progress: depProgress, message: `下载依赖 ${downloaded}/${total}: ${dep.title}` });
+            try {
+                const depResult = await API.downloadModVersion(
+                    dep.compatibleVersion.versionId, dep.projectId, source, '',
+                    gameVersion, loader, savePath, false
+                );
+                if (depResult.success && depResult.sessionId) {
+                    const depDlId = 'dep-' + dep.projectId + '-' + Date.now();
+                    dlManager.add(depDlId, dep.title || depResult.fileName, 'mod', '', dep.icon || '');
+                    dlManager.update(depDlId, { progress: 0, status: 'downloading', message: '下载中...' });
+                    showModDownloadModal(depResult.fileName, depResult.sessionId, savePath);
+                }
+            } catch (e) {
+                console.warn(`[Deps] 下载依赖 ${dep.title} 失败:`, e.message);
+                const depFailId = 'dep-fail-' + Date.now();
+                dlManager.add(depFailId, dep.title || '依赖', 'mod', '', dep.icon || '');
+                dlManager.update(depFailId, { status: 'failed', message: e.message || '下载失败' });
+            }
+        }
+
+        mdDepsCache.clear();
+        dlManager.update(taskId, { status: 'completed', progress: 100, message: `全部下载完成 (${total} 个依赖)` });
+        showToast(`前置模组下载完成: ${total} 个依赖`, 'success');
+    } catch (e) {
+        dlManager.update(taskId, { status: 'failed', message: e.message || '下载失败' });
+        showToast('前置模组下载失败: ' + (e.message || '未知错误'), 'error');
+    }
+}
+
 function showDependencyDialog(projectId, source, versionId, fileId, savePath, deps, gameVersion, loader) {
     const existing = document.getElementById('mod-dependency-modal');
     if (existing) existing.remove();
@@ -4148,25 +4580,27 @@ function showDependencyDialog(projectId, source, versionId, fileId, savePath, de
         const iconHtml = dep.icon
             ? `<img src="${dep.icon}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;" onerror="this.style.display='none'" loading="lazy">`
             : `<div style="width:32px;height:32px;border-radius:6px;background:var(--bg-secondary);display:flex;align-items:center;justify-content:center;font-size:14px;">📦</div>`;
+        const btnDisabled = !ver ? 'opacity:0.4;pointer-events:none;' : '';
         return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
             ${iconHtml}
             <div style="flex:1;min-width:0;">
                 <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(dep.title)}</div>
                 <div style="font-size:11px;color:var(--text-secondary);">${escapeHtml(verInfo)}</div>
             </div>
-            ${ver ? '<span style="font-size:11px;color:#22c55e;">✓ 可下载</span>' : '<span style="font-size:11px;color:#ef4444;">✗ 无兼容版本</span>'}
+            <button class="dep-single-download-btn" data-project-id="${escapeHtml(dep.projectId)}" style="padding:4px 10px;border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-size:11px;white-space:nowrap;${btnDisabled}" title="${ver ? '选择版本并下载前置模组' : '无兼容版本'}">下载前置</button>
+            ${ver ? '<span style="font-size:11px;color:#22c55e;">✓</span>' : '<span style="font-size:11px;color:#ef4444;">✗</span>'}
         </div>`;
     }).join('');
 
     const downloadableCount = deps.filter(d => d.compatibleVersion).length;
 
-    modal.innerHTML = `<div style="background:var(--bg-primary);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    modal.innerHTML = `<div style="background:var(--bg-primary);border-radius:12px;padding:24px;max-width:460px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
         <h3 style="margin:0 0 8px;font-size:16px;font-weight:700;">检测到前置依赖</h3>
         <p style="margin:0 0 16px;font-size:13px;color:var(--text-secondary);">该模组需要以下前置模组才能正常运行：</p>
-        <div style="max-height:240px;overflow-y:auto;margin-bottom:16px;">${depListHtml}</div>
+        <div style="max-height:280px;overflow-y:auto;margin-bottom:16px;">${depListHtml}</div>
         <div style="display:flex;gap:10px;justify-content:flex-end;">
             <button id="dep-cancel-btn" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-primary);cursor:pointer;font-size:13px;">取消</button>
-            <button id="dep-download-btn" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;font-weight:600;${downloadableCount === 0 ? 'opacity:0.5;pointer-events:none;' : ''}">一键下载（含 ${downloadableCount} 个前置）</button>
+            <button id="dep-download-btn" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;font-weight:600;${downloadableCount === 0 ? 'opacity:0.5;pointer-events:none;' : ''}">一键下载全部（${downloadableCount} 个前置）</button>
         </div>
     </div>`;
 
@@ -4175,9 +4609,18 @@ function showDependencyDialog(projectId, source, versionId, fileId, savePath, de
     document.getElementById('dep-cancel-btn').onclick = () => modal.remove();
     document.getElementById('dep-download-btn').onclick = () => {
         modal.remove();
-        proceedModInstall(projectId, source, versionId, fileId, savePath, true, deps, gameVersion, loader);
+        proceedModInstall(projectId, source, versionId, fileId, savePath, false, deps, gameVersion, loader);
     };
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+    modal.querySelectorAll('.dep-single-download-btn').forEach(btn => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const depProjectId = btn.dataset.projectId;
+            modal.remove();
+            showDepVersionSelectModal(depProjectId, source, gameVersion, loader, savePath);
+        };
+    });
 }
 
 
@@ -4191,6 +4634,7 @@ async function proceedModInstall(projectId, source, versionId, fileId, savePath,
         const currentLoader = loader || getCustomSelectValue('mod-filter-loader') || '';
         const result = await API.downloadModVersion(versionId || '', projectId, source, fileId || '', currentGameVersion, currentLoader, savePath, includeDeps);
         if (result.success) {
+            mdDepsCache.clear();
             dlManager.remove(pendingTaskId);
             showModDownloadModal(result.fileName, result.sessionId, savePath);
         } else {
@@ -4205,8 +4649,9 @@ async function proceedModInstall(projectId, source, versionId, fileId, savePath,
 }
 
 function quickInstallCurrentMod() {
-    if (!currentModDetailId) return;
-    showModInstallConfirm(currentModDetailId, currentModDetailSource, currentModDetailVersionId || '');
+    if (!currentModDetailData) return;
+    const versionId = currentModDetailData.selectedVersionId || currentModDetailData.versionId || '';
+    showModInstallConfirm(currentModDetailData.id || currentModDetailId, currentModDetailSource, versionId);
 }
 
 function copyModName() {
@@ -4235,6 +4680,7 @@ async function quickInstallMod(projectId, source, versionId, fileId) {
         const currentLoader = getCustomSelectValue('mod-filter-loader') || '';
         const result = await API.downloadModVersion(versionId || '', projectId, source, fileId || '', currentGameVersion, currentLoader);
         if (result.success) {
+            mdDepsCache.clear();
             dlManager.remove(pendingTaskId);
             showModDownloadModal(result.fileName, result.sessionId);
         } else {
@@ -5938,6 +6384,9 @@ async function selectThirdPartyProfile(profileId, profileName) {
 async function handleLaunch() {
     const versionId = launchVersionCustomSelect ? launchVersionCustomSelect.getValue() : '';
     if (!versionId) { showToast('请选择游戏版本', 'error'); return; }
+
+    _cachedLastLaunchVersion = versionId;
+    try { await window.electronAPI.store.set('versepc_last_launch_version', versionId); } catch (_) {}
 
     const launchBtn = document.getElementById('launch-btn');
     const homeLaunchBtn = document.getElementById('home-launch-btn');
@@ -8252,7 +8701,7 @@ async function deleteCurrentVersion() {
     const confirmed = await showConfirmDialog('删除版本', '确定要删除此版本吗？此操作不可撤销！', '删除', '取消');
     if (!confirmed) return;
     try {
-        const r = await API.deleteVersionById(currentSettingsVersionId);
+        const r = await API.deleteVersion(currentSettingsVersionId);
         if (r.success) {
             showToast('版本已删除', 'success');
             closeVersionSettings();
@@ -8464,7 +8913,7 @@ function goDownloadMods() {
 
 function toggleModInManager(fileName, disable) {
     if (!currentSettingsVersionId) return;
-    API.toggleModForVersion(fileName, !disable).then(r => {
+    API.toggleMod(fileName, !disable).then(r => {
         if (r.success) {
             showToast(disable ? '已禁用' : '已启用', 'success');
             loadInstalledModsForSettings();
@@ -9373,12 +9822,6 @@ function checkForUpdates() {
 
 let _memoryOptimizing = false;
 
-function formatBytes(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-    if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
-    return (bytes / 1073741824).toFixed(2) + ' GB';
-}
 
 async function refreshMemoryInfo() {
     try {
@@ -9657,6 +10100,14 @@ function renderSponsors(filter) {
         ? SPONSORS.filter(name => name.toLowerCase().includes(keyword))
         : SPONSORS;
 
+    const countEl = document.getElementById('sponsor-count');
+    if (countEl) countEl.textContent = SPONSORS.length + ' 人';
+
+    const moreBtn = document.getElementById('sponsor-more-btn');
+    if (moreBtn && !keyword) {
+        moreBtn.style.display = SPONSORS.length > 10 ? '' : 'none';
+    }
+
     if (filtered.length === 0) {
         container.innerHTML = '<span class="sponsor-empty">' + (keyword ? '未找到匹配的赞助者' : '暂无赞助者') + '</span>';
         return;
@@ -9671,14 +10122,122 @@ function renderSponsors(filter) {
     }).join('');
 }
 
+let sponsorExpanded = false;
+
+function toggleShowMoreSponsors() {
+    sponsorExpanded = !sponsorExpanded;
+    const grid = document.getElementById('sponsor-list');
+    const btn = document.getElementById('sponsor-more-btn');
+    if (grid) grid.classList.toggle('expanded', sponsorExpanded);
+    if (btn) {
+        btn.classList.toggle('expanded', sponsorExpanded);
+        btn.childNodes[0].textContent = sponsorExpanded ? '收起 ' : '展开更多 ';
+    }
+}
+
 function filterSponsors(keyword) {
+    const grid = document.getElementById('sponsor-list');
+    const btn = document.getElementById('sponsor-more-btn');
+    if (keyword && keyword.trim()) {
+        if (grid) grid.classList.add('expanded');
+        if (btn) btn.style.display = 'none';
+    } else {
+        if (grid) grid.classList.toggle('expanded', sponsorExpanded);
+        if (btn) btn.style.display = '';
+    }
     renderSponsors(keyword);
+}
+
+async function copyMachineId(btn) {
+    try {
+        const el = document.getElementById('machine-id-display');
+        if (!el || !el.value || el.value === '正在获取...') {
+            showToast('识别码获取中，请稍候', 'info');
+            return;
+        }
+        if (window.electronAPI && window.electronAPI.clipboard) {
+            await window.electronAPI.clipboard.writeText(el.value);
+        } else {
+            await navigator.clipboard.writeText(el.value);
+        }
+        const original = btn.textContent;
+        btn.textContent = '已复制';
+        btn.classList.add('btn-success');
+        setTimeout(() => { btn.textContent = original; btn.classList.remove('btn-success'); }, 1500);
+        showToast('识别码已复制到剪贴板', 'success');
+    } catch (e) {
+        showToast('复制失败', 'error');
+    }
+}
+
+async function loadMachineId() {
+    try {
+        if (window.electronAPI && window.electronAPI.getMachineId) {
+            const id = await window.electronAPI.getMachineId();
+            const el = document.getElementById('machine-id-display');
+            if (el && id) el.value = id;
+        }
+    } catch (e) {
+        console.error('[MachineId] Failed:', e.message);
+    }
+}
+
+async function submitActivationCode(btn) {
+    const input = document.getElementById('activation-code-input');
+    const statusEl = document.getElementById('activation-status');
+    if (!input || !statusEl) return;
+    const code = input.value.trim();
+    if (!code) {
+        statusEl.className = 'activation-status failed';
+        statusEl.textContent = '请输入激活码';
+        return;
+    }
+    btn.disabled = true;
+    btn.textContent = '验证中...';
+    statusEl.className = 'activation-status info';
+    statusEl.textContent = '正在验证...';
+    try {
+        const result = await window.electronAPI.activateVerify(code);
+        if (result.success) {
+            statusEl.className = 'activation-status activated';
+            statusEl.textContent = '✓ ' + result.message;
+            input.value = '';
+            updateActivationStatus();
+        } else {
+            statusEl.className = 'activation-status failed';
+            statusEl.textContent = '✗ ' + result.message;
+        }
+    } catch (e) {
+        statusEl.className = 'activation-status failed';
+        statusEl.textContent = '✗ 验证失败';
+    }
+    btn.disabled = false;
+    btn.textContent = '激活';
+}
+
+async function updateActivationStatus() {
+    try {
+        const status = await window.electronAPI.activateStatus();
+        const statusEl = document.getElementById('activation-status');
+        if (!statusEl) return;
+        if (status.activated) {
+            statusEl.className = 'activation-status activated';
+            const typeLabel = status.type === 'permanent' ? '永久授权' : '单次授权';
+            statusEl.textContent = '✓ 已激活 (' + typeLabel + ')';
+            const input = document.getElementById('activation-code-input');
+            const btn = document.getElementById('activate-btn');
+            if (input) input.style.display = 'none';
+            if (btn) btn.style.display = 'none';
+        }
+    } catch (e) {}
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     init();
     setTimeout(initSettingsPages, 500);
     renderSponsors();
+    loadMachineId();
+    updateActivationStatus();
 });
 
 document.addEventListener('keydown', (e) => {

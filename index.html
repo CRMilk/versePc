@@ -931,6 +931,10 @@
                                         </div>
                                     </div>
                                 </div>
+                                <button class="btn btn-secondary btn-sm" id="mod-fav-view-btn" onclick="enterFavSubPage()" style="display:flex;align-items:center;gap:4px;margin-left:8px;flex-shrink:0">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                                    收藏
+                                </button>
                             </div>
                         </div>
                         <div id="mod-browse-section" class="mod-browse-section">
@@ -942,6 +946,50 @@
                                 <button id="mod-prev-btn" class="btn btn-secondary btn-sm">上一页</button>
                                 <span id="mod-page-info" class="page-info">1/1</span>
                                 <button id="mod-next-btn" class="btn btn-secondary btn-sm">下一页</button>
+                            </div>
+                        </div>
+                        <div id="mod-fav-section" class="mod-browse-section" style="display:none">
+                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+                                <button class="btn btn-icon" onclick="exitFavSubPage()" title="返回浏览">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M15 18l-6-6 6-6"/></svg>
+                                </button>
+                                <h3 class="section-title" style="margin:0">我的收藏</h3>
+                                <select id="fav-sub-folder-select" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:13px;" onchange="onFavSubFolderChange(this.value)"></select>
+                                <div style="flex:1"></div>
+                                <button class="btn btn-secondary btn-sm" onclick="showFavManageMenu()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                                    管理
+                                </button>
+                                <button class="btn btn-secondary btn-sm" id="fav-sub-multi-toggle" onclick="toggleFavSubMultiSelect()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                                    多选
+                                </button>
+                                <button class="btn btn-secondary btn-sm" onclick="showFavImportModal()">导入</button>
+                                <button class="btn btn-secondary btn-sm" onclick="exportCurrentFav()">导出</button>
+                            </div>
+                            <div id="fav-sub-multi-bar" class="mod-multiselect-bar" style="display:none">
+                                <label class="mod-select-all-label">
+                                    <input type="checkbox" id="fav-sub-select-all" onchange="toggleFavSubSelectAll(this.checked)">
+                                    <span>全选</span>
+                                </label>
+                                <span class="mod-selected-count" id="fav-sub-selected-count">已选 0 个</span>
+                                <button class="btn btn-danger btn-sm" id="fav-sub-batch-remove" onclick="batchRemoveFavSub()" disabled>取消收藏</button>
+                                <button class="btn btn-primary btn-sm" id="fav-sub-batch-download" onclick="batchDownloadFavSub()" disabled>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    批量下载
+                                </button>
+                                <button class="btn btn-secondary btn-sm" onclick="toggleFavSubMultiSelect()">取消多选</button>
+                            </div>
+                            <div id="fav-sub-search-bar" style="margin-bottom:16px">
+                                <input type="text" id="fav-sub-search-input" placeholder="搜索收藏的模组..." class="search-input" style="max-width:400px" oninput="onFavSubSearch(this.value)">
+                            </div>
+                            <div id="fav-sub-list" class="mod-list">
+                                <div class="loading-spinner"><div class="spinner"></div></div>
+                            </div>
+                            <div id="fav-sub-empty" style="display:none;text-align:center;padding:60px 20px;color:var(--text-secondary)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:64px;height:64px;margin-bottom:16px;opacity:0.3"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                                <p style="font-size:15px;margin-bottom:8px">还没有收藏内容</p>
+                                <p style="font-size:13px">在模组搜索页面点击心形按钮收藏模组</p>
                             </div>
                         </div>
                     </div>
@@ -978,13 +1026,19 @@
                         </button>
                     </div>
                     <div id="md-deps-section" class="md-deps-section" style="display:none">
-                        <div class="md-deps-header" onclick="toggleMdDepsSection()">
-                            <div style="display:flex;align-items:center;gap:8px">
+                        <div class="md-deps-header">
+                            <div style="display:flex;align-items:center;gap:8px;flex:1;cursor:pointer" onclick="toggleMdDepsSection()">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" style="width:18px;height:18px"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                                 <span style="font-size:14px;font-weight:600;color:var(--text-primary)">前置模组</span>
                                 <span id="md-deps-count" style="font-size:12px;color:var(--text-muted)"></span>
                             </div>
-                            <svg id="md-deps-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;transition:transform 0.2s"><path d="M6 9l6 6 6-6"/></svg>
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <button id="md-deps-download-all-btn" class="md-deps-download-all" onclick="event.stopPropagation();downloadAllDeps()" title="一键下载所有前置模组">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    <span>一键下载</span>
+                                </button>
+                                <svg id="md-deps-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;transition:transform 0.2s;cursor:pointer" onclick="event.stopPropagation();toggleMdDepsSection()"><path d="M6 9l6 6 6-6"/></svg>
+                            </div>
                         </div>
                         <div id="md-deps-list" class="md-deps-list"></div>
                     </div>
@@ -2837,13 +2891,38 @@
                     </div>
                     <div class="settings-container">
                         <div class="card sponsor-card" id="sponsor-card">
-                            <h3>💕 赞助者</h3>
-                            <p class="form-hint" style="margin-bottom: 12px;">感谢以下用户对 VersePC 的支持与赞助</p>
+                            <div class="sponsor-header">
+                                <h3>💕 赞助者</h3>
+                                <span class="sponsor-count" id="sponsor-count"></span>
+                            </div>
                             <div class="sponsor-search">
                                 <input type="text" id="sponsor-search-input" class="sponsor-search-input" placeholder="搜索赞助者..." oninput="filterSponsors(this.value)">
                             </div>
                             <div class="sponsor-grid" id="sponsor-list">
                             </div>
+                            <button class="btn btn-ghost btn-sm sponsor-more-btn" id="sponsor-more-btn" onclick="toggleShowMoreSponsors()">
+                                展开更多
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:4px"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                        </div>
+                        <div class="card">
+                            <h3>识别码与激活</h3>
+                            <p class="form-hint" style="margin-bottom: 12px;">赞助后将识别码发给作者，获取激活码解锁测试版</p>
+                            <div class="form-group">
+                                <label>本机识别码</label>
+                                <div class="input-with-btn">
+                                    <input type="text" id="machine-id-display" class="text-input" readonly placeholder="正在获取...">
+                                    <button class="btn btn-primary btn-sm" onclick="copyMachineId(this)">复制</button>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top:12px">
+                                <label>输入激活码</label>
+                                <div class="input-with-btn">
+                                    <input type="text" id="activation-code-input" class="text-input" placeholder="输入激活码，如 VP-XXXXXXXXXXXX" style="text-transform:uppercase">
+                                    <button class="btn btn-accent btn-sm" id="activate-btn" onclick="submitActivationCode(this)">激活</button>
+                                </div>
+                            </div>
+                            <div id="activation-status" class="activation-status"></div>
                         </div>
                         <div class="card">
                             <h3>反馈</h3>
@@ -3217,6 +3296,7 @@
         <div id="toast-container" class="toast-container"></div>
     </div>
 
+    <script src="js/utils.js"></script>
     <script src="js/api.js"></script>
     <script src="js/three.bundle.js"></script>
     <script src="js/wallpaper-engine.js"></script>

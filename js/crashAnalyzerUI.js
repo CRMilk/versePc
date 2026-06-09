@@ -826,9 +826,7 @@ ${this.currentAnalysis.crashReasons ? this.currentAnalysis.crashReasons.map(r =>
      * @returns {string} 转义后的安全 HTML 字符串
      */
     escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        return escapeHtml(text);
     }
 }
 

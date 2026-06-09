@@ -1,4 +1,4 @@
-﻿/**
+/**
  * VersePC - Minecraft Launcher
  * Copyright (c) 2026 豆杰. All Rights Reserved.
  *
@@ -1119,6 +1119,18 @@ body {
 
 .btn-outline:hover {
     background: rgba(96,165,250,0.1);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+}
+
+.btn-ghost:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border);
 }
 
 .btn-sm {
@@ -6174,6 +6186,27 @@ body.dark-theme .acct-btn-danger:hover {
 
 .md-deps-header:hover {
     opacity: 0.8;
+}
+
+.md-deps-download-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.md-deps-download-all:hover {
+    background: var(--accent);
+    color: #fff;
 }
 
 .md-deps-list {
@@ -13507,8 +13540,28 @@ body.dark-theme .rc-context-sep { background:#222; }
     border-left: 3px solid var(--purple);
 }
 
-.sponsor-search {
+.sponsor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin-bottom: 12px;
+}
+
+.sponsor-header h3 {
+    margin-bottom: 0;
+}
+
+.sponsor-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+}
+
+.sponsor-search {
+    margin-bottom: 10px;
 }
 
 .sponsor-search-input {
@@ -13533,23 +13586,44 @@ body.dark-theme .rc-context-sep { background:#222; }
 }
 
 .sponsor-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 110px;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.sponsor-grid.expanded {
+    max-height: 2000px;
 }
 
 .sponsor-tag {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
+    gap: 6px;
+    padding: 5px 10px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     color: var(--text-primary);
     transition: background 0.2s, border-color 0.2s;
+}
+
+.sponsor-more-btn {
+    width: 100%;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.sponsor-more-btn.expanded svg {
+    transform: rotate(180deg);
 }
 
 .sponsor-tag:hover {
@@ -13558,14 +13632,14 @@ body.dark-theme .rc-context-sep { background:#222; }
 }
 
 .sponsor-tag-icon {
-    width: 28px;
-    height: 28px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--purple), #e879f9);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 700;
     color: #fff;
     flex-shrink: 0;
@@ -13583,6 +13657,26 @@ body.dark-theme .rc-context-sep { background:#222; }
     color: var(--text-muted);
     font-style: italic;
     padding: 12px 0;
+}
+
+.activation-status {
+    margin-top: 10px;
+    font-size: 13px;
+    min-height: 20px;
+}
+
+.activation-status.activated {
+    color: #22c55e;
+    font-weight: 500;
+}
+
+.activation-status.failed {
+    color: #ef4444;
+}
+
+.activation-status.info {
+    color: var(--text-secondary);
+}
     text-align: center;
 }
 
@@ -13779,21 +13873,18 @@ body.dark-theme .rc-context-sep { background:#222; }
     flex-shrink: 0;
 }
 .fav-heart-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
     width: 32px;
     height: 32px;
     border-radius: 50%;
     border: none;
-    background: rgba(255,255,255,0.9);
-    display: flex;
+    background: transparent;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s;
-    z-index: 2;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    flex-shrink: 0;
+    padding: 0;
 }
 .fav-heart-btn:hover {
     transform: scale(1.1);

@@ -75,6 +75,7 @@ const { app, BrowserWindow, Menu, shell, ipcMain, dialog, screen, protocol, clip
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { AI_PROVIDERS, TOOL_CONFIG, TOOL_DISPLAY_NAMES, getProviderForModel, buildApiHeaders } = require('./ai-config');
 
 let _autoUpdater;
 function getAutoUpdater() {
@@ -103,6 +104,13 @@ let serverModuleCache = null;     // server.js 模块缓存
 let ssePort = 3001;
 let updateDownloaded = false;     // 更新是否已下载完成
 let updateAvailableInfo = null;   // 可用的更新信息（用于弹窗通知）
+
+// ============================================================================
+// Windows 任务栏图标关联（必须在 app.ready 之前设置）
+// ============================================================================
+if (process.platform === 'win32') {
+    app.setAppUserModelId('com.versepc.launcher');
+}
 
 // 窗口配置文件路径和缓存
 const CONFIG_PATH = path.join(require('os').homedir(), '.versepc', 'window-config.json');
@@ -600,6 +608,109 @@ ipcMain.handle('store-delete', async (event, key) => {
     delete store[key];
     saveStore(store);
     return true;
+});
+
+ipcMain.handle('get-machine-id', async () => {
+    try {
+        const crypto = require('crypto');
+        const os = require('os');
+        const parts = [];
+        try { parts.push(os.hostname()); } catch (e) {}
+        try { parts.push(os.arch()); } catch (e) {}
+        try { parts.push(os.platform()); } catch (e) {}
+        try {
+            const cpus = os.cpus();
+            if (cpus.length > 0) parts.push(cpus[0].model);
+        } catch (e) {}
+        try {
+            const totalMem = os.totalmem();
+            parts.push(String(totalMem));
+        } catch (e) {}
+        try {
+            const nets = os.networkInterfaces();
+            for (const name of Object.keys(nets)) {
+                for (const iface of nets[name]) {
+                    if (!iface.internal && iface.mac && iface.mac !== '00:00:00:00:00:00') {
+                        parts.push(iface.mac);
+                        break;
+                    }
+                }
+            }
+        } catch (e) {}
+        const raw = parts.join('|');
+        const hash = crypto.createHash('sha256').update(raw).digest('hex').toUpperCase();
+        return hash.substring(0, 16);
+    } catch (e) {
+        return null;
+    }
+});
+
+ipcMain.handle('activate-verify', async (event, code) => {
+    try {
+        const crypto = require('crypto');
+        const os = require('os');
+        const SECRET = 'VersePC$ecureK3y#2026@Activation!Gen';
+        const HASH_LEN = 12;
+
+        const parts = [];
+        try { parts.push(os.hostname()); } catch (e) {}
+        try { parts.push(os.arch()); } catch (e) {}
+        try { parts.push(os.platform()); } catch (e) {}
+        try { const cpus = os.cpus(); if (cpus.length > 0) parts.push(cpus[0].model); } catch (e) {}
+        try { parts.push(String(os.totalmem())); } catch (e) {}
+        try {
+            const nets = os.networkInterfaces();
+            for (const name of Object.keys(nets)) {
+                for (const iface of nets[name]) {
+                    if (!iface.internal && iface.mac && iface.mac !== '00:00:00:00:00:00') {
+                        parts.push(iface.mac);
+                        break;
+                    }
+                }
+            }
+        } catch (e) {}
+        const machineId = crypto.createHash('sha256').update(parts.join('|')).digest('hex').toUpperCase().substring(0, 16);
+
+        const c = (code || '').trim().toUpperCase();
+        if (!c) return { success: false, message: '请输入激活码' };
+        const codeParts = c.split('-');
+        if (codeParts.length !== 2) return { success: false, message: '激活码格式无效' };
+
+        const [prefix, hash] = codeParts;
+        let activationType = null;
+
+        if (prefix === 'VP') {
+            const data = machineId + '|PERM';
+            const expected = 'VP-' + crypto.createHmac('sha256', SECRET).update(data).digest('hex').toUpperCase().substring(0, HASH_LEN);
+            if (c === expected) activationType = 'permanent';
+        } else if (prefix === 'VS') {
+            const appVersion = app.getVersion();
+            const data = machineId + '|SINGLE|' + appVersion;
+            const expected = 'VS-' + crypto.createHmac('sha256', SECRET).update(data).digest('hex').toUpperCase().substring(0, HASH_LEN);
+            if (c === expected) activationType = 'single';
+        }
+
+        if (!activationType) return { success: false, message: '激活码无效或与本机不匹配' };
+
+        const store = loadStore();
+        store['activation_type'] = activationType;
+        store['activation_code'] = c;
+        store['activation_time'] = new Date().toISOString();
+        fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), () => {});
+
+        return { success: true, type: activationType, message: activationType === 'permanent' ? '永久激活成功！' : '单次激活成功！' };
+    } catch (e) {
+        return { success: false, message: '验证失败: ' + e.message };
+    }
+});
+
+ipcMain.handle('activate-status', async () => {
+    const store = loadStore();
+    return {
+        activated: !!store['activation_type'],
+        type: store['activation_type'] || null,
+        time: store['activation_time'] || null
+    };
 });
 
     ipcMain.handle('preview:stop', async () => {
@@ -1178,6 +1289,7 @@ async function handleAPIRequest(request, reqUrl) {
     reqUrl.searchParams.forEach((value, key) => { query[key] = value; });
 
     const pathname = reqUrl.pathname;
+    console.log('[Fav] handleAPIRequest:', method, pathname);
     // 判断是否为 SSE（Server-Sent Events）流式请求
     const isSSE = pathname === '/api/game/log/stream' ||
                   (pathname === '/api/install-progress' && query.sse === 'true');
@@ -2044,206 +2156,6 @@ function registerAIChatIPC() {
     const https = require('https');
     const http = require('http');
 
-    const AI_PROVIDERS = {
-        zhipu: {
-            name: '智谱 GLM',
-            baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-            models: [
-                { id: 'glm-5.1', name: 'GLM-5.1', free: false },
-                { id: 'glm-5', name: 'GLM-5', free: false },
-                { id: 'glm-5-plus', name: 'GLM-5-Plus', free: false },
-                { id: 'glm-5-air', name: 'GLM-5-Air', free: false },
-                { id: 'glm-5-flash', name: 'GLM-5-Flash', free: true },
-                { id: 'glm-4.7', name: 'GLM-4.7', free: false },
-            ],
-            authType: 'bearer',
-            thinkingParams: {}
-        },
-        deepseek: {
-            name: 'DeepSeek',
-            baseUrl: 'https://api.deepseek.com/v1',
-            models: [
-                { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro', free: false },
-                { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', free: false },
-                { id: 'deepseek-chat', name: 'DeepSeek-V3.2', free: false },
-                { id: 'deepseek-reasoner', name: 'DeepSeek-R1', free: false },
-            ],
-            authType: 'bearer',
-            thinkingParams: { enable_thinking: true }
-        },
-        qwen: {
-            name: '通义千问',
-            baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-            models: [
-                { id: 'qwen3.6-max-preview', name: 'Qwen3.6-Max', free: false },
-                { id: 'qwen3.6-plus', name: 'Qwen3.6-Plus', free: false },
-                { id: 'qwen3.6-flash', name: 'Qwen3.6-Flash', free: true },
-                { id: 'qwen3-235b-a22b', name: 'Qwen3-235B', free: false },
-                { id: 'qwen3-30b-a3b', name: 'Qwen3-30B', free: true },
-                { id: 'qwq-plus', name: 'QwQ-Plus', free: false },
-            ],
-            authType: 'bearer',
-            thinkingParams: { enable_thinking: true }
-        },
-        moonshot: {
-            name: 'Moonshot Kimi',
-            baseUrl: 'https://api.moonshot.cn/v1',
-            models: [
-                { id: 'kimi-k2.6', name: 'Kimi-K2.6', free: false },
-                { id: 'kimi-k2.5', name: 'Kimi-K2.5', free: false },
-                { id: 'moonshot-v1-128k', name: 'Moonshot-v1-128k', free: false },
-                { id: 'moonshot-v1-32k', name: 'Moonshot-v1-32k', free: false },
-            ],
-            authType: 'bearer',
-            thinkingParams: {}
-        },
-        yi: {
-            name: '零一万物',
-            baseUrl: 'https://api.lingyiwanwu.com/v1',
-            models: [
-                { id: 'yi-lightning', name: 'Yi-Lightning', free: true },
-                { id: 'yi-large', name: 'Yi-Large', free: false },
-                { id: 'yi-large-turbo', name: 'Yi-Large-Turbo', free: false },
-                { id: 'yi-medium', name: 'Yi-Medium', free: false },
-            ],
-            authType: 'bearer',
-            thinkingParams: {}
-        },
-        baichuan: {
-            name: '百川智能',
-            baseUrl: 'https://api.baichuan-ai.com/v1',
-            models: [
-                { id: 'Baichuan4-Turbo', name: 'Baichuan4-Turbo', free: false },
-                { id: 'Baichuan4-Air', name: 'Baichuan4-Air', free: false },
-                { id: 'Baichuan4', name: 'Baichuan4', free: false },
-                { id: 'Baichuan3-Turbo', name: 'Baichuan3-Turbo', free: false },
-            ],
-            authType: 'bearer',
-            thinkingParams: {}
-        },
-        minimax: {
-            name: 'MiniMax',
-            baseUrl: 'https://api.minimax.chat/v1',
-            models: [
-                { id: 'MiniMax-M2.7', name: 'MiniMax-M2.7', free: false },
-                { id: 'MiniMax-M2.5', name: 'MiniMax-M2.5', free: false },
-                { id: 'MiniMax-M2.1', name: 'MiniMax-M2.1', free: false },
-            ],
-            authType: 'bearer',
-            thinkingParams: {}
-        },
-        stepfun: {
-            name: '阶跃星辰',
-            baseUrl: 'https://api.stepfun.com/v1',
-            models: [
-                { id: 'step-2-16k', name: 'Step-2-16K', free: false },
-                { id: 'step-1-8k', name: 'Step-1-8K', free: true },
-            ],
-            authType: 'bearer',
-            thinkingParams: {}
-        },
-        siliconflow: {
-            name: 'SiliconFlow',
-            baseUrl: 'https://api.siliconflow.cn/v1',
-            models: [
-                { id: 'Pro/deepseek-ai/DeepSeek-V4-Pro', name: 'DeepSeek-V4-Pro', free: false },
-                { id: 'deepseek-ai/DeepSeek-V4-Flash', name: 'DeepSeek-V4-Flash', free: true },
-                { id: 'Qwen/Qwen3-235B-A22B', name: 'Qwen3-235B', free: true },
-                { id: 'Qwen/Qwen3-30B-A3B', name: 'Qwen3-30B', free: true },
-                { id: 'Qwen/Qwen3.6-Flash', name: 'Qwen3.6-Flash', free: true },
-                { id: 'Pro/zai-org/GLM-5.1', name: 'GLM-5.1', free: true },
-            ],
-            authType: 'bearer',
-            thinkingParams: { enable_thinking: true }
-        },
-        openrouter: {
-            name: 'OpenRouter',
-            baseUrl: 'https://openrouter.ai/api/v1',
-            models: [
-                { id: 'deepseek/deepseek-v4-pro', name: 'DeepSeek V4 Pro', free: false },
-                { id: 'deepseek/deepseek-v4-flash:free', name: 'DeepSeek V4 Flash', free: true },
-                { id: 'qwen/qwen3-235b-a22b', name: 'Qwen3 235B', free: true },
-                { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash', free: true },
-                { id: 'anthropic/claude-sonnet-4-6', name: 'Claude Sonnet 4.6', free: false },
-                { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', free: true },
-            ],
-            authType: 'bearer',
-            thinkingParams: { enable_thinking: true }
-        },
-        groq: {
-            name: 'Groq',
-            baseUrl: 'https://api.groq.com/openai/v1',
-            models: [
-                { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', free: true },
-                { id: 'qwen/qwen3-32b', name: 'Qwen3 32B', free: true },
-                { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 70B', free: true },
-            ],
-            authType: 'bearer',
-            thinkingParams: {}
-        },
-        openai: {
-            name: 'OpenAI',
-            baseUrl: 'https://api.openai.com/v1',
-            models: [
-                { id: 'gpt-4.1', name: 'GPT-4.1', free: false },
-                { id: 'gpt-4.1-mini', name: 'GPT-4.1-mini', free: false },
-                { id: 'gpt-4.1-nano', name: 'GPT-4.1-nano', free: false },
-                { id: 'gpt-4o', name: 'GPT-4o', free: false },
-                { id: 'gpt-4o-mini', name: 'GPT-4o-mini', free: false },
-                { id: 'o3-mini', name: 'o3-mini', free: false },
-                { id: 'o3', name: 'o3', free: false },
-            ],
-            authType: 'bearer',
-            thinkingParams: {}
-        },
-        anthropic: {
-            name: 'Anthropic',
-            baseUrl: 'https://api.anthropic.com',
-            models: [
-                { id: 'claude-sonnet-4-6-20250217', name: 'Claude Sonnet 4.6', free: false },
-                { id: 'claude-opus-4-7-20260416', name: 'Claude Opus 4.7', free: false },
-                { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', free: false },
-                { id: 'claude-opus-4-5-20251124', name: 'Claude Opus 4.5', free: false },
-                { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', free: false },
-            ],
-            authType: 'x-api-key',
-            thinkingParams: {}
-        },
-        google: {
-            name: 'Google Gemini',
-            baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-            models: [
-                { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', free: false },
-                { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', free: false },
-                { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', free: true },
-                { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', free: true },
-                { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', free: true },
-            ],
-            authType: 'url_key',
-            thinkingParams: {}
-        },
-    };
-
-    function getProviderForModel(modelId) {
-        for (const [key, provider] of Object.entries(AI_PROVIDERS)) {
-            if (provider.models.some(m => m.id === modelId)) {
-                return { key, ...provider };
-            }
-        }
-        return { key: 'zhipu', ...AI_PROVIDERS.zhipu };
-    }
-
-    function buildApiHeaders(provider, apiKey) {
-        const headers = { 'Content-Type': 'application/json' };
-        if (provider.authType === 'x-api-key') {
-            headers['x-api-key'] = apiKey;
-            headers['anthropic-version'] = '2023-06-01';
-        } else {
-            headers['Authorization'] = `Bearer ${apiKey}`;
-        }
-        return headers;
-    }
-
     ipcMain.handle('ai:get-providers', async () => {
         return Object.entries(AI_PROVIDERS).map(([key, p]) => ({
             key,
@@ -2864,69 +2776,7 @@ function registerAIChatIPC() {
         }
     ];
 
-    const TOOL_DISPLAY_NAMES_MAIN = {
-        search_mods: '搜索模组', install_mod: '安装模组', get_installed_mods: '查看已安装模组',
-        toggle_mod: '切换模组状态', get_system_info: '获取系统信息', get_versions: '获取版本列表',
-        get_game_status: '获取游戏状态', get_mod_details: '获取模组详情', browse_directory: '浏览文件夹',
-        read_file: '读取文件', launch_game: '启动游戏', stop_game: '停止游戏',
-        get_game_log: '获取游戏日志', diagnose_crash: '诊断崩溃', manage_settings: '管理设置',
-        install_version: '安装版本', install_progress: '安装进度', install_loader: '安装加载器',
-        web_search: '搜索网络', get_current_context: '获取当前上下文',
-        search_modpacks: '搜索整合包', install_modpack: '安装整合包',
-        execute_command: '执行命令', write_file: '写入文件', edit_file: '编辑文件',
-        grep_search: '搜索文件内容', glob_search: '搜索文件名', web_fetch: '获取网页',
-        web_search_general: '通用网络搜索', todo_write: '任务管理', update_todo_list: '更新计划', agent: '子代理',
-        translate_mod: '模组汉化', download_cfpa_pack: '下载社区汉化包',
-        explore_environment: '探索环境',
-        select_version: '选择版本',
-        manage_core_memory: '管理记忆'
-    };
 
-    const TOOL_CONFIG = {
-        bash:               { timeout: 120000, retries: 0, risk: 'safe' },
-        str_replace_based_edit_tool: { timeout: 30000, retries: 0, risk: 'safe' },
-        json_edit_tool:     { timeout: 30000, retries: 0, risk: 'safe' },
-        sequential_thinking: { timeout: 10000, retries: 0, risk: 'safe' },
-        attempt_completion:  { timeout: 10000, retries: 0, risk: 'safe' },
-        ckg:               { timeout: 30000, retries: 1, risk: 'safe' },
-        search_mods:       { timeout: 15000, retries: 1, risk: 'safe' },
-        install_mod:       { timeout: 60000, retries: 0, risk: 'moderate' },
-        get_installed_mods:{ timeout: 10000, retries: 1, risk: 'safe' },
-        toggle_mod:        { timeout: 10000, retries: 1, risk: 'moderate' },
-        get_system_info:   { timeout: 5000,  retries: 1, risk: 'safe' },
-        get_versions:      { timeout: 15000, retries: 1, risk: 'safe' },
-        get_game_status:   { timeout: 5000,  retries: 1, risk: 'safe' },
-        get_mod_details:   { timeout: 15000, retries: 1, risk: 'safe' },
-        browse_directory:  { timeout: 10000, retries: 1, risk: 'safe' },
-        read_file:         { timeout: 10000, retries: 1, risk: 'safe' },
-        launch_game:       { timeout: 30000, retries: 0, risk: 'dangerous' },
-        stop_game:         { timeout: 10000, retries: 0, risk: 'dangerous' },
-        get_game_log:      { timeout: 10000, retries: 1, risk: 'safe' },
-        diagnose_crash:    { timeout: 10000, retries: 1, risk: 'safe' },
-        manage_settings:   { timeout: 10000, retries: 0, risk: 'dangerous' },
-        install_version:   { timeout: 30000, retries: 0, risk: 'moderate' },
-        install_progress:  { timeout: 10000, retries: 1, risk: 'safe' },
-        install_loader:    { timeout: 120000,retries: 0, risk: 'moderate' },
-        web_search:        { timeout: 15000, retries: 1, risk: 'safe' },
-        get_current_context:{ timeout: 5000,  retries: 1, risk: 'safe' },
-        search_modpacks:   { timeout: 15000, retries: 1, risk: 'safe' },
-        install_modpack:   { timeout: 30000, retries: 0, risk: 'moderate' },
-        execute_command:   { timeout: 15000, retries: 0, risk: 'dangerous' },
-        write_file:        { timeout: 10000, retries: 0, risk: 'dangerous' },
-        edit_file:         { timeout: 10000, retries: 0, risk: 'dangerous' },
-        grep_search:       { timeout: 15000, retries: 1, risk: 'safe' },
-        glob_search:       { timeout: 10000, retries: 1, risk: 'safe' },
-        web_fetch:         { timeout: 20000, retries: 1, risk: 'safe' },
-        web_search_general:{ timeout: 15000, retries: 1, risk: 'safe' },
-        todo_write:        { timeout: 5000,  retries: 0, risk: 'safe' },
-        update_todo_list:  { timeout: 5000,  retries: 0, risk: 'safe' },
-        manage_core_memory:{ timeout: 5000,  retries: 0, risk: 'safe' },
-        agent:             { timeout: 120000,retries: 0, risk: 'moderate' },
-        translate_mod:     { timeout: 120000,retries: 0, risk: 'moderate' },
-        download_cfpa_pack:{ timeout: 60000, retries: 1, risk: 'safe' },
-        explore_environment: { timeout: 20000, retries: 1, risk: 'safe' },
-        select_version:    { timeout: 120000, retries: 0, risk: 'safe' }
-    };
 
     function normalizeToolResult(name, result) {
         try {

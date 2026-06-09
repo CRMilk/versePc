@@ -111,6 +111,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
         writeText: (text) => ipcRenderer.invoke('clipboard-write-text', text),
         readText: () => ipcRenderer.invoke('clipboard-read-text'),
     },
+    getMachineId: () => ipcRenderer.invoke('get-machine-id'),
+    activateVerify: (code) => ipcRenderer.invoke('activate-verify', code),
+    activateStatus: () => ipcRenderer.invoke('activate-status'),
     store: {
         get: (key) => ipcRenderer.invoke('store-get', key),
         getMultiple: (keys) => ipcRenderer.invoke('store-get-multiple', keys),

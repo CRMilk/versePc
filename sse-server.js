@@ -33,6 +33,7 @@
  */
 
 const http = require('http');
+const { TOOL_RISK } = require('./ai-config');
 
 function createSSEServer(mainExports = {}) {
     const { executeTool = null } = mainExports;
@@ -136,16 +137,8 @@ function createSSEServer(mainExports = {}) {
                 sendChunk(processed);
             };
 
-            const TOOL_RISK_MAP = {
-                write_to_file: 'dangerous', replace_in_file: 'dangerous', delete_file: 'dangerous',
-                execute_command: 'moderate', spawn_process: 'moderate',
-                browser_action: 'moderate', mcp_tool: 'moderate',
-                search_files: 'safe', list_files: 'safe', list_code_definition_names: 'safe',
-                read_file: 'safe', ask_followup_question: 'safe', attempt_completion: 'safe',
-                update_todo_list: 'safe', sequential_thinking: 'safe',
-            };
             const onRequestApproval = (toolName, argsStr) => {
-                const risk = TOOL_RISK_MAP[toolName] || 'moderate';
+                const risk = TOOL_RISK[toolName] || 'moderate';
                 const aid = `apv_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 6)}`;
                 sendChunk({ type: 'approval_requested', approvalId: aid, toolName, risk, args: argsStr });
                 return new Promise((resolve) => {
