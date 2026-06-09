@@ -11,101 +11,178 @@
 -->
 
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; font-src 'self' data:; img-src 'self' data:;">
 <title>VersePC Editor</title>
 <style>
+[data-theme="dark"] {
+    --ed-bg: #0a0a0a;
+    --ed-bg-secondary: #141414;
+    --ed-bg-tertiary: #1c1c1c;
+    --ed-bg-tab: #1a1a1a;
+    --ed-bg-tab-active: #0a0a0a;
+    --ed-bg-hover: #242424;
+    --ed-text: #e0e0e0;
+    --ed-text-secondary: #a0a0a0;
+    --ed-text-muted: #666666;
+    --ed-border: rgba(255, 255, 255, 0.1);
+    --ed-accent: #ffffff;
+    --ed-accent-fg: #0a0a0a;
+    --ed-statusbar-bg: #141414;
+    --ed-statusbar-accent: #ffffff;
+    --ed-statusbar-text: #a0a0a0;
+    --ed-statusbar-btn-hover: rgba(255, 255, 255, 0.1);
+    --ed-diff-accept: #16a34a;
+    --ed-diff-accept-hover: #15803d;
+    --ed-diff-reject: #3a2020;
+    --ed-diff-reject-text: #d4a0a0;
+    --ed-diff-reject-hover: #4a2828;
+    --ed-diff-apply: #2563eb;
+    --ed-diff-apply-hover: #1d4ed8;
+    --ed-diff-label: #4ec9b0;
+    --ed-ai-mark: #60a5fa;
+    --ed-ai-line-bg: rgba(96, 165, 250, 0.06);
+    --ed-scrollbar: rgba(255, 255, 255, 0.15);
+    --ed-scrollbar-hover: rgba(255, 255, 255, 0.25);
+    --ed-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    --ed-overlay: rgba(0, 0, 0, 0.5);
+    --ed-quickopen-selected: #094771;
+    --ed-kbd-bg: #242424;
+    --ed-kbd-border: rgba(255, 255, 255, 0.15);
+    --ed-icon-fill: #a0a0a0;
+    --ed-icon-stroke: #a0a0a0;
+}
+[data-theme="light"] {
+    --ed-bg: #ffffff;
+    --ed-bg-secondary: #f5f5f7;
+    --ed-bg-tertiary: #eeeef0;
+    --ed-bg-tab: #eaeaed;
+    --ed-bg-tab-active: #ffffff;
+    --ed-bg-hover: #e0e0e4;
+    --ed-text: #1a1a1a;
+    --ed-text-secondary: #555555;
+    --ed-text-muted: #999999;
+    --ed-border: rgba(0, 0, 0, 0.1);
+    --ed-accent: #1a1a1a;
+    --ed-accent-fg: #ffffff;
+    --ed-statusbar-bg: #f0f0f2;
+    --ed-statusbar-accent: #1a1a1a;
+    --ed-statusbar-text: #555555;
+    --ed-statusbar-btn-hover: rgba(0, 0, 0, 0.06);
+    --ed-diff-accept: #16a34a;
+    --ed-diff-accept-hover: #15803d;
+    --ed-diff-reject: #fef2f2;
+    --ed-diff-reject-text: #991b1b;
+    --ed-diff-reject-hover: #fee2e2;
+    --ed-diff-apply: #2563eb;
+    --ed-diff-apply-hover: #1d4ed8;
+    --ed-diff-label: #0d9488;
+    --ed-ai-mark: #2563eb;
+    --ed-ai-line-bg: rgba(37, 99, 235, 0.06);
+    --ed-scrollbar: rgba(0, 0, 0, 0.15);
+    --ed-scrollbar-hover: rgba(0, 0, 0, 0.25);
+    --ed-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    --ed-overlay: rgba(0, 0, 0, 0.3);
+    --ed-quickopen-selected: #e0e7ff;
+    --ed-kbd-bg: #f0f0f2;
+    --ed-kbd-border: rgba(0, 0, 0, 0.15);
+    --ed-icon-fill: #555555;
+    --ed-icon-stroke: #555555;
+}
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1e1e1e; color: #ccc; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
-.tabs-bar { height: 35px; background: #252526; display: flex; align-items: center; padding: 0 8px; gap: 4px; overflow-x: auto; flex-shrink: 0; border-bottom: 1px solid #333; }
-.tab-action-btn { background: none; border: none; color: #999; cursor: pointer; padding: 4px 6px; font-size: 13px; border-radius: 4px; flex-shrink: 0; }
-.tab-action-btn:hover { background: #3c3c3c; color: #fff; }
-.tab { height: 30px; padding: 0 12px; display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999; background: #2d2d2d; cursor: pointer; border-radius: 6px 6px 0 0; min-width: 80px; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
-.tab.active { background: #1e1e1e; color: #fff; }
-.tab .tab-close { opacity: 0; border: none; background: none; color: #999; cursor: pointer; font-size: 14px; padding: 0 2px; border-radius: 3px; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--ed-bg); color: var(--ed-text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+.tabs-bar { height: 35px; background: var(--ed-bg-secondary); display: flex; align-items: center; padding: 0 8px; gap: 4px; overflow-x: auto; flex-shrink: 0; border-bottom: 1px solid var(--ed-border); }
+.tab-action-btn { background: none; border: none; color: var(--ed-text-muted); cursor: pointer; padding: 4px 6px; font-size: 13px; border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.tab-action-btn:hover { background: var(--ed-bg-hover); color: var(--ed-text); }
+.tab-action-btn svg { width: 14px; height: 14px; }
+.tab { height: 30px; padding: 0 12px; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ed-text-muted); background: var(--ed-bg-tab); cursor: pointer; border-radius: 6px 6px 0 0; min-width: 80px; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
+.tab.active { background: var(--ed-bg-tab-active); color: var(--ed-text); }
+.tab .tab-close { opacity: 0; border: none; background: none; color: var(--ed-text-muted); cursor: pointer; font-size: 14px; padding: 0 2px; border-radius: 3px; line-height: 1; }
 .tab:hover .tab-close { opacity: 1; }
-.tab .tab-close:hover { background: #5a5a5a; color: #fff; }
-.tab .modified-dot { width: 8px; height: 8px; border-radius: 50%; background: #e8e8e8; display: none; }
+.tab .tab-close:hover { background: var(--ed-bg-hover); color: var(--ed-text); }
+.tab .modified-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ed-text-secondary); display: none; }
 .tab.modified .modified-dot { display: block; }
 .editor-container { flex: 1; overflow: hidden; min-height: 0; }
-.statusbar { height: 22px; background: #007acc; display: flex; align-items: center; padding: 0 10px; font-size: 11px; color: #fff; gap: 16px; flex-shrink: 0; }
+.statusbar { height: 22px; background: var(--ed-statusbar-bg); display: flex; align-items: center; padding: 0 10px; font-size: 11px; color: var(--ed-statusbar-text); gap: 16px; flex-shrink: 0; }
 .statusbar-item { display: flex; align-items: center; gap: 4px; }
-.welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; gap: 12px; }
-.welcome h2 { font-size: 20px; font-weight: 300; color: #888; }
+.welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--ed-text-muted); gap: 12px; }
+.welcome h2 { font-size: 20px; font-weight: 300; color: var(--ed-text-secondary); }
 .welcome p { font-size: 13px; }
-.welcome kbd { background: #333; padding: 2px 8px; border-radius: 3px; font-size: 12px; border: 1px solid #555; }
-.diff-toolbar { height: 40px; background: #252526; display: none; align-items: center; padding: 0 12px; gap: 8px; border-bottom: 1px solid #333; flex-shrink: 0; }
+.welcome kbd { background: var(--ed-kbd-bg); padding: 2px 8px; border-radius: 3px; font-size: 12px; border: 1px solid var(--ed-kbd-border); color: var(--ed-text-secondary); }
+.diff-toolbar { height: 40px; background: var(--ed-bg-secondary); display: none; align-items: center; padding: 0 12px; gap: 8px; border-bottom: 1px solid var(--ed-border); flex-shrink: 0; }
 .diff-toolbar.visible { display: flex; }
-.diff-toolbar-label { font-size: 12px; color: #ccc; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.diff-toolbar-label span { color: #4ec9b0; }
+.diff-toolbar-label { font-size: 12px; color: var(--ed-text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diff-toolbar-label span { color: var(--ed-diff-label); }
 .diff-btn { padding: 5px 14px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 500; }
-.diff-btn-accept { background: #0e7a0d; color: #fff; }
-.diff-btn-accept:hover { background: #118210; }
-.diff-btn-reject { background: #5a3e3e; color: #ccc; }
-.diff-btn-reject:hover { background: #6e4a4a; }
-.diff-btn-apply { background: #0078d4; color: #fff; }
-.diff-btn-apply:hover { background: #1a8bea; }
-.terminal-panel { height: 0; background: #1e1e1e; border-top: 1px solid #333; display: flex; flex-direction: column; overflow: hidden; transition: height 0.2s ease; }
+.diff-btn-accept { background: var(--ed-diff-accept); color: #fff; }
+.diff-btn-accept:hover { background: var(--ed-diff-accept-hover); }
+.diff-btn-reject { background: var(--ed-diff-reject); color: var(--ed-diff-reject-text); }
+.diff-btn-reject:hover { background: var(--ed-diff-reject-hover); }
+.diff-btn-apply { background: var(--ed-diff-apply); color: #fff; }
+.diff-btn-apply:hover { background: var(--ed-diff-apply-hover); }
+.terminal-panel { height: 0; background: var(--ed-bg); border-top: 1px solid var(--ed-border); display: flex; flex-direction: column; overflow: hidden; transition: height 0.2s ease; }
 .terminal-panel.open { height: 220px; }
-.terminal-header { height: 30px; background: #252526; display: flex; align-items: center; padding: 0 12px; gap: 8px; flex-shrink: 0; border-bottom: 1px solid #333; }
-.terminal-header-title { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
-.terminal-header-btn { background: none; border: none; color: #999; cursor: pointer; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
-.terminal-header-btn:hover { background: #3c3c3c; color: #fff; }
-.terminal-header-btn.active { color: #0078d4; }
+.terminal-header { height: 30px; background: var(--ed-bg-secondary); display: flex; align-items: center; padding: 0 12px; gap: 8px; flex-shrink: 0; border-bottom: 1px solid var(--ed-border); }
+.terminal-header-title { font-size: 11px; color: var(--ed-text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.terminal-header-btn { background: none; border: none; color: var(--ed-text-muted); cursor: pointer; padding: 2px 6px; border-radius: 3px; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+.terminal-header-btn:hover { background: var(--ed-bg-hover); color: var(--ed-text); }
+.terminal-header-btn.active { color: var(--ed-statusbar-accent); }
+.terminal-header-btn svg { width: 14px; height: 14px; }
 .terminal-drag-handle { height: 4px; cursor: row-resize; background: transparent; flex-shrink: 0; }
-.terminal-drag-handle:hover { background: #0078d4; }
+.terminal-drag-handle:hover { background: var(--ed-statusbar-accent); }
 .terminal-body { flex: 1; overflow: hidden; }
-.terminal-hint { padding: 12px; color: #666; font-size: 12px; text-align: center; }
-.quickopen-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 200; justify-content: center; padding-top: 80px; }
+.terminal-hint { padding: 12px; color: var(--ed-text-muted); font-size: 12px; text-align: center; }
+.quickopen-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--ed-overlay); z-index: 200; justify-content: center; padding-top: 80px; }
 .quickopen-overlay.visible { display: flex; }
-.quickopen-box { width: 520px; max-height: 400px; background: #252526; border: 1px solid #444; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); display: flex; flex-direction: column; overflow: hidden; }
-.quickopen-input { width: 100%; padding: 10px 14px; background: #3c3c3c; border: none; border-bottom: 1px solid #444; color: #fff; font-size: 14px; outline: none; font-family: inherit; }
-.quickopen-input::placeholder { color: #888; }
+.quickopen-box { width: 520px; max-height: 400px; background: var(--ed-bg-secondary); border: 1px solid var(--ed-border); border-radius: 8px; box-shadow: var(--ed-shadow); display: flex; flex-direction: column; overflow: hidden; }
+.quickopen-input { width: 100%; padding: 10px 14px; background: var(--ed-bg-tertiary); border: none; border-bottom: 1px solid var(--ed-border); color: var(--ed-text); font-size: 14px; outline: none; font-family: inherit; }
+.quickopen-input::placeholder { color: var(--ed-text-muted); }
 .quickopen-list { flex: 1; overflow-y: auto; max-height: 340px; }
-.quickopen-item { padding: 6px 14px; font-size: 13px; color: #ccc; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-.quickopen-item:hover, .quickopen-item.selected { background: #094771; color: #fff; }
-.quickopen-item .qo-icon { font-size: 12px; opacity: 0.7; }
-.quickopen-item .qo-path { font-size: 11px; color: #888; margin-left: auto; }
-.quickopen-empty { padding: 16px; text-align: center; color: #666; font-size: 12px; }
-.ai-modified-line { background: rgba(96, 165, 250, 0.08) !important; }
-.ai-modified-glyph { background: #60a5fa; border-radius: 50%; width: 8px !important; height: 8px !important; margin-left: 4px; margin-top: 6px; }
+.quickopen-item { padding: 6px 14px; font-size: 13px; color: var(--ed-text-secondary); cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.quickopen-item:hover, .quickopen-item.selected { background: var(--ed-quickopen-selected); color: var(--ed-text); }
+.quickopen-item .qo-icon { font-size: 12px; opacity: 0.7; display: flex; align-items: center; }
+.quickopen-item .qo-icon svg { width: 13px; height: 13px; }
+.quickopen-item .qo-path { font-size: 11px; color: var(--ed-text-muted); margin-left: auto; }
+.quickopen-empty { padding: 16px; text-align: center; color: var(--ed-text-muted); font-size: 12px; }
+.ai-modified-line { background: var(--ed-ai-line-bg) !important; }
+.ai-modified-glyph { background: var(--ed-ai-mark); border-radius: 50%; width: 8px !important; height: 8px !important; margin-left: 4px; margin-top: 6px; }
 .statusbar-btn { cursor: pointer; padding: 0 8px; border-radius: 3px; transition: background 0.15s; }
-.statusbar-btn:hover { background: rgba(255,255,255,0.15); }
-.statusbar-ai-mark { color: #60a5fa; font-weight: 600; }
+.statusbar-btn:hover { background: var(--ed-statusbar-btn-hover); }
+.statusbar-ai-mark { color: var(--ed-ai-mark); font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="tabs-bar">
-    <button class="tab-action-btn" onclick="openFile()" title="打开文件 Ctrl+O">📂</button>
-    <button class="tab-action-btn" onclick="saveCurrentFile()" title="保存 Ctrl+S">💾</button>
+    <button class="tab-action-btn" onclick="openFile()" title="打开文件 Ctrl+O"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
+    <button class="tab-action-btn" onclick="saveCurrentFile()" title="保存 Ctrl+S"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></button>
     <div id="tabsBar" style="display:flex;align-items:flex-end;gap:1px;overflow-x:auto;flex:1"></div>
 </div>
 <div class="diff-toolbar" id="diffToolbar">
     <span class="diff-toolbar-label" id="diffLabel">AI 修改: <span id="diffFileName">-</span></span>
-    <button class="diff-btn diff-btn-reject" onclick="rejectDiff()">✕ 拒绝</button>
-    <button class="diff-btn diff-btn-apply" onclick="applyDiff()">→ 应用到编辑器</button>
-    <button class="diff-btn diff-btn-accept" onclick="acceptDiff()">✓ 接受并保存</button>
+    <button class="diff-btn diff-btn-reject" onclick="rejectDiff()">拒绝</button>
+    <button class="diff-btn diff-btn-apply" onclick="applyDiff()">应用到编辑器</button>
+    <button class="diff-btn diff-btn-accept" onclick="acceptDiff()">接受并保存</button>
 </div>
 <div class="editor-container" id="editorContainer">
     <div class="welcome" id="welcomeScreen">
         <h2>VersePC Editor</h2>
-        <p>拖拽文件到此处，或点击 <kbd>📂 打开</kbd> 加载文件</p>
-        <p style="margin-top:8px; font-size:12px; color:#555">Ctrl+S 保存 · Ctrl+P 快速打开 · Ctrl+Z 撤销</p>
+        <p>拖拽文件到此处，或点击 <kbd>打开</kbd> 加载文件</p>
+        <p style="margin-top:8px; font-size:12px; color:var(--ed-text-muted)">Ctrl+S 保存 / Ctrl+P 快速打开 / Ctrl+Z 撤销</p>
     </div>
 </div>
 <div class="terminal-drag-handle" id="terminalDragHandle"></div>
 <div class="terminal-panel" id="terminalPanel">
     <div class="terminal-header">
         <span class="terminal-header-title">终端</span>
-        <button class="terminal-header-btn" id="btnTerminalToggle" onclick="toggleTerminal()" title="Ctrl+`">🖥️</button>
-        <button class="terminal-header-btn" onclick="createTerminal()" title="新建终端">+</button>
-        <button class="terminal-header-btn" onclick="clearTerminal()" title="清空">🗑️</button>
+        <button class="terminal-header-btn" id="btnTerminalToggle" onclick="toggleTerminal()" title="Ctrl+`"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></button>
+        <button class="terminal-header-btn" onclick="createTerminal()" title="新建终端"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        <button class="terminal-header-btn" onclick="clearTerminal()" title="清空"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
     </div>
     <div class="terminal-body" id="terminalBody">
-        <div class="terminal-hint" id="terminalHint">点击 🖥️ 或按 Ctrl+` 打开终端</div>
+        <div class="terminal-hint" id="terminalHint">点击终端图标或按 Ctrl+` 打开终端</div>
     </div>
 </div>
 <div class="quickopen-overlay" id="quickopenOverlay">
@@ -121,7 +198,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
     <span style="flex:1"></span>
     <span class="statusbar-item statusbar-btn" id="statusCompletion" title="AI 代码补全 (Ctrl+Shift+Space)">AI 补全</span>
     <span class="statusbar-item statusbar-btn" id="statusSendToAI" title="发送选中代码到 AI (Ctrl+Shift+I)" style="cursor:pointer;opacity:0.6;" onclick="sendSelectionToAI()">AI 修改</span>
-    <span class="statusbar-item statusbar-btn" id="btnTerminalStatus" onclick="toggleTerminal()" title="切换终端 (Ctrl+`)">🖥️ 终端</span>
+    <span class="statusbar-item statusbar-btn" id="btnTerminalStatus" onclick="toggleTerminal()" title="切换终端 (Ctrl+`)">终端</span>
     <span class="statusbar-item" id="statusEncoding">UTF-8</span>
     <span class="statusbar-item" id="statusEOL">LF</span>
 </div>
@@ -170,24 +247,66 @@ require(['vs/editor/editor.main'], function () {
             { token: 'type', foreground: '4EC9B0' }
         ],
         colors: {
-            'editor.background': '#1e1e1e',
-            'editor.foreground': '#d4d4d4',
-            'editorLineNumber.foreground': '#858585',
-            'editorCursor.foreground': '#d4d4d4',
+            'editor.background': '#0a0a0a',
+            'editor.foreground': '#e0e0e0',
+            'editorLineNumber.foreground': '#555555',
+            'editorCursor.foreground': '#e0e0e0',
             'editor.selectionBackground': '#264f78',
-            'editor.lineHighlightBackground': '#2a2d2e',
-            'editorIndentGuide.background': '#404040',
-            'editorWidget.background': '#252526',
-            'editorSuggestWidget.background': '#252526',
-            'sideBar.background': '#252526',
-            'statusBar.background': '#007acc'
+            'editor.lineHighlightBackground': '#141414',
+            'editorIndentGuide.background': '#2a2a2a',
+            'editorWidget.background': '#141414',
+            'editorSuggestWidget.background': '#141414',
+            'sideBar.background': '#141414',
+            'statusBar.background': '#141414',
+            'editorGutter.background': '#0a0a0a',
+            'minimap.background': '#0a0a0a',
+            'editorBracketMatch.background': '#264f7840',
+            'editorBracketMatch.border': '#264f78'
         }
     });
+
+    monaco.editor.defineTheme('versepc-light', {
+        base: 'vs',
+        inherit: true,
+        rules: [
+            { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
+            { token: 'keyword', foreground: '0451a5' },
+            { token: 'string', foreground: 'a31515' },
+            { token: 'number', foreground: '098658' },
+            { token: 'type', foreground: '267f99' }
+        ],
+        colors: {
+            'editor.background': '#ffffff',
+            'editor.foreground': '#1a1a1a',
+            'editorLineNumber.foreground': '#aaaaaa',
+            'editorCursor.foreground': '#1a1a1a',
+            'editor.selectionBackground': '#add6ff',
+            'editor.lineHighlightBackground': '#f5f5f7',
+            'editorIndentGuide.background': '#e0e0e0',
+            'editorWidget.background': '#f5f5f7',
+            'editorSuggestWidget.background': '#f5f5f7',
+            'sideBar.background': '#f5f5f7',
+            'statusBar.background': '#f0f0f2',
+            'editorGutter.background': '#ffffff',
+            'minimap.background': '#f5f5f7',
+            'editorBracketMatch.background': '#add6ff60',
+            'editorBracketMatch.border': '#add6ff'
+        }
+    });
+
+    function getCurrentTheme() {
+        try {
+            const parentTheme = window.parent.document.documentElement.getAttribute('data-theme');
+            return parentTheme === 'light' ? 'versepc-light' : 'versepc-dark';
+        } catch (e) {
+            return 'versepc-dark';
+        }
+    }
 
     editor = monaco.editor.create(document.getElementById('editorContainer'), {
         value: '',
         language: 'plaintext',
-        theme: 'versepc-dark',
+        theme: getCurrentTheme(),
         automaticLayout: true,
         fontSize: 14,
         fontFamily: "'Cascadia Code', 'Fira Code', Consolas, 'Courier New', monospace",
@@ -353,6 +472,18 @@ require(['vs/editor/editor.main'], function () {
         const status = document.getElementById('statusCompletion');
         if (status) status.textContent = _completionEnabled ? 'AI 补全' : '补全关';
     });
+
+    function syncTheme() {
+        try {
+            const parentTheme = window.parent.document.documentElement.getAttribute('data-theme');
+            if (parentTheme) {
+                document.documentElement.setAttribute('data-theme', parentTheme);
+                if (editor) monaco.editor.setTheme(parentTheme === 'light' ? 'versepc-light' : 'versepc-dark');
+            }
+        } catch (e) {}
+    }
+    syncTheme();
+    window._syncEditorTheme = syncTheme;
 });
 
 async function openFile() {
@@ -402,7 +533,7 @@ function closeFile(filePath) {
             const welcome = document.createElement('div');
             welcome.className = 'welcome';
             welcome.id = 'welcomeScreen';
-            welcome.innerHTML = '<h2>VersePC Editor</h2><p>拖拽文件到此处，或点击 📂 打开 加载文件</p>';
+            welcome.innerHTML = '<h2>VersePC Editor</h2><p>拖拽文件到此处，或点击 <kbd>打开</kbd> 加载文件</p>';
             document.getElementById('editorContainer').appendChild(welcome);
         }
     }
@@ -544,7 +675,7 @@ function showDiff(filePath, original, modified) {
     if (diffEditor) { diffEditor.dispose(); diffEditor = null; }
     diffEditor = monaco.editor.createDiffEditor(document.getElementById('editorContainer'), {
         automaticLayout: true,
-        theme: 'versepc-dark',
+        theme: getCurrentTheme(),
         readOnly: true,
         renderSideBySide: true,
         fontSize: 14,
@@ -623,6 +754,11 @@ window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'editor:open-file') {
         loadFile(event.data.filePath);
     }
+    if (event.data && event.data.type === 'editor:set-theme') {
+        document.documentElement.setAttribute('data-theme', event.data.theme);
+        if (editor) monaco.editor.setTheme(event.data.theme === 'light' ? 'versepc-light' : 'versepc-dark');
+        if (xtermInstance) xtermInstance.options.theme = getTerminalTheme();
+    }
 });
 
 let xtermInstance = null;
@@ -642,13 +778,21 @@ function toggleTerminal() {
     if (fitAddon) setTimeout(() => fitAddon.fit(), 50);
 }
 
+function getTerminalTheme() {
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    if (isLight) {
+        return { background: '#ffffff', foreground: '#1a1a1a', cursor: '#1a1a1a', selectionBackground: '#add6ff', black: '#000', red: '#cd3131', green: '#00bc00', yellow: '#949800', blue: '#0451a5', magenta: '#bc05bc', cyan: '#0598bc', white: '#555', brightBlack: '#666', brightRed: '#f14c4c', brightGreen: '#23d18b', brightYellow: '#f5f543', brightBlue: '#0451a5', brightMagenta: '#bc05bc', brightCyan: '#0598bc', brightWhite: '#a5a5a5' };
+    }
+    return { background: '#0a0a0a', foreground: '#e0e0e0', cursor: '#e0e0e0', selectionBackground: '#264f78', black: '#000', red: '#cd3131', green: '#00bc00', yellow: '#949800', blue: '#0451a5', magenta: '#bc05bc', cyan: '#0598bc', white: '#555', brightBlack: '#666', brightRed: '#f14c4c', brightGreen: '#23d18b', brightYellow: '#f5f543', brightBlue: '#0451a5', brightMagenta: '#bc05bc', brightCyan: '#0598bc', brightWhite: '#a5a5a5' };
+}
+
 function initTerminal() {
     if (xtermInstance) return;
     const body = document.getElementById('terminalBody');
     const hint = document.getElementById('terminalHint');
     if (hint) hint.style.display = 'none';
     xtermInstance = new Terminal({
-        theme: { background: '#1e1e1e', foreground: '#d4d4d4', cursor: '#d4d4d4', selectionBackground: '#264f78', black: '#000', red: '#cd3131', green: '#00bc00', yellow: '#949800', blue: '#0451a5', magenta: '#bc05bc', cyan: '#0598bc', white: '#555', brightBlack: '#666', brightRed: '#f14c4c', brightGreen: '#23d18b', brightYellow: '#f5f543', brightBlue: '#0451a5', brightMagenta: '#bc05bc', brightCyan: '#0598bc', brightWhite: '#a5a5a5' },
+        theme: getTerminalTheme(),
         fontSize: 13,
         fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
         cursorBlink: true,
@@ -785,8 +929,9 @@ function renderQuickOpenList(query) {
 
 function getFileIcon(name) {
     const ext = name.split('.').pop().toLowerCase();
-    const icons = { js: '📜', ts: '📘', json: '📋', html: '🌐', css: '🎨', py: '🐍', java: '☕', md: '📝', yml: '⚙️', yaml: '⚙️', toml: '⚙️', ini: '⚙️', sh: '🖥️', bat: '🖥️', txt: '📄', log: '📄' };
-    return icons[ext] || '📄';
+    const colors = { js: '#f0db4f', ts: '#3178c6', json: '#5b5b5b', html: '#e34c26', css: '#264de4', py: '#3572A5', java: '#b07219', md: '#555', yml: '#cb171e', yaml: '#cb171e', toml: '#9c4221', ini: '#6c7086', sh: '#4eaa25', bat: '#4eaa25', txt: '#888', log: '#888' };
+    const c = colors[ext] || 'var(--ed-icon-fill)';
+    return '<svg viewBox="0 0 16 16" width="13" height="13"><path d="M4 1h6l4 4v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M10 1v4h4" fill="none" stroke="currentColor" stroke-width="1.2"/><text x="8" y="12" text-anchor="middle" font-size="4.5" font-weight="600" fill="' + c + '">' + ext.toUpperCase().slice(0, 3) + '</text></svg>';
 }
 
 async function scanProjectFiles() {
@@ -803,7 +948,7 @@ async function refreshFileExplorer(dirPath) {
         const files = await ipcRenderer.scanDir(dirPath || '.');
         if (!files || !files.length) { list.innerHTML = '<div class="editor-fileexplorer-empty">空目录</div>'; return; }
         list.innerHTML = files.map(f => {
-            const icon = f.isDir ? '📁' : getFileIcon(f.name);
+            const icon = f.isDir ? '<svg viewBox="0 0 16 16" width="13" height="13"><path d="M1.5 2h4.3l1.2 2H14.5a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" fill="var(--ed-icon-fill)" opacity="0.7"/></svg>' : getFileIcon(f.name);
             return `<div class="editor-fileexplorer-item" data-path="${f.path}" data-isdir="${f.isDir}"><span class="icon">${icon}</span><span>${f.name}</span></div>`;
         }).join('');
         list.querySelectorAll('.editor-fileexplorer-item').forEach(el => {

@@ -2579,29 +2579,24 @@ body {
     pointer-events: auto;
     background: var(--bg-card-glass);
     color: var(--text-primary);
-    border-left: 3px solid var(--accent);
 }
 
 .toast.success {
-    border-left-color: var(--green);
     color: var(--text-primary);
     background: var(--bg-card-glass);
 }
 
 .toast.error {
-    border-left-color: var(--red);
     color: var(--text-primary);
     background: var(--bg-card-glass);
 }
 
 .toast.warning {
-    border-left-color: var(--orange);
     color: var(--text-primary);
     background: var(--bg-card-glass);
 }
 
 .toast.info {
-    border-left-color: var(--accent);
     color: var(--text-primary);
     background: var(--bg-card-glass);
 }
@@ -6569,7 +6564,7 @@ body {
     position: fixed;
     inset: 0;
     z-index: 10000;
-    background: #ffffff;
+    background: var(--launch-bg, #ffffff);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -6611,44 +6606,70 @@ body {
     transform: translateX(-1px);
 }
 
-.launch-overlay-content {
+.launch-splash-content {
     position: relative;
     z-index: 5;
-    width: 420px;
-    max-height: 85vh;
-    overflow-y: auto;
-}
-
-/* ── 启动链容�?── */
-.launch-chain-container {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 480px;
+    padding: 0 24px;
 }
 
-/* ── 顶部进度轨道 ── */
-.launch-chain-progress {
-    width: 100%;
-    margin-bottom: 24px;
+/* ── 启动图标 ── */
+.launch-splash-logo {
+    margin-bottom: 32px;
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+    animation: launch-logo-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 0.1s;
 }
-.launch-chain-progress-track {
-    height: 4px;
-    background: #e2e8f0;
-    border-radius: 4px;
-    overflow: hidden;
+.launch-splash-logo img {
+    width: 80px;
+    height: 80px;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
+}
+@keyframes launch-logo-enter {
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── 进度容器 ── */
+.launch-splash-progress-container {
+    width: 280px;
+    opacity: 0;
+    transform: translateY(10px);
+    animation: launch-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 0.3s;
+}
+@keyframes launch-fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── 进度条轨道 ── */
+.launch-splash-track {
     position: relative;
+    height: 3px;
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--launch-track-bg, #e2e8f0);
 }
-.launch-chain-progress-glow {
+.launch-splash-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, var(--accent), #8b5cf6, #06b6d4);
+    border-radius: 2px;
+    background: var(--launch-progress-bg, linear-gradient(90deg, var(--accent), #8b5cf6, #06b6d4));
     background-size: 200% 100%;
-    border-radius: 4px;
     transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    animation: progress-shimmer 2s linear infinite;
+    animation: launch-progress-shimmer 2s linear infinite;
 }
-.launch-chain-progress-glow::after {
+.launch-splash-progress::after {
     content: '';
     position: absolute;
     right: 0;
@@ -6658,291 +6679,73 @@ body {
     background: var(--accent);
     border-radius: 50%;
     box-shadow: 0 0 8px var(--accent), 0 0 16px var(--accent);
+    opacity: 0.8;
 }
-@keyframes progress-shimmer {
+@keyframes launch-progress-shimmer {
     0% { background-position: 0% 0%; }
     100% { background-position: 200% 0%; }
 }
 
-/* ── 标题 ── */
-.launch-chain-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 28px;
-    letter-spacing: 0.5px;
-}
-
-/* ── 步骤�?── */
-.launch-chain-steps {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-}
-
-/* ── 每一行：节点 + 信息 ── */
-.launch-chain-step {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    position: relative;
-    padding: 6px 0;
-}
-
-/* ── 节点圆盘 ── */
-.launch-chain-node {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-}
-.launch-chain-ring {
-    position: absolute;
-    inset: 0;
-    border: 2px solid #cbd5e1;
-    border-radius: 50%;
-    transition: all 0.4s ease;
-}
-.launch-chain-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #cbd5e1;
-    transition: all 0.4s ease;
-}
-.launch-chain-check,
-.launch-chain-cross {
-    display: none;
-    width: 14px;
-    height: 14px;
-    position: absolute;
-}
-
-/* ── 节点状�?── */
-.launch-chain-step.pending .launch-chain-ring {
-    border-color: #cbd5e1;
-}
-.launch-chain-step.pending .launch-chain-dot {
-    background: #cbd5e1;
-}
-.launch-chain-step.pending .launch-chain-check,
-.launch-chain-step.pending .launch-chain-cross { display: none; }
-
-.launch-chain-step.running .launch-chain-ring {
-    border-color: var(--accent);
-    animation: node-pulse 1.2s ease-in-out infinite;
-}
-.launch-chain-step.running .launch-chain-dot {
-    background: var(--accent);
-    box-shadow: 0 0 6px rgba(var(--accent-rgb), 0.4), 0 0 12px rgba(var(--accent-rgb), 0.2);
-    animation: dot-blink 1.2s ease-in-out infinite;
-}
-.launch-chain-step.running .launch-chain-check,
-.launch-chain-step.running .launch-chain-cross { display: none; }
-
-@keyframes node-pulse {
-    0%, 100% { transform: scale(1); border-color: var(--accent); }
-    50% { transform: scale(1.08); border-color: var(--accent-hover); }
-}
-@keyframes dot-blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-.launch-chain-step.success .launch-chain-ring {
-    border-color: #16a34a;
-    border-width: 2.5px;
-    animation: success-ring 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.launch-chain-step.success .launch-chain-dot { display: none; }
-.launch-chain-step.success .launch-chain-check {
-    display: block;
-    color: #16a34a;
-    animation: check-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.launch-chain-step.success .launch-chain-cross { display: none; }
-
-@keyframes success-ring {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.2); }
-    100% { transform: scale(1); }
-}
-@keyframes check-pop {
-    0% { transform: scale(0); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
-}
-
-.launch-chain-step.error .launch-chain-ring {
-    border-color: #dc2626;
-    border-width: 2.5px;
-    animation: error-shake 0.5s ease;
-}
-.launch-chain-step.error .launch-chain-dot { display: none; }
-.launch-chain-step.error .launch-chain-cross {
-    display: block;
-    color: #dc2626;
-    animation: check-pop 0.3s ease;
-}
-.launch-chain-step.error .launch-chain-check { display: none; }
-
-@keyframes error-shake {
-    0%, 100% { transform: translateX(0); }
-    20% { transform: translateX(-4px); }
-    40% { transform: translateX(4px); }
-    60% { transform: translateX(-3px); }
-    80% { transform: translateX(3px); }
-}
-
-.launch-chain-step.warning .launch-chain-ring {
-    border-color: #d97706;
-    border-width: 2.5px;
-}
-.launch-chain-step.warning .launch-chain-dot {
-    background: #d97706;
-    box-shadow: 0 0 4px rgba(217,119,6,0.3);
-}
-
-/* ── 节点连接�?── */
-.launch-chain-link {
-    width: 2px;
-    height: 20px;
-    background: #e2e8f0;
-    margin-left: 15px;
-    position: relative;
-    overflow: hidden;
-    transition: background 0.5s ease;
-}
-.launch-chain-link::after {
-    content: '';
-    position: absolute;
-    top: -100%;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(to bottom, transparent, var(--accent), transparent);
-    animation: link-flow 1.5s ease-in-out infinite;
-    opacity: 0;
-}
-.launch-chain-step.success + .launch-chain-link,
-.launch-chain-link.active {
-    background: #16a34a;
-}
-.launch-chain-step.success + .launch-chain-link::after,
-.launch-chain-link.active::after {
-    opacity: 1;
-}
-.launch-chain-step.error + .launch-chain-link {
-    background: #fecaca;
-}
-
-@keyframes link-flow {
-    0% { transform: translateY(-100%); }
-    100% { transform: translateY(100%); }
-}
-
-/* ── 步骤信息 ── */
-.launch-chain-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-.launch-chain-label {
+/* ── 状态文字 ── */
+.launch-splash-status {
+    margin-top: 16px;
     font-size: 13px;
-    font-weight: 600;
-    color: #94a3b8;
+    letter-spacing: 0.05em;
+    text-align: center;
+    min-height: 20px;
+    color: var(--launch-status-color, #94a3b8);
     transition: color 0.3s ease;
 }
-.launch-chain-desc {
-    font-size: 11px;
-    color: #cbd5e1;
-    transition: all 0.3s ease;
-}
-.launch-chain-step.running .launch-chain-label { color: var(--accent); }
-.launch-chain-step.running .launch-chain-desc { color: var(--accent); }
-.launch-chain-step.success .launch-chain-label { color: #16a34a; }
-.launch-chain-step.success .launch-chain-desc { color: #4ade80; }
-.launch-chain-step.error .launch-chain-label { color: #dc2626; }
-.launch-chain-step.error .launch-chain-desc { color: #ef4444; }
-.launch-chain-step.warning .launch-chain-label { color: #d97706; }
-.launch-chain-step.warning .launch-chain-desc { color: #f59e0b; }
 
-/* ── 下载详情 ── */
-.launch-chain-detail {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-}
-.launch-chain-detail-bar {
-    flex: 1;
-    height: 3px;
-    background: #e2e8f0;
-    border-radius: 2px;
-    overflow: hidden;
-}
-.launch-chain-detail-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 2px;
-    transition: width 0.3s ease;
-}
-.launch-chain-detail-text {
-    font-size: 10px;
-    color: #64748b;
-    white-space: nowrap;
-}
-
-/* ── 错误�?── */
-.launch-chain-error {
+/* ── 错误区域 ── */
+.launch-splash-error {
     display: flex;
     align-items: flex-start;
     gap: 12px;
     padding: 16px 20px;
     margin-top: 24px;
-    background: #fef2f2;
-    border: 1px solid #fecaca;
+    background: var(--launch-error-bg, #fef2f2);
+    border: 1px solid var(--launch-error-border, #fecaca);
     border-radius: 12px;
-    width: 100%;
+    width: 280px;
+    animation: launch-fade-up 0.3s ease-out;
 }
-.launch-chain-error-icon {
+.launch-splash-error-icon {
     color: #dc2626;
     min-width: 20px;
     width: 20px;
 }
-.launch-chain-error-text { flex: 1; }
-.launch-chain-error-title {
+.launch-splash-error-text { flex: 1; }
+.launch-splash-error-title {
     font-size: 14px;
     font-weight: 600;
     color: #dc2626;
     margin-bottom: 6px;
 }
-.launch-chain-error-msg {
+.launch-splash-error-msg {
     font-size: 12px;
-    color: #475569;
+    color: var(--launch-error-msg-color, #475569);
     line-height: 1.6;
 }
 
 /* ── 修复引导 ── */
-.launch-chain-repair {
+.launch-splash-repair {
     display: flex;
     align-items: flex-start;
     gap: 10px;
     padding: 14px 18px;
     margin-top: 16px;
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
+    background: var(--launch-repair-bg, #eff6ff);
+    border: 1px solid var(--launch-repair-border, #bfdbfe);
     border-radius: 12px;
-    width: 100%;
+    width: 280px;
     font-size: 13px;
-    color: #334155;
+    color: var(--launch-repair-color, #334155);
     line-height: 1.6;
+    animation: launch-fade-up 0.3s ease-out;
 }
-.launch-chain-repair strong { color: var(--accent-hover); }
-.launch-chain-repair .btn { margin-left: auto; flex-shrink: 0; }
+.launch-splash-repair strong { color: var(--accent-hover); }
+.launch-splash-repair .btn { margin-left: auto; flex-shrink: 0; }
 
 .vset-nav-item:hover {
     background: var(--bg-hover);
@@ -8324,13 +8127,12 @@ body {
     margin-bottom: 16px;
 }
 .support-modal-count {
-    font-size: 52px;
+    font-size: 20px;
     font-weight: 800;
     background: linear-gradient(135deg, var(--accent), #8b5cf6);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    line-height: 1.1;
 }
 .support-modal-subtitle {
     font-size: 15px;
@@ -9421,7 +9223,7 @@ body {
 }
 .editor-drag-handle:hover,
 .editor-drag-handle.active {
-    background: #0078d4;
+    background: var(--ai-accent, #0078d4);
 }
 .editor-drag-handle.active {
     width: 3px;
@@ -9465,7 +9267,7 @@ body {
     font-size: 12px;
 }
 .editor-panel-header-btn:hover { background: var(--ai-bg-hover, #3c3c3c); color: var(--ai-text-primary, #fff); }
-.editor-panel-header-btn.active { color: #0078d4; }
+.editor-panel-header-btn.active { color: var(--ai-accent, #0078d4); }
 .editor-panel-close {
     background: none;
     border: none;
@@ -9555,8 +9357,8 @@ body {
     position: absolute;
     top: 44px;
     right: 12px;
-    background: #0078d4;
-    color: #fff;
+    background: var(--ai-accent, #0078d4);
+    color: var(--ai-accent-fg, #fff);
     padding: 8px 16px;
     border-radius: 6px;
     font-size: 12px;
@@ -10376,21 +10178,21 @@ body {
 .rc-provider-card-icon-wrapper { width:28px; height:28px; border-radius:6px; flex-shrink:0; justify-content:center; align-items:center; display:flex; background:var(--ai-bg-hover, rgba(255,255,255,0.10)); overflow:hidden; }
 .rc-provider-card-icon { width:16px; height:16px; border-radius:3px; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; background:var(--ai-bg-active, rgba(86,99,119,0.15)); }
 .rc-provider-card-icon img { width:100%; height:100%; object-fit:contain; border-radius:2px; }
-.rc-provider-card-icon.deepseek { background:#6b7de3; }
-.rc-provider-card-icon.openai { background:#10a37f; }
-.rc-provider-card-icon.anthropic { background:#d97706; }
-.rc-provider-card-icon.google { background:#4285f4; }
-.rc-provider-card-icon.zhipu { background:#4a6cf7; }
-.rc-provider-card-icon.qwen { background:#ff6a00; }
-.rc-provider-card-icon.moonshot { background:#6941c6; }
-.rc-provider-card-icon.yi { background:#7c3aed; }
-.rc-provider-card-icon.baichuan { background:#0891b2; }
-.rc-provider-card-icon.minimax { background:#db2777; }
-.rc-provider-card-icon.stepfun { background:#059669; }
-.rc-provider-card-icon.siliconflow { background:#f59e0b; }
-.rc-provider-card-icon.groq { background:#a855f7; }
-.rc-provider-card-icon.openrouter { background:#30a14e; }
-.rc-provider-card-icon.doubao { background:#3b82f6; }
+.rc-provider-card-icon.deepseek { background:#6b7de3; background-image:url('../img/providers/deepseek.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.openai { background:#10a37f; background-image:url('../img/providers/openai.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.anthropic { background:#d97706; background-image:url('../img/providers/anthropic.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.google { background:#4285f4; background-image:url('../img/providers/google.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.zhipu { background:#4a6cf7; background-image:url('../img/providers/zhipu.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.qwen { background:#ff6a00; background-image:url('../img/providers/qwen.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.moonshot { background:#6941c6; background-image:url('../img/providers/moonshot.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.yi { background:#7c3aed; background-image:url('../img/providers/yi.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.baichuan { background:#0891b2; background-image:url('../img/providers/baichuan.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.minimax { background:#db2777; background-image:url('../img/providers/minimax.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.stepfun { background:#059669; background-image:url('../img/providers/stepfun.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.siliconflow { background:#f59e0b; background-image:url('../img/providers/siliconflow.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.groq { background:#a855f7; background-image:url('../img/providers/groq.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.openrouter { background:#30a14e; background-image:url('../img/providers/openrouter.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+.rc-provider-card-icon.doubao { background:#3b82f6; background-image:url('../img/providers/doubao.png'); background-size:contain; background-repeat:no-repeat; background-position:center; }
 .rc-provider-card-icon.custom { background:var(--ai-bg-active, rgba(86,99,119,0.15)); font-size:12px; font-weight:500; }
 .rc-provider-card-name { min-width:0; min-height:0; color:var(--ai-text-primary, #d1d3db); text-overflow:ellipsis; white-space:nowrap; flex:1 0 0; font-size:12px; font-weight:600; line-height:18px; overflow:hidden; }
 .rc-provider-card-status-icon { flex-shrink:0; justify-content:center; align-items:center; width:16px; height:16px; display:flex; }

@@ -27,7 +27,7 @@
  * ============================================================================
  */
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 let progressCallbackWrapper = null;
 let updaterStatusCallbackWrapper = null;
@@ -50,7 +50,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     showOpenDialog: (options) => ipcRenderer.invoke('dialog-open', options),
     onWindowStateChanged: (callback) => ipcRenderer.on('window-state-changed', (event, data) => callback(data)),
     onWindowModeChanged: (callback) => ipcRenderer.on('window-mode-changed', (event, data) => callback(data)),
-    getDroppedFilePath: (file) => file.path || '',
+    getDroppedFilePath: (file) => webUtils.getPathForFile(file) || '',
     getDefaultModPath: () => ipcRenderer.invoke('getDefaultModPath'),
     getVersionsDir: () => ipcRenderer.invoke('getVersionsDir'),
     getExternalVersionFolders: () => ipcRenderer.invoke('getExternalVersionFolders'),

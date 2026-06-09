@@ -800,7 +800,7 @@ ${this.currentAnalysis.crashReasons ? this.currentAnalysis.crashReasons.map(r =>
             const file = e.target.files[0];
             if (!file) return;
 
-            const filePath = file.path;
+            const filePath = (window.electronAPI && window.electronAPI.getDroppedFilePath) ? window.electronAPI.getDroppedFilePath(file) : (file.path || '');
             if (filePath) {
                 await this.analyzeLog(filePath);
             }

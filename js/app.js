@@ -537,43 +537,6 @@ let modloaderVersionCustomSelect = null;
 const customSelectInstances = {};
 
 function initAllCustomSelects() {
-    if (!customSelectInstances['vset-icon-type']) {
-        customSelectInstances['vset-icon-type'] = new CustomSelect('vset-icon-type-wrapper', {
-            onChange: (value) => {
-                if (!currentSettingsVersionId) return;
-                API.setVersionIcon(currentSettingsVersionId, value).then(r => {
-                    if (r.success) showToast('图标已更新', 'success');
-                });
-            }
-        });
-        customSelectInstances['vset-icon-type'].setOptions([
-            { value: 'auto', text: '自动' },
-            { value: 'grass', text: '草方块' },
-            { value: 'cobblestone', text: '圆石' },
-            { value: 'commandblock', text: '命令方块' },
-            { value: 'neoforge', text: 'NeoForge' },
-            { value: 'fabric', text: 'Fabric' }
-        ]);
-    }
-
-    if (!customSelectInstances['vset-category']) {
-        customSelectInstances['vset-category'] = new CustomSelect('vset-category-wrapper', {
-            onChange: (value) => {
-                if (!currentSettingsVersionId) return;
-                API.setVersionCategory(currentSettingsVersionId, value).then(r => {
-                    if (r.success) showToast('分类已更新', 'success');
-                });
-            }
-        });
-        customSelectInstances['vset-category'].setOptions([
-            { value: 'auto', text: '自动' },
-            { value: 'survival', text: '生存' },
-            { value: 'creative', text: '创造' },
-            { value: 'modded', text: '模组' },
-            { value: 'other', text: '其他' }
-        ]);
-    }
-
     if (!customSelectInstances['vset-isolation']) {
         customSelectInstances['vset-isolation'] = new CustomSelect('vset-isolation-wrapper');
         customSelectInstances['vset-isolation'].setOptions([
@@ -6809,9 +6772,10 @@ async function handleLaunch() {
         }
     } catch (e) {
         console.error('[Launch] 启动异常:', e);
-        const currentStep = document.querySelector('.launch-chain-step.running');
-        if (currentStep) {
-            setLaunchStep(currentStep.dataset.step, 'error', e.message || '启动请求失败');
+        const statusEl = document.getElementById('launch-splash-status');
+        if (statusEl) {
+            statusEl.textContent = e.message || '启动请求失败';
+            statusEl.style.color = '#dc2626';
         }
         showLaunchError(e.message || '启动请求失败', { error: e.message, stack: e.stack });
         launchBtn.disabled = false;
@@ -6912,7 +6876,7 @@ function pollLaunchDepProgress(sessionId, versionId) {
             };
 
             updateLaunchDownloadProgress(status.progress || 0, status.message || '', detailData);
-            const baseProgress = parseInt(document.querySelector('.launch-chain-step[data-step="download"]')?.dataset.progress || '75');
+            const baseProgress = 75;
             updateLaunchProgress(baseProgress + ((status.progress || 0) / 100) * 10);
 
             if (status.status === 'launched') {
@@ -7133,25 +7097,27 @@ function showLaunchModal() {
 
     overlay.style.display = 'flex';
 
-    document.querySelectorAll('.launch-chain-step').forEach(el => {
-        el.className = 'launch-chain-step pending';
-        const desc = el.querySelector('.launch-chain-desc');
-        if (desc) desc.textContent = '等待中...';
-    });
-    document.querySelectorAll('.launch-chain-link').forEach(el => {
-        el.classList.remove('active');
-    });
+    const progressBar = document.getElementById('launch-splash-progress');
+    if (progressBar) progressBar.style.width = '0%';
+
+    const statusEl = document.getElementById('launch-splash-status');
+    if (statusEl) {
+        statusEl.textContent = '正在验证登录状态...';
+        statusEl.style.color = '';
+    }
+
+    const logo = document.getElementById('launch-splash-logo');
+    if (logo) {
+        logo.style.animation = 'none';
+        void logo.offsetWidth;
+        logo.style.animation = '';
+    }
 
     const errorSection = document.getElementById('launch-error-section');
     if (errorSection) errorSection.style.display = 'none';
 
     const logSection = document.getElementById('launch-log-section');
     if (logSection) logSection.style.display = 'none';
-
-    const titleEl = document.getElementById('launch-flow-title');
-    if (titleEl) titleEl.textContent = '正在启动游戏';
-
-    updateLaunchProgress(0);
 
     const repairGuide = document.getElementById('launch-repair-guide');
     if (repairGuide) repairGuide.style.display = 'none';
@@ -7178,54 +7144,37 @@ function closeLaunchModal(name_fade) {
 }
 
 function updateLaunchProgress(pct) {
-    const glow = document.getElementById('launch-chain-glow');
-    if (glow) glow.style.width = pct + '%';
+    const bar = document.getElementById('launch-splash-progress');
+    if (bar) bar.style.width = pct + '%';
 }
 
+const LAUNCH_STEP_PROGRESS = {
+    'auth': 5, 'java-check': 15, 'version-resolve': 25,
+    'files-check': 40, 'natives-extract': 55, 'assets-check': 65,
+    'download': 75, 'build-args': 85, 'launching': 95
+};
+
 function setLaunchStep(stepName, status, desc) {
-    const step = document.querySelector(`.launch-chain-step[data-step="${stepName}"]`);
-    if (!step) return;
+    const statusEl = document.getElementById('launch-splash-status');
+    if (statusEl && desc) statusEl.textContent = desc;
 
-    step.className = 'launch-chain-step ' + status;
-
-    const descEl = step.querySelector('.launch-chain-desc');
-    if (descEl && desc) descEl.textContent = desc;
-
-    const progress = parseInt(step.dataset.progress || '0');
+    const progress = LAUNCH_STEP_PROGRESS[stepName] || 0;
     updateLaunchProgress(progress);
 
-    const allSteps = document.querySelectorAll('.launch-chain-step');
-    const allLinks = document.querySelectorAll('.launch-chain-link');
-    allSteps.forEach((s, i) => {
-        if (s.classList.contains('success') || s.classList.contains('warning')) {
-            if (i < allLinks.length) allLinks[i].classList.add('active');
-        }
-    });
-
-    if (stepName === 'launching' && status === 'success') {
-        updateLaunchProgress(100);
-        const titleEl = document.getElementById('launch-flow-title');
-        if (titleEl) {
-            titleEl.textContent = '启动成功！';
-            titleEl.style.color = '#4ade80';
+    if (statusEl) {
+        if (status === 'error') {
+            statusEl.style.color = '#dc2626';
+        } else if (status === 'success' && stepName === 'launching') {
+            updateLaunchProgress(100);
+            statusEl.textContent = '启动成功！';
+            statusEl.style.color = '#4ade80';
+        } else {
+            statusEl.style.color = '';
         }
     }
 }
 
 function completeAllPreviousSteps(currentStepName) {
-    const allSteps = document.querySelectorAll('.launch-chain-step');
-    let foundCurrent = false;
-    allSteps.forEach(step => {
-        if (step.dataset.step === currentStepName) {
-            foundCurrent = true;
-            return;
-        }
-        if (!foundCurrent && !step.classList.contains('success')) {
-            step.className = 'launch-chain-step success';
-            const descEl = step.querySelector('.launch-chain-desc');
-            if (descEl && descEl.textContent === '等待中...') descEl.textContent = '完成';
-        }
-    });
 }
 
 function showLaunchError(msg, details = null) {
@@ -7251,6 +7200,12 @@ function showLaunchError(msg, details = null) {
         errorMsg.textContent = msg || '未知错误';
         errorMsg.title = fullMsg;
     }
+
+    const statusEl = document.getElementById('launch-splash-status');
+    if (statusEl) {
+        statusEl.textContent = msg || '启动失败';
+        statusEl.style.color = '#dc2626';
+    }
 }
 
 function hideLaunchError() {
@@ -7258,6 +7213,9 @@ function hideLaunchError() {
     const repairGuide = document.getElementById('launch-repair-guide');
     if (errorSection) errorSection.style.display = 'none';
     if (repairGuide) repairGuide.style.display = 'none';
+
+    const statusEl = document.getElementById('launch-splash-status');
+    if (statusEl) statusEl.style.color = '';
 }
 
 function openVersionSettingsForRepair() {
@@ -7270,33 +7228,23 @@ function openVersionSettingsForRepair() {
 }
 
 function updateLaunchDownloadProgress(pct, msg, detailData) {
-    const step = document.querySelector('.launch-chain-step[data-step="download"]');
-    if (!step) return;
-
-    const detailWrap = step.querySelector('.launch-chain-detail');
-    const fill = step.querySelector('.launch-chain-detail-fill');
-    const textEl = step.querySelector('.launch-chain-detail-text');
-    const desc = step.querySelector('.launch-chain-desc');
-
-    if (detailWrap) detailWrap.style.display = 'flex';
-    if (fill) fill.style.width = Math.round(pct) + '%';
-    if (textEl) textEl.textContent = Math.round(pct) + '%';
-    if (desc && msg) desc.textContent = msg;
+    const statusEl = document.getElementById('launch-splash-status');
+    if (!statusEl) return;
 
     if (detailData) {
-        if (textEl) {
-            var parts = [];
-            if (detailData.completedFiles !== undefined && detailData.totalFiles !== undefined) {
-                parts.push(detailData.completedFiles + '/' + detailData.totalFiles);
-            }
-            if (detailData.speed > 0) {
-                var spd = detailData.speed;
-                if (spd < 1024) parts.push(spd.toFixed(0) + ' B/s');
-                else if (spd < 1024 * 1024) parts.push((spd / 1024).toFixed(1) + ' KB/s');
-                else parts.push((spd / (1024 * 1024)).toFixed(1) + ' MB/s');
-            }
-            textEl.textContent = (parts.length ? parts.join('  ') + ' - ' : '') + Math.round(pct) + '%';
+        var parts = [];
+        if (detailData.completedFiles !== undefined && detailData.totalFiles !== undefined) {
+            parts.push(detailData.completedFiles + '/' + detailData.totalFiles);
         }
+        if (detailData.speed > 0) {
+            var spd = detailData.speed;
+            if (spd < 1024) parts.push(spd.toFixed(0) + ' B/s');
+            else if (spd < 1024 * 1024) parts.push((spd / 1024).toFixed(1) + ' KB/s');
+            else parts.push((spd / (1024 * 1024)).toFixed(1) + ' MB/s');
+        }
+        statusEl.textContent = (parts.length ? parts.join('  ') + ' - ' : '') + Math.round(pct) + '%';
+    } else if (msg) {
+        statusEl.textContent = msg;
     }
 }
 
@@ -7346,7 +7294,7 @@ async function pollLaunchDownload(sessionId, versionId, requiredJava) {
                         speed: dlStatus.speed || 0,
                         activeDownloads: dlStatus.activeDownloads || []
                     });
-                    const baseProgress = parseInt(document.querySelector('.launch-chain-step[data-step="download"]')?.dataset.progress || '75');
+                    const baseProgress = 75;
                         updateLaunchProgress(baseProgress + (pct / 100) * 10);
                 }
                 
@@ -8485,14 +8433,6 @@ async function loadVersionSettingsUI() {
         const settings = await API.getVersionSettings(currentSettingsVersionId);
         currentVersionSettings = settings;
 
-        if (customSelectInstances['vset-icon-type']) {
-            customSelectInstances['vset-icon-type'].setValue(settings.icon || 'auto');
-        }
-
-        if (customSelectInstances['vset-category']) {
-            customSelectInstances['vset-category'].setValue(settings.category || 'auto');
-        }
-
         const isolationSelect = document.getElementById('vset-isolation');
         if (isolationSelect) {
             const versionInfo = installedVersions.find(v => v.id === currentSettingsVersionId);
@@ -8535,7 +8475,7 @@ async function loadVersionSettingsUI() {
             }
         }
 
-        const memoryMode = document.querySelector(`input[name="memoryMode"][value="${settings.memoryMode || 'global'}"]`);
+        const memoryMode = document.querySelector(`input[name="vsetMemoryMode"][value="${settings.memoryMode || 'global'}"]`);
         if (memoryMode) memoryMode.checked = true;
 
         const memoryCustom = document.getElementById('vset-memory-custom');
@@ -8556,8 +8496,6 @@ async function loadVersionSettingsUI() {
         const gameArgsInput = document.getElementById('vset-game-args');
         if (gameArgsInput) gameArgsInput.value = settings.gameArgs || '';
 
-        const favBtn = document.querySelector('[onclick="addToFavorites()"]');
-        if (favBtn) favBtn.textContent = settings.favorite ? '取消收藏' : '加入收藏夹';
     } catch (e) {
         console.error('[VersionSettings] Load settings error:', e);
     }
@@ -8690,47 +8628,6 @@ function showModUpdateDialog(updates, checkedCount) {
     overlay.appendChild(dialog);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
-}
-
-function renameCurrentVersion() {
-    if (!currentSettingsVersionId) return;
-    const newName = prompt('请输入新的版本名称：', '');
-    if (!newName) return;
-    API.renameVersion(currentSettingsVersionId, newName).then(() => {
-        showToast('版本名已修改', 'success');
-        document.getElementById('vset-title').textContent = '版本设置 - ' + newName;
-    }).catch(e => showToast(e.message || '修改失败', 'error'));
-}
-
-function editVersionDesc() {
-    if (!currentSettingsVersionId) return;
-    const currentDesc = currentVersionSettings?.description || '';
-    const newDesc = prompt('请输入版本描述：', currentDesc);
-    if (newDesc === null) return;
-    API.setVersionDescription(currentSettingsVersionId, newDesc).then(r => {
-        if (r.success) {
-            showToast('版本描述已修改', 'success');
-            if (currentVersionSettings) currentVersionSettings.description = newDesc;
-        } else {
-            showToast(r.error || '修改失败', 'error');
-        }
-    }).catch(e => showToast(e.message || '修改失败', 'error'));
-}
-
-function addToFavorites() {
-    if (!currentSettingsVersionId) return;
-    const isFav = currentVersionSettings?.favorite || false;
-    const newState = !isFav;
-    API.setVersionFavorite(currentSettingsVersionId, newState).then(r => {
-        if (r.success) {
-            showToast(newState ? '已加入收藏夹' : '已取消收藏', 'success');
-            if (currentVersionSettings) currentVersionSettings.favorite = newState;
-            const favBtn = document.querySelector('[onclick="addToFavorites()"]');
-            if (favBtn) favBtn.textContent = newState ? '取消收藏' : '加入收藏夹';
-        } else {
-            showToast(r.error || '操作失败', 'error');
-        }
-    }).catch(e => showToast(e.message || '操作失败', 'error'));
 }
 
 function exportLaunchScript() {
@@ -8958,7 +8855,7 @@ async function deleteCurrentVersion() {
     }
 }
 
-document.querySelectorAll('input[name="memoryMode"]').forEach(r => {
+document.querySelectorAll('input[name="vsetMemoryMode"]').forEach(r => {
     r.addEventListener('change', function() {
         document.getElementById('vset-memory-custom').style.display = this.value === 'custom' ? 'block' : 'none';
         saveCurrentVersionSetting('memoryMode', this.value);
@@ -9285,7 +9182,7 @@ function switchPage(pageName) {
 let systemMemoryInfo = null;
 
 function toggleMemoryMode() {
-    const mode = document.querySelector('input[name="memoryMode"]:checked')?.value;
+    const mode = document.querySelector('input[name="globalMemoryMode"]:checked')?.value;
     const customSettings = document.getElementById('memory-custom-settings');
     const autoInfo = document.getElementById('memory-auto-info');
     if (customSettings) {
@@ -9325,7 +9222,7 @@ function updateMemoryDisplay() {
 }
 
 function updateAllocatedMemoryDisplay() {
-    const mode = document.querySelector('input[name="memoryMode"]:checked')?.value;
+    const mode = document.querySelector('input[name="globalMemoryMode"]:checked')?.value;
     const allocatedDisplay = document.getElementById('allocated-memory-display');
     const remainingDisplay = document.getElementById('remaining-memory-display');
     if (!systemMemoryInfo) return;
@@ -9410,7 +9307,7 @@ async function saveLaunchSettings() {
         processPriority: document.getElementById('process-priority')?.value,
         windowSize: windowSize,
         gameJava: document.getElementById('game-java-select')?.value,
-        memoryMode: document.querySelector('input[name="memoryMode"]:checked')?.value,
+        memoryMode: document.querySelector('input[name="globalMemoryMode"]:checked')?.value,
         memoryValue: document.getElementById('memory-slider')?.value,
         jvmArgs: document.getElementById('jvm-args')?.value,
         gameArgs: document.getElementById('game-args')?.value,
@@ -9473,7 +9370,7 @@ async function resetLaunchSettings() {
     document.getElementById('process-priority').value = 'normal';
     document.getElementById('window-size').value = 'default';
     document.getElementById('game-java-select').value = 'auto';
-    document.querySelector('input[name="memoryMode"][value="auto"]').checked = true;
+    document.querySelector('input[name="globalMemoryMode"][value="auto"]').checked = true;
     document.getElementById('memory-slider').value = 4096;
     document.getElementById('jvm-args').value = '';
     document.getElementById('game-args').value = '';
@@ -9544,7 +9441,7 @@ async function loadLaunchSettings() {
             }
             if (settings.gameJava) document.getElementById('game-java-select').value = settings.gameJava;
             if (settings.memoryMode) {
-                document.querySelector(`input[name="memoryMode"][value="${settings.memoryMode}"]`).checked = true;
+                document.querySelector(`input[name="globalMemoryMode"][value="${settings.memoryMode}"]`).checked = true;
                 toggleMemoryMode();
             }
             if (settings.memoryValue) {
@@ -9592,6 +9489,11 @@ async function selectTheme(element) {
 
     if (typeof updateWallpaperTheme === 'function') {
         updateWallpaperTheme(theme === 'dark');
+    }
+
+    const editorIframe = document.getElementById('editor-iframe');
+    if (editorIframe && editorIframe.contentWindow) {
+        editorIframe.contentWindow.postMessage({ type: 'editor:set-theme', theme: theme }, '*');
     }
 
     try {
@@ -9722,7 +9624,7 @@ function initWallpaperDropZone() {
         const file = e.dataTransfer.files[0];
         if (!file) return;
 
-        const filePath = file.path;
+        const filePath = (window.electronAPI && window.electronAPI.getDroppedFilePath) ? window.electronAPI.getDroppedFilePath(file) : '';
         if (!filePath) return;
 
         const validImageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
@@ -10072,9 +9974,6 @@ async function loadOtherSettings() {
             if (settings.notifyReleaseUpdates !== undefined) document.getElementById('notify-release-updates').checked = settings.notifyReleaseUpdates;
             if (settings.notifySnapshotUpdates !== undefined) document.getElementById('notify-snapshot-updates').checked = settings.notifySnapshotUpdates;
             if (settings.autoSetChinese !== undefined) document.getElementById('auto-set-chinese').checked = settings.autoSetChinese;
-            if (settings.launcherUpdateMode) document.getElementById('launcher-update-mode').value = settings.launcherUpdateMode;
-            if (settings.launcherNoticeMode) document.getElementById('launcher-notice-mode').value = settings.launcherNoticeMode;
-            if (settings.anonymousDataCollection !== undefined) document.getElementById('anonymous-data-collection').checked = settings.anonymousDataCollection;
             if (settings.debugMode !== undefined) document.getElementById('debug-mode').checked = settings.debugMode;
             if (settings.verboseLogging !== undefined) document.getElementById('verbose-logging').checked = settings.verboseLogging;
             if (settings.consoleDebug !== undefined) document.getElementById('enable-console-debug').checked = settings.consoleDebug;

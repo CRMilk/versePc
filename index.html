@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   VersePC - Minecraft Launcher
   Copyright (c) 2026 豆杰. All Rights Reserved.
 
@@ -575,38 +575,6 @@
                         <div class="vset-panel active" id="vset-panel-overview">
                             <div id="vset-external-info" style="display:none;margin-bottom:16px"></div>
                             <div class="vset-section">
-                                <div class="vset-section-title">个性化</div>
-                                <div class="vset-form-row">
-                                    <label class="vset-label">图标</label>
-                                    <div class="custom-select custom-select-sm" id="vset-icon-type-wrapper">
-                                        <div class="custom-select-trigger" id="vset-icon-type-trigger">
-                                            <span class="custom-select-value" id="vset-icon-type-value">自动</span>
-                                            <svg class="custom-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                                        </div>
-                                        <div class="custom-select-dropdown" id="vset-icon-type-dropdown">
-                                            <div class="custom-select-options" id="vset-icon-type-options"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="vset-form-row">
-                                    <label class="vset-label">分类</label>
-                                    <div class="custom-select custom-select-sm" id="vset-category-wrapper">
-                                        <div class="custom-select-trigger" id="vset-category-trigger">
-                                            <span class="custom-select-value" id="vset-category-value">自动</span>
-                                            <svg class="custom-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                                        </div>
-                                        <div class="custom-select-dropdown" id="vset-category-dropdown">
-                                            <div class="custom-select-options" id="vset-category-options"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="vset-btn-group">
-                                    <button class="btn btn-secondary btn-sm" onclick="renameCurrentVersion()">修改版本名</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="editVersionDesc()">修改版本描述</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="addToFavorites()">加入收藏夹</button>
-                                </div>
-                            </div>
-                            <div class="vset-section">
                                 <div class="vset-section-title">快捷方式</div>
                                 <div class="vset-btn-group">
                                     <button class="btn btn-secondary btn-sm" onclick="openVersionFolder()">版本文件夹</button>
@@ -663,9 +631,9 @@
                             <div class="vset-section">
                                 <div class="vset-section-title">内存分配</div>
                                 <div class="vset-radio-group" id="vset-memory-mode">
-                                    <label class="vset-radio"><input type="radio" name="memoryMode" value="global" checked><span>跟随全局设置</span></label>
-                                    <label class="vset-radio"><input type="radio" name="memoryMode" value="auto"><span>自动配置</span></label>
-                                    <label class="vset-radio"><input type="radio" name="memoryMode" value="custom"><span>自定义</span></label>
+                                    <label class="vset-radio"><input type="radio" name="vsetMemoryMode" value="global" checked><span>跟随全局设置</span></label>
+                                    <label class="vset-radio"><input type="radio" name="vsetMemoryMode" value="auto"><span>自动配置</span></label>
+                                    <label class="vset-radio"><input type="radio" name="vsetMemoryMode" value="custom"><span>自定义</span></label>
                                 </div>
                                 <div class="vset-slider-wrap" id="vset-memory-custom" style="display:none">
                                     <input type="range" class="vset-slider" id="vset-memory-value" min="512" max="16384" step="256" value="4096">
@@ -2342,156 +2310,35 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20"><polyline points="15 18 9 12 15 6"/></svg>
                         <span>返回</span>
                     </button>
-                    <div class="launch-overlay-content">
-                        <div class="launch-chain-container">
-                            <div class="launch-chain-progress">
-                                <div class="launch-chain-progress-track">
-                                    <div class="launch-chain-progress-glow" id="launch-chain-glow"></div>
-                                </div>
+                    <div class="launch-splash-content">
+                        <div id="launch-splash-logo" class="launch-splash-logo">
+                            <img src="img/icon.svg" alt="VersePC" width="80" height="80"/>
+                        </div>
+                        <div class="launch-splash-progress-container">
+                            <div id="launch-splash-track" class="launch-splash-track">
+                                <div id="launch-splash-progress" class="launch-splash-progress"></div>
                             </div>
-                            <div class="launch-chain-title" id="launch-flow-title">正在启动游戏</div>
-                            <div class="launch-chain-steps">
-                                <div class="launch-chain-step" data-step="auth" data-progress="5">
-                                    <div class="launch-chain-node">
-                                        <div class="launch-chain-ring"></div>
-                                        <div class="launch-chain-dot"></div>
-                                        <svg class="launch-chain-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 10 9 14 15 6"/></svg>
-                                        <svg class="launch-chain-cross" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="14" y2="14"/><line x1="14" y1="6" x2="6" y2="14"/></svg>
-                                    </div>
-                                    <div class="launch-chain-info">
-                                        <div class="launch-chain-label">验证登录状态</div>
-                                        <div class="launch-chain-desc">等待中...</div>
-                                    </div>
-                                </div>
-                                <div class="launch-chain-link"></div>
-                                <div class="launch-chain-step" data-step="java-check" data-progress="15">
-                                    <div class="launch-chain-node">
-                                        <div class="launch-chain-ring"></div>
-                                        <div class="launch-chain-dot"></div>
-                                        <svg class="launch-chain-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 10 9 14 15 6"/></svg>
-                                        <svg class="launch-chain-cross" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="14" y2="14"/><line x1="14" y1="6" x2="6" y2="14"/></svg>
-                                    </div>
-                                    <div class="launch-chain-info">
-                                        <div class="launch-chain-label">检测 Java 环境</div>
-                                        <div class="launch-chain-desc">等待中...</div>
-                                    </div>
-                                </div>
-                                <div class="launch-chain-link"></div>
-                                <div class="launch-chain-step" data-step="version-resolve" data-progress="25">
-                                    <div class="launch-chain-node">
-                                        <div class="launch-chain-ring"></div>
-                                        <div class="launch-chain-dot"></div>
-                                        <svg class="launch-chain-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 10 9 14 15 6"/></svg>
-                                        <svg class="launch-chain-cross" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="14" y2="14"/><line x1="14" y1="6" x2="6" y2="14"/></svg>
-                                    </div>
-                                    <div class="launch-chain-info">
-                                        <div class="launch-chain-label">解析版本信息</div>
-                                        <div class="launch-chain-desc">等待中...</div>
-                                    </div>
-                                </div>
-                                <div class="launch-chain-link"></div>
-                                <div class="launch-chain-step" data-step="files-check" data-progress="40">
-                                    <div class="launch-chain-node">
-                                        <div class="launch-chain-ring"></div>
-                                        <div class="launch-chain-dot"></div>
-                                        <svg class="launch-chain-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 10 9 14 15 6"/></svg>
-                                        <svg class="launch-chain-cross" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="14" y2="14"/><line x1="14" y1="6" x2="6" y2="14"/></svg>
-                                    </div>
-                                    <div class="launch-chain-info">
-                                        <div class="launch-chain-label">检查文件完整性</div>
-                                        <div class="launch-chain-desc">等待中...</div>
-                                    </div>
-                                </div>
-                                <div class="launch-chain-link"></div>
-                                <div class="launch-chain-step" data-step="natives-extract" data-progress="55">
-                                    <div class="launch-chain-node">
-                                        <div class="launch-chain-ring"></div>
-                                        <div class="launch-chain-dot"></div>
-                                        <svg class="launch-chain-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 10 9 14 15 6"/></svg>
-                                        <svg class="launch-chain-cross" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="14" y2="14"/><line x1="14" y1="6" x2="6" y2="14"/></svg>
-                                    </div>
-                                    <div class="launch-chain-info">
-                                        <div class="launch-chain-label">解压本地库</div>
-                                        <div class="launch-chain-desc">等待中...</div>
-                                    </div>
-                                </div>
-                                <div class="launch-chain-link"></div>
-                                <div class="launch-chain-step" data-step="assets-check" data-progress="65">
-                                    <div class="launch-chain-node">
-                                        <div class="launch-chain-ring"></div>
-                                        <div class="launch-chain-dot"></div>
-                                        <svg class="launch-chain-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 10 9 14 15 6"/></svg>
-                                        <svg class="launch-chain-cross" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="14" y2="14"/><line x1="14" y1="6" x2="6" y2="14"/></svg>
-                                    </div>
-                                    <div class="launch-chain-info">
-                                        <div class="launch-chain-label">检查资源文件</div>
-                                        <div class="launch-chain-desc">等待中...</div>
-                                    </div>
-                                </div>
-                                <div class="launch-chain-link"></div>
-                                <div class="launch-chain-step" data-step="download" data-progress="75">
-                                    <div class="launch-chain-node">
-                                        <div class="launch-chain-ring"></div>
-                                        <div class="launch-chain-dot"></div>
-                                        <svg class="launch-chain-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 10 9 14 15 6"/></svg>
-                                        <svg class="launch-chain-cross" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="14" y2="14"/><line x1="14" y1="6" x2="6" y2="14"/></svg>
-                                    </div>
-                                    <div class="launch-chain-info">
-                                        <div class="launch-chain-label">下载缺失文件</div>
-                                        <div class="launch-chain-desc">等待中...</div>
-                                    </div>
-                                    <div class="launch-chain-detail" style="display:none">
-                                        <div class="launch-chain-detail-bar"><div class="launch-chain-detail-fill" style="width:0%"></div></div>
-                                        <span class="launch-chain-detail-text"></span>
-                                    </div>
-                                </div>
-                                <div class="launch-chain-link"></div>
-                                <div class="launch-chain-step" data-step="build-args" data-progress="85">
-                                    <div class="launch-chain-node">
-                                        <div class="launch-chain-ring"></div>
-                                        <div class="launch-chain-dot"></div>
-                                        <svg class="launch-chain-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 10 9 14 15 6"/></svg>
-                                        <svg class="launch-chain-cross" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="14" y2="14"/><line x1="14" y1="6" x2="6" y2="14"/></svg>
-                                    </div>
-                                    <div class="launch-chain-info">
-                                        <div class="launch-chain-label">构建启动参数</div>
-                                        <div class="launch-chain-desc">等待中...</div>
-                                    </div>
-                                </div>
-                                <div class="launch-chain-link"></div>
-                                <div class="launch-chain-step" data-step="launching" data-progress="95">
-                                    <div class="launch-chain-node">
-                                        <div class="launch-chain-ring"></div>
-                                        <div class="launch-chain-dot"></div>
-                                        <svg class="launch-chain-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 10 9 14 15 6"/></svg>
-                                        <svg class="launch-chain-cross" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="14" y2="14"/><line x1="14" y1="6" x2="6" y2="14"/></svg>
-                                    </div>
-                                    <div class="launch-chain-info">
-                                        <div class="launch-chain-label">启动游戏</div>
-                                        <div class="launch-chain-desc">等待中...</div>
-                                    </div>
-                                </div>
+                            <div id="launch-splash-status" class="launch-splash-status">正在验证登录状态...</div>
+                        </div>
+                        <div class="launch-splash-error" id="launch-error-section" style="display:none">
+                            <div class="launch-splash-error-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                             </div>
-                            <div class="launch-chain-error" id="launch-error-section" style="display:none">
-                                <div class="launch-chain-error-icon">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                                </div>
-                                <div class="launch-chain-error-text">
-                                    <div class="launch-chain-error-title">启动失败</div>
-                                    <div class="launch-chain-error-msg" id="launch-error-msg">未知错误</div>
-                                    <button class="btn btn-secondary btn-sm" onclick="exportGameLog()" style="margin-top:8px;font-size:11px">导出日志</button>
-                                    <button class="btn btn-accent btn-sm" onclick="exportLogAndAskAI()" style="margin-top:8px;font-size:11px" title="导出日志并在AI中分析修复">导出并询问AI修复</button>
-                                </div>
+                            <div class="launch-splash-error-text">
+                                <div class="launch-splash-error-title">启动失败</div>
+                                <div class="launch-splash-error-msg" id="launch-error-msg">未知错误</div>
+                                <button class="btn btn-secondary btn-sm" onclick="exportGameLog()" style="margin-top:8px;font-size:11px">导出日志</button>
+                                <button class="btn btn-accent btn-sm" onclick="exportLogAndAskAI()" style="margin-top:8px;font-size:11px" title="导出日志并在AI中分析修复">导出并询问AI修复</button>
                             </div>
-                            <div class="launch-chain-repair" id="launch-repair-guide" style="display:none">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" width="20" height="20"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                                <span>游戏启动失败，可前往<strong>版本设置页面</strong>使用<strong>文件修复功能</strong>解决此问题</span>
-                                <button class="btn btn-accent btn-sm" onclick="openVersionSettingsForRepair()">修复</button>
-                            </div>
-                            <div id="launch-log-section" style="display:none;margin-top:12px">
-                                <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">游戏日志</div>
-                                <div id="launch-log-output" style="background:var(--bg-primary);border-radius:6px;padding:8px;max-height:150px;overflow-y:auto;font-family:monospace;font-size:11px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all"></div>
-                            </div>
+                        </div>
+                        <div class="launch-splash-repair" id="launch-repair-guide" style="display:none">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" width="20" height="20"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                            <span>游戏启动失败，可前往<strong>版本设置页面</strong>使用<strong>文件修复功能</strong>解决此问题</span>
+                            <button class="btn btn-accent btn-sm" onclick="openVersionSettingsForRepair()">修复</button>
+                        </div>
+                        <div id="launch-log-section" style="display:none;margin-top:12px">
+                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">游戏日志</div>
+                            <div id="launch-log-output" style="background:var(--bg-primary);border-radius:6px;padding:8px;max-height:150px;overflow-y:auto;font-family:monospace;font-size:11px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all"></div>
                         </div>
                     </div>
                 </div>
@@ -2501,8 +2348,7 @@
                     <div class="modal-content support-modal-content">
                         <div class="support-modal-body">
                             <div class="support-modal-title">感谢你的支持！</div>
-                            <div class="support-modal-count" id="support-modal-count">N</div>
-                            <div class="support-modal-subtitle">你已经使用 VersePC 启动 次了</div>
+                            <div class="support-modal-subtitle">你已经使用 VersePC 启动 <span class="support-modal-count" id="support-modal-count">0</span> 次了</div>
                             <div class="support-modal-desc">如果喜欢，可以去爱发电支持豆杰</div>
                             <div class="support-modal-actions">
                                 <button class="btn btn-accent" onclick="openSupportPage()">
@@ -2646,11 +2492,11 @@
                             </div>
                             <div class="vset-radio-group">
                                 <label class="vset-radio">
-                                    <input type="radio" name="memoryMode" value="auto" checked onchange="toggleMemoryMode()">
+                                    <input type="radio" name="globalMemoryMode" value="auto" checked onchange="toggleMemoryMode()">
                                     <span>自动配置</span>
                                 </label>
                                 <label class="vset-radio">
-                                    <input type="radio" name="memoryMode" value="custom" onchange="toggleMemoryMode()">
+                                    <input type="radio" name="globalMemoryMode" value="custom" onchange="toggleMemoryMode()">
                                     <span>自定义</span>
                                 </label>
                             </div>
@@ -3057,49 +2903,6 @@
                         </div>
 
                         <div class="card">
-                            <h3>启动器</h3>
-                            <div class="form-group">
-                                <label>启动器更新</label>
-                                <select id="launcher-update-mode" class="select-input">
-                                    <option value="auto">在有新版本时自动下载</option>
-                                    <option value="notify">仅提示有更新可用</option>
-                                    <option value="manual">手动检查更新</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>启动器公告</label>
-                                <select id="launcher-notice-mode" class="select-input">
-                                    <option value="show-all">显示所有公告</option>
-                                    <option value="show-important">仅显示重要公告</option>
-                                    <option value="hide">不显示公告</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>缓存文件夹</label>
-                                <div class="input-with-btn">
-                                    <input type="text" id="cache-folder-path" class="text-input" placeholder="默认" readonly>
-                                    <button class="btn btn-secondary btn-sm" onclick="openFolder('cache')">打开</button>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="anonymous-data-collection">
-                                    <span>匿名数据收集</span>
-                                </label>
-                                <span class="form-hint">帮助我们改进产品，收集的数据仅用于统计分析</span>
-                            </div>
-                            <div class="form-group" style="margin-top: 12px;">
-                                <div class="btn-group">
-                                    <button class="btn btn-secondary" onclick="checkForUpdates()">检查更新</button>
-                                    <button class="btn btn-secondary" onclick="showUpdateAnnouncement()">查看更新公告</button>
-                                    <button class="btn btn-secondary" onclick="exportSettings()">导出设置</button>
-                                    <button class="btn btn-secondary" onclick="importSettings()">导入设置</button>
-                                    <button class="btn btn-secondary" onclick="createDesktopShortcut()">创建桌面快捷方式</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card">
                             <h3>内存优化</h3>
                             <p class="form-hint" style="margin-bottom: 12px;">将物理内存占用降低约 1/3，不仅限于 Minecraft。如果使用机械硬盘，可能会导致一小段时间的卡顿。</p>
                             <div class="form-group">
@@ -3182,6 +2985,8 @@
                                     </svg>
                                     安装并重启
                                 </button>
+                                <button class="btn btn-secondary" onclick="showUpdateAnnouncement()">查看更新公告</button>
+                                <button class="btn btn-secondary" onclick="createDesktopShortcut()">创建桌面快捷方式</button>
                             </div>
                         </div>
 

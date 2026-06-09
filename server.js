@@ -10910,9 +10910,6 @@ async function performInstallation(sessionId, versionDetails) {
         const settings = loadSettingsCached();
         const LIB_PARALLEL = Math.min(parseInt(settings.maxThreads, 10) || 16, validLibraries.length);
         let libCompleted = 0;
-        let libIndex = 0;
-        let libActive = 0;
-        let libResolve = null;
 
         const downloadOneLib = async (lib, idx) => {
             if (isAborted()) return;
@@ -11048,38 +11045,31 @@ async function performInstallation(sessionId, versionDetails) {
             }
         };
 
-        await new Promise((resolve) => {
-            libResolve = resolve;
-            const startLib = async () => {
-                while (libIndex < validLibraries.length) {
-                    if (isAborted()) { abortCleanup(); return; }
+        {
+            let libIndex = 0;
+            let libActive = 0;
+            let libDone = null;
+
+            const scheduleNext = () => {
+                while (libActive < LIB_PARALLEL && libIndex < validLibraries.length) {
+                    if (isAborted()) break;
                     const curIdx = libIndex++;
-                    const lib = validLibraries[curIdx];
-                    session.currentFile = lib.name || 'unknown';
                     libActive++;
-                    downloadOneLib(lib, curIdx).then(() => {
+                    session.currentFile = validLibraries[curIdx].name || 'unknown';
+                    downloadOneLib(validLibraries[curIdx], curIdx).then(() => {
                         libCompleted++;
-                        libActive--;
                         session.completedFiles = libCompleted;
-                        if (libActive === 0 && libIndex >= validLibraries.length && libResolve) {
-                            libResolve();
-                        }
+                    }).catch(() => {}).finally(() => {
+                        libActive--;
+                        if (libActive === 0 && libIndex >= validLibraries.length && libDone) libDone();
+                        else if (libActive < LIB_PARALLEL && libIndex < validLibraries.length) scheduleNext();
                     });
-                    if (libActive >= LIB_PARALLEL) {
-                        await new Promise(r => {
-                            const check = setInterval(() => {
-                                if (libActive < LIB_PARALLEL || libIndex >= validLibraries.length) {
-                                    clearInterval(check);
-                                    r();
-                                }
-                            }, 10);
-                        });
-                    }
                 }
-                if (libActive === 0 && libResolve) libResolve();
             };
-            startLib();
-        });
+
+            await new Promise((resolve) => { libDone = resolve; scheduleNext(); });
+        }
+
         session.completedFiles = validLibraries.length;
         session.progress = 60;
 
@@ -11117,43 +11107,52 @@ async function performInstallation(sessionId, versionDetails) {
 
             session.totalFiles = totalAssets;
             session.completedFiles = 0;
-            session.message = `下载资源文件 (�?${totalAssets} �?...`;
+            session.message = `下载资源文件 (0/${totalAssets})...`;
 
-            const batchSize = 32;
+            const ASSET_PARALLEL = 32;
+            let assetIndex = 0;
+            let assetActive = 0;
+            let assetDone = null;
             let processedCount = 0;
 
-            for (let i = 0; i < assetEntries.length; i += batchSize) {
-                if (isAborted()) { abortCleanup(); return; }
-
-                const batch = assetEntries.slice(i, i + batchSize);
-                const downloadPromises = batch.map(async ([name, info]) => {
-                    const hash = info.hash;
-                    const subDir = hash.substring(0, 2);
-                    const assetPath = path.join(ASSETS_DIR, 'objects', subDir, hash);
-                    const assetUrl = `https://resources.download.minecraft.net/${subDir}/${hash}`;
-
-                    const needDownload = !fs.existsSync(assetPath) || !verifyFileSha1(assetPath, hash);
-                    if (needDownload) {
-                        try {
-                            if (fs.existsSync(assetPath)) fs.unlinkSync(assetPath);
-                            await downloadFileWithMirror(assetUrl, assetPath, (p) => {
-                                session.speed = p.speed || DownloadManager.getSpeed();
-                                session.bytesDownloaded = p.bytesDownloaded;
-                                session.totalBytes = p.totalBytes;
-                            });
-                        } catch (e) {
-                            session.errors.push(`资源下载失败: ${name}`);
+            const scheduleNextAsset = () => {
+                while (assetActive < ASSET_PARALLEL && assetIndex < assetEntries.length) {
+                    if (isAborted()) break;
+                    const [name, info] = assetEntries[assetIndex++];
+                    assetActive++;
+                    (async () => {
+                        const hash = info.hash;
+                        const subDir = hash.substring(0, 2);
+                        const assetPath = path.join(ASSETS_DIR, 'objects', subDir, hash);
+                        const assetUrl = `https://resources.download.minecraft.net/${subDir}/${hash}`;
+                        const needDownload = !fs.existsSync(assetPath) || !verifyFileSha1(assetPath, hash);
+                        if (needDownload) {
+                            try {
+                                if (fs.existsSync(assetPath)) await fs.promises.unlink(assetPath).catch(() => {});
+                                await downloadFileWithMirror(assetUrl, assetPath, (p) => {
+                                    session.speed = p.speed || DownloadManager.getSpeed();
+                                    session.bytesDownloaded = p.bytesDownloaded;
+                                    session.totalBytes = p.totalBytes;
+                                });
+                            } catch (e) {
+                                session.errors.push(`资源下载失败: ${name}`);
+                            }
                         }
-                    }
-                    processedCount++;
-                    session.completedFiles = Math.min(processedCount, totalAssets);
-                    session.progress = 68 + (processedCount / totalAssets) * 25;
-                    session.currentFile = `资源 ${processedCount}/${totalAssets}`;
-                });
+                    })().then(() => {
+                        processedCount++;
+                        session.completedFiles = Math.min(processedCount, totalAssets);
+                        session.progress = 68 + (processedCount / totalAssets) * 25;
+                        session.currentFile = `资源 ${processedCount}/${totalAssets}`;
+                    }).catch(() => {}).finally(() => {
+                        assetActive--;
+                        if (assetActive === 0 && assetIndex >= assetEntries.length && assetDone) assetDone();
+                        else if (assetActive < ASSET_PARALLEL && assetIndex < assetEntries.length) scheduleNextAsset();
+                    });
+                }
+            };
 
-                await Promise.all(downloadPromises);
-                session.message = `下载资源文件 (${processedCount}/${totalAssets})...`;
-            }
+            await new Promise((resolve) => { assetDone = resolve; scheduleNextAsset(); });
+            session.message = `下载资源文件 (${processedCount}/${totalAssets})...`;
 
             if (assetIndexData.map_to_resources) {
                 const resourcesDir = path.join(ASSETS_DIR, 'resources');
