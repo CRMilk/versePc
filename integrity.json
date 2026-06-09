@@ -4,7 +4,7 @@
   "preload.cjs": "3012e5acfd49b8fd8a69ff1c0b06a223ecbd98eb2d5e44431cede83de42318b7",
   "editor-preload.cjs": "8c72ff604f4781055ec9b0683696932667d507c1d6c2a649181b36f0862d31a0",
   "agent-engine.js": "74753c3443b0f9d33b3f313ee01b486467a96784edaf8637bfdab627dccfdc65",
-  "js/app.js": "ecc912ccae71f6f3c080357d0920ed2dd99f35d30b541ae8f37aeb5230737c29",
+  "js/app.js": "cb17374cd200dbbd5fcfa02bd35bde664a4cf84d2806bc35fa23b57f591edeb9",
   "js/ai-chat.js": "c7ee6992c26a3d5025a2eb9daf50b243afedd2ad33919b550a7beb833f6e4540",
   "js/api.js": "1364f781fb52708e97aa577554f10e09cda148717dae4cd1d35929159eecabd7"
 }

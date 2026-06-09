@@ -3553,13 +3553,22 @@ async function openModDetail(projectId, source) {
     if (mdVersionTabs) mdVersionTabs.innerHTML = '';
 
     try {
-        console.log('[ModDetail] Fetching mod detail + versions in parallel...');
-        const [detail, versionsData] = await Promise.all([
-            API.getModDetail(projectId, source),
-            API.getModVersions(projectId, source)
+        console.log('[ModDetail] Fetching mod detail + versions in parallel for:', projectId);
+        const _timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时 (30s)')), 30000));
+        const [detail, versionsData] = await Promise.race([
+            Promise.all([
+                API.getModDetail(projectId, source).catch(e => { console.error('[ModDetail] getModDetail failed:', e); return null; }),
+                API.getModVersions(projectId, source).catch(e => { console.error('[ModDetail] getModVersions failed:', e); return null; })
+            ]),
+            _timeout
         ]);
         if (mySeq !== _modDetailSeq) { console.log('[ModDetail] Aborted (stale)'); return; }
-        console.log('[ModDetail] Got detail:', detail);
+        if (!detail) {
+            mdName.textContent = '加载失败';
+            mdVersionList.innerHTML = `<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">无法加载模组详情: API请求失败，请检查网络连接</p>`;
+            return;
+        }
+        console.log('[ModDetail] Got detail:', detail.title || projectId);
         currentModDetailData = detail;
 
         const modTitle = formatModNameWithChinese(detail.id || detail.slug, detail.title || '未知模组');
@@ -3613,10 +3622,11 @@ async function openModDetail(projectId, source) {
             }
         }
 
-        mdAllVersions = versionsData.versions || [];
+        mdAllVersions = versionsData ? (versionsData.versions || []) : [];
         if (!Array.isArray(mdAllVersions)) mdAllVersions = [];
         loadModDependencies();
         await renderMdVersionTabs(mySeq);
+        console.log('[ModDetail] Done, versions:', mdAllVersions.length);
     } catch (e) {
         if (mySeq !== _modDetailSeq) return;
         console.error('[ModDetail] Error:', e);
@@ -8002,9 +8012,14 @@ async function openResourceDetail(projectId, type) {
 
     try {
         const [detail, data] = await Promise.all([
-            API.getModDetail(projectId, 'modrinth'),
-            API.getModVersions(projectId, 'modrinth')
+            API.getModDetail(projectId, 'modrinth').catch(e => { console.error('[ResDetail] getModDetail failed:', e); return null; }),
+            API.getModVersions(projectId, 'modrinth').catch(e => { console.error('[ResDetail] getModVersions failed:', e); return null; })
         ]);
+        if (!detail) {
+            mdName.textContent = '加载失败';
+            mdVersionList.innerHTML = `<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">无法加载详情: API请求失败，请检查网络连接</p>`;
+            return;
+        }
         currentModDetailData = detail;
 
         mdName.textContent = formatModNameWithChinese(detail.id || detail.slug, detail.title || typeNames[type] || '未知');
@@ -8033,7 +8048,7 @@ async function openResourceDetail(projectId, type) {
             srcBadge.style.background = 'rgba(245,158,11,0.12)';
         }
 
-        mdAllVersions = data.versions || [];
+        mdAllVersions = data ? (data.versions || []) : [];
         if (!Array.isArray(mdAllVersions)) mdAllVersions = [];
 
         const currentGameVersion = getCustomSelectValue('mod-filter-version') || '';
