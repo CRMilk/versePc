@@ -9417,7 +9417,7 @@ async function resetLaunchSettings() {
 
     document.getElementById('launch-version-isolation').value = 'all';
     document.getElementById('launch-window-title').value = '';
-    document.getElementById('launch-custom-info').value = '';
+    document.getElementById('launch-custom-info').value = 'VersePC';
     document.getElementById('launcher-visibility').value = 'keep';
     document.getElementById('process-priority').value = 'normal';
     document.getElementById('window-size').value = 'default';

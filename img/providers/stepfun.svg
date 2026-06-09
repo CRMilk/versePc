@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="stepfunGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#059669"/>
+      <stop offset="100%" style="stop-color:#10b981"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="url(#stepfunGrad)"/>
+  <path d="M8 22L12 18L16 14L20 10L24 6" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="8" cy="22" r="2.5" fill="white"/>
+  <circle cx="16" cy="14" r="2.5" fill="white"/>
+  <circle cx="24" cy="6" r="2.5" fill="white"/>
+</svg>
