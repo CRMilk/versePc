@@ -15343,7 +15343,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         success: true,
                         deviceCode: result.device_code,
                         userCode: result.user_code,
-                        verificationUri: result.verification_uri,
+                        verificationUri: 'https://www.xbox.com/live/security/code',
                         verificationUriComplete: result.verification_uri_complete,
                         expiresIn: result.expires_in,
                         interval: result.interval || 5,

@@ -1559,8 +1559,14 @@ function setupAccountButtons() {
         const offlineUsernameInput = document.getElementById('offline-username-input');
         const username = offlineUsernameInput ? offlineUsernameInput.value.trim() : '';
         if (!username) { showToast('请输入玩家 ID', 'error'); return; }
-        if (username.length < 3 || username.length > 16) { showToast('玩家 ID 长度需为 3 - 16 位', 'error'); return; }
-        if (!/^[A-Za-z0-9_]+$/.test(username)) { showToast('玩家 ID 只能包含英文字母、数字与下划线', 'error'); return; }
+        if (username.length < 3 || username.length > 16) {
+            showToast('玩家 ID 长度需为 3 - 16 位', 'error'); return;
+        }
+        if (!/^[A-Za-z0-9_]+$/.test(username)) {
+            if (!confirm(`你输入的玩家 ID「${username}」不符合标准（3 - 16 位，只可以包含英文字母、数字与下划线），可能导致部分版本的游戏无法启动或发生错误。\n\n强烈建议使用规范的玩家 ID！\n如果你坚持，仍然可以继续创建档案。`)) {
+                return;
+            }
+        }
         try {
             const result = await API.addOfflineAccount(username);
             if (result.success) {
