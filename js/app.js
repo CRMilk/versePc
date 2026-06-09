@@ -6887,28 +6887,28 @@ async function handleLaunch() {
                             setLaunchStep('java-check', 'success', reCheck.java.message || `Java ${reCheck.java.version} ✓`);
                         } else {
                             setLaunchStep('java-check', 'error', 'Java 安装后仍无法检测，请检查设置');
-                            showLaunchError('Java 自动安装完成，但仍未检测到。请前往版本设置手动配置Java路径');
+                            showLaunchError(`Java 自动安装完成，但仍未检测到。<br><a href="#" onclick="event.preventDefault();closeLaunchModal();navigateToPage('java')" style="color:var(--accent);text-decoration:underline;cursor:pointer;">前往 Java 管理页面 →</a>`);
                             launchBtn.disabled = false;
                             homeLaunchBtn.disabled = false;
                             return;
                         }
                     } else {
                         setLaunchStep('java-check', 'error', `Java ${requiredVer}+ 自动安装失败`);
-                        showLaunchError(`Java ${requiredVer}+ 自动安装失败，请前往版本设置手动安装或配置Java。\n错误: ${javaStatus}`);
+                        showLaunchError(`Java ${requiredVer}+ 自动安装失败。<br>错误: ${javaStatus}<br><a href="#" onclick="event.preventDefault();closeLaunchModal();navigateToPage('java')" style="color:var(--accent);text-decoration:underline;cursor:pointer;">前往 Java 管理页面 →</a>`);
                         launchBtn.disabled = false;
                         homeLaunchBtn.disabled = false;
                         return;
                     }
                 } else {
                     setLaunchStep('java-check', 'error', `需要Java ${requiredVer}或更高版本`);
-                    showLaunchError(`需要安装Java ${requiredVer}或更高版本。请前往版本设置"文件修复"功能安装Java。`);
+                    showLaunchError(`需要安装Java ${requiredVer}或更高版本。<br><a href="#" onclick="event.preventDefault();closeLaunchModal();navigateToPage('java')" style="color:var(--accent);text-decoration:underline;cursor:pointer;">前往 Java 管理页面 →</a>`);
                     launchBtn.disabled = false;
                     homeLaunchBtn.disabled = false;
                     return;
                 }
             } catch (e) {
                 setLaunchStep('java-check', 'error', `Java ${requiredVer}+ 安装失败: ${e.message}`);
-                showLaunchError(`Java 自动安装失败: ${e.message}。请前往版本设置手动安装Java。`);
+                showLaunchError(`Java 自动安装失败: ${e.message}<br><a href="#" onclick="event.preventDefault();closeLaunchModal();navigateToPage('java')" style="color:var(--accent);text-decoration:underline;cursor:pointer;">前往 Java 管理页面 →</a>`);
                 launchBtn.disabled = false;
                 homeLaunchBtn.disabled = false;
                 return;
@@ -7432,7 +7432,7 @@ function showLaunchError(msg, details = null) {
     }
 
     if (errorMsg) {
-        errorMsg.textContent = msg || '未知错误';
+        errorMsg.innerHTML = (msg || '未知错误').replace(/\n/g, '<br>');
         errorMsg.title = fullMsg;
     }
 

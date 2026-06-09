@@ -6017,48 +6017,52 @@ async function downloadJavaAsync(majorVersion, sessionId, sessionFile, mirrorInd
             `https://mirror.iscas.ac.cn/adoptium/releases/temurin${majorVersion}-binaries/`
         ];
         
-        for (const mirrorBase of mirrorBases) {
+        const probeResults = await Promise.allSettled(mirrorBases.map(async (mirrorBase) => {
+            const hostname = new URL(mirrorBase).hostname;
+            const start = Date.now();
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 8000);
             try {
-                updateStatus('fetching', 5, `正在扫描镜像 ${new URL(mirrorBase).hostname}...`);
-                const listController = new AbortController();
-                const listTimer = setTimeout(() => listController.abort(), 12000);
-                const listResp = await fetch(mirrorBase, { signal: listController.signal });
-                clearTimeout(listTimer);
-                if (!listResp.ok) { console.log(`[Java] ${new URL(mirrorBase).hostname} 目录不可用 (${listResp.status})`); continue; }
-                const html = await listResp.text();
-                const versionDirs = [];
+                const resp = await fetch(mirrorBase, { signal: controller.signal });
+                clearTimeout(timer);
+                if (!resp.ok) return { hostname, ok: false, latency: Infinity };
+                const html = await resp.text();
                 const dirRegex = /href="[^"]*?(jdk-\d+\.\d+\.\d+%2B\d+)[^"]*?"/g;
-                let m;
-                while ((m = dirRegex.exec(html)) !== null) {
-                    versionDirs.push(decodeURIComponent(m[1]));
-                }
-                if (versionDirs.length === 0) continue;
-                versionDirs.sort().reverse();
-                for (const verDir of versionDirs) {
-                    const verMatch = verDir.match(/jdk-(\d+)\.(\d+)\.(\d+)\+(\d+)/);
-                    if (!verMatch) continue;
-                    const altFileName = `OpenJDK${majorVersion}U-jdk_${arch}_${osName}_hotspot_${verMatch[2]}.${verMatch[3]}_${verMatch[4]}.zip`;
-                    const altUrl = mirrorBase + verDir + '/' + altFileName;
-                    try {
-                        const h = new AbortController();
-                        const t = setTimeout(() => h.abort(), 10000);
-                        const r = await fetch(altUrl, { method: 'HEAD', signal: h.signal });
-                        clearTimeout(t);
-                        if (r.ok) {
-                            console.log(`[Java] 镜像可用 (${verDir}): ${altUrl.substring(0, 80)}`);
-                            downloadUrl = altUrl;
-                            fileName = altFileName;
-                            if (r.headers.get('content-length')) {
-                                totalSize = parseInt(r.headers.get('content-length'), 10) || totalSize;
-                            }
-                            break;
-                        }
-                    } catch (e) {}
-                }
-                if (downloadUrl) break;
+                const dirs = [];
+                let dm;
+                while ((dm = dirRegex.exec(html)) !== null) dirs.push(decodeURIComponent(dm[1]));
+                if (dirs.length === 0) return { hostname, ok: false, latency: Infinity };
+                dirs.sort().reverse();
+                const latestDir = dirs[0];
+                const vm = latestDir.match(/jdk-(\d+)\.(\d+)\.(\d+)\+(\d+)/);
+                if (!vm) return { hostname, ok: false, latency: Infinity };
+                const testFileName = `OpenJDK${majorVersion}U-jdk_${arch}_${osName}_hotspot_${vm[2]}.${vm[3]}_${vm[4]}.zip`;
+                const testUrl = mirrorBase + latestDir + '/' + testFileName;
+                const h2 = new AbortController();
+                const t2 = setTimeout(() => h2.abort(), 5000);
+                const r2 = await fetch(testUrl, { method: 'HEAD', signal: h2.signal });
+                clearTimeout(t2);
+                if (!r2.ok) return { hostname, ok: false, latency: Infinity };
+                const latency = Date.now() - start;
+                let size = 0;
+                if (r2.headers.get('content-length')) size = parseInt(r2.headers.get('content-length'), 10) || 0;
+                return { hostname, ok: true, latency, dir: latestDir, fileName: testFileName, baseUrl: mirrorBase, size };
             } catch (e) {
-                console.warn(`[Java] 扫描镜像 ${new URL(mirrorBase).hostname} 失败: ${e.message}`);
+                clearTimeout(timer);
+                return { hostname, ok: false, latency: Infinity };
             }
+        }));
+        
+        const available = probeResults.filter(r => r.status === 'fulfilled' && r.value.ok).map(r => r.value);
+        available.sort((a, b) => a.latency - b.latency);
+        
+        if (available.length > 0) {
+            const best = available[0];
+            console.log(`[Java] 最快镜像: ${best.hostname} (${best.latency}ms)`);
+            updateStatus('fetching', 5, `已选择最快镜像: ${best.hostname}`);
+            downloadUrl = best.baseUrl + best.dir + '/' + best.fileName;
+            fileName = best.fileName;
+            totalSize = best.size;
         }
         
         if (!downloadUrl) {

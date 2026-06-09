@@ -2547,8 +2547,13 @@ const AIChat = {
         let temp = this.temperature;
         try { model = await window.electronAPI.store.get('versepc_ai_model') || this.model; } catch (e) {}
         try { temp = parseFloat(await window.electronAPI.store.get('versepc_ai_temp')); } catch (e) {}
-        model = model || 'glm-5-flash';
+        model = model || null;
         temp = isNaN(temp) ? 0.7 : temp;
+
+        if (!model) {
+            showToast('请先选择一个模型', 'error');
+            return;
+        }
 
         const recommended = this.getRecommendedModel(text);
         if (recommended && recommended.modelId !== model) {
@@ -7361,7 +7366,13 @@ Call attempt_completion when all operations are done and verified.
         const label = document.getElementById('ai-current-model-label');
         const settingsName = document.getElementById('ai-settings-model-name');
         const settingsBadge = document.getElementById('ai-settings-model-badge');
-        const modelId = this.model || 'glm-5-flash';
+        const modelId = this.model;
+        if (!modelId) {
+            if (label) label.textContent = '未选择模型';
+            if (settingsName) settingsName.textContent = '未选择模型';
+            if (settingsBadge) { settingsBadge.textContent = ''; settingsBadge.className = 'ai-settings-model-badge'; }
+            return;
+        }
         let displayName = modelId;
         let isFree = false;
         if (this.addedModels) {
@@ -7465,16 +7476,14 @@ Call attempt_completion when all operations are done and verified.
         if (existing) { existing.remove(); return; }
         const btn = document.getElementById('ai-model-select-btn');
         if (!btn) return;
-        const currentModel = this.model || 'glm-5-flash';
+        const currentModel = this.model;
         let models = [];
         const allModels = this.addedModels;
         for (const m of allModels) {
             models.push({ id: m.modelId, name: m.modelName || m.modelId, provider: m.providerName || m.providerKey || '未知', free: m.free, providerKey: m.providerKey });
         }
         if (!models.length) {
-            models = [
-                { id: 'glm-5-flash', name: 'GLM-5-Flash', provider: '智谱', free: true, providerKey: 'zhipu' },
-            ];
+            return;
         }
         const grouped = {};
         for (const m of models) {
