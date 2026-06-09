@@ -966,7 +966,7 @@ ipcMain.handle('memory-optimize', async () => {
             resolve({ success: false, error: 'Script not found' });
             return;
         }
-        exec(`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 30000 }, (err, stdout, stderr) => {
+        require('child_process').exec(`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 30000 }, (err, stdout, stderr) => {
             if (err) {
                 resolve({ success: false, error: err.message });
                 return;

@@ -3586,6 +3586,7 @@ async function openModDetail(projectId, source) {
     if (!mdVersionList) { console.error('[ModDetail] Required elements not found'); return; }
 
     const cached = _projectDataCache.get(projectId);
+    const hasPreloaded = _versionPreloadCache.has(projectId);
     if (cached) {
         console.log('[ModDetail] Cache hit, rendering immediately');
         _renderModDetailHeader(cached, source, projectId);
@@ -3593,17 +3594,26 @@ async function openModDetail(projectId, source) {
         const mdName = document.getElementById('md-name');
         if (mdName) mdName.textContent = '加载中...';
     }
-    mdVersionList.innerHTML = '<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">加载版本列表...</p>';
+
+    let _loadingTimer = null;
+    if (!hasPreloaded) {
+        _loadingTimer = setTimeout(() => {
+            if (mdVersionList && !mdVersionList.querySelector('.mdv-group')) {
+                mdVersionList.innerHTML = '<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">加载版本列表...</p>';
+            }
+        }, 400);
+    }
     if (mdVersionTabs) mdVersionTabs.innerHTML = '';
 
     try {
-        const versionsPromise = _versionPreloadCache.has(projectId)
+        const versionsPromise = hasPreloaded
             ? Promise.resolve(_versionPreloadCache.get(projectId))
             : API.getModVersions(projectId, source).catch(e => { console.error('[ModDetail] getModVersions failed:', e); return null; });
         _versionPreloadCache.delete(projectId);
         const detailPromise = cached ? Promise.resolve(cached) : API.getModDetail(projectId, source).catch(e => { console.error('[ModDetail] getModDetail failed:', e); return null; });
 
         const [detail, versionsData] = await Promise.all([detailPromise, versionsPromise]);
+        if (_loadingTimer) { clearTimeout(_loadingTimer); _loadingTimer = null; }
         if (mySeq !== _modDetailSeq) { console.log('[ModDetail] Aborted (stale)'); return; }
         if (!detail) {
             const mdName = document.getElementById('md-name');
@@ -8094,17 +8104,27 @@ async function openResourceDetail(projectId, type) {
     } else {
         mdName.textContent = '加载中...';
     }
-    mdVersionList.innerHTML = '<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">加载版本列表...</p>';
+
+    const _hasPreloaded = _versionPreloadCache.has(projectId);
+    let _resLoadingTimer = null;
+    if (!_hasPreloaded) {
+        _resLoadingTimer = setTimeout(() => {
+            if (mdVersionList && !mdVersionList.querySelector('.mdv-group')) {
+                mdVersionList.innerHTML = '<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">加载版本列表...</p>';
+            }
+        }, 400);
+    }
     if (mdVersionTabs) mdVersionTabs.innerHTML = '';
 
     try {
-        const versionsPromise = _versionPreloadCache.has(projectId)
+        const versionsPromise = _hasPreloaded
             ? Promise.resolve(_versionPreloadCache.get(projectId))
             : API.getModVersions(projectId, 'modrinth').catch(e => { console.error('[ResDetail] getModVersions failed:', e); return null; });
         _versionPreloadCache.delete(projectId);
         const detailPromise = cached ? Promise.resolve(cached) : API.getModDetail(projectId, 'modrinth').catch(e => { console.error('[ResDetail] getModDetail failed:', e); return null; });
 
         const [detail, data] = await Promise.all([detailPromise, versionsPromise]);
+        if (_resLoadingTimer) { clearTimeout(_resLoadingTimer); _resLoadingTimer = null; }
         if (!detail) {
             mdName.textContent = '加载失败';
             mdVersionList.innerHTML = `<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">无法加载详情: API请求失败，请检查网络连接</p>`;
@@ -10216,9 +10236,7 @@ function renderSponsors(filter) {
     }
 
     container.innerHTML = filtered.map(name => {
-        const initial = name.charAt(0).toUpperCase();
         return `<div class="sponsor-tag">
-            <div class="sponsor-tag-icon">${initial}</div>
             <span class="sponsor-tag-name">${escapeHtml(name)}</span>
         </div>`;
     }).join('');

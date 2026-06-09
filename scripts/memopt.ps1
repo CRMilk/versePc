@@ -1,16 +1,22 @@
 $ErrorActionPreference = 'Continue'
+
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class MemOpt {
+    [DllImport("psapi.dll")]
+    public static extern int EmptyWorkingSet(IntPtr hwProc);
+}
+"@
+
 $before = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory
-try {
-    $proc = [System.Diagnostics.Process]::GetCurrentProcess()
-    $proc.MinWorkingSet = [IntPtr](-1)
-    $proc.MaxWorkingSet = [IntPtr](-1)
-} catch {}
+
 Get-Process | ForEach-Object {
     try {
-        $_.MinWorkingSet = [IntPtr](-1)
-        $_.MaxWorkingSet = [IntPtr](-1)
+        [void][MemOpt]::EmptyWorkingSet($_.Handle)
     } catch {}
 }
+
 Start-Sleep -Milliseconds 500
 $after = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory
 $diff = $after - $before

@@ -3301,22 +3301,32 @@ function cachedFetchJSON(urlStr, cacheTTL, retriesOrHeaders, timeoutMs) {
     });
 }
 
+const zlib = require('zlib');
+const { pipeline } = require('stream');
+
 function _fetchOnce(url, headers, timeout) {
     const mod = url.startsWith('https') ? https : http;
     const agent = url.startsWith('https') ? SHARED_HTTPS_AGENT : SHARED_HTTP_AGENT;
+    const reqHeaders = { ...headers, 'Accept-Encoding': 'gzip, deflate, br' };
     return new Promise((resolve, reject) => {
-        const req = mod.get(url, { headers, agent, timeout }, (res) => {
+        const req = mod.get(url, { headers: reqHeaders, agent, timeout }, (res) => {
             if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
                 req.destroy();
                 return _fetchOnce(res.headers.location, headers, timeout).then(resolve).catch(reject);
             }
-            if (res.statusCode !== 200) { req.destroy(); reject(new Error(`HTTP ${res.statusCode}`)); return; }
+            if (res.statusCode !== 200) { res.destroy(); reject(new Error(`HTTP ${res.statusCode}`)); return; }
+            const encoding = (res.headers['content-encoding'] || '').toLowerCase();
+            let stream = res;
+            if (encoding === 'gzip') stream = res.pipe(zlib.createGunzip());
+            else if (encoding === 'br') stream = res.pipe(zlib.createBrotliDecompress());
+            else if (encoding === 'deflate') stream = res.pipe(zlib.createInflate());
             let data = '';
-            res.on('data', chunk => { data += chunk; });
-            res.on('end', () => {
+            stream.on('data', chunk => { data += chunk; });
+            stream.on('end', () => {
                 try { resolve(JSON.parse(data)); }
                 catch (e) { reject(new Error(`JSON解析失败: ${e.message}`)); }
             });
+            stream.on('error', reject);
         });
         req.on('timeout', () => { req.destroy(); reject(new Error(`请求超时 (${timeout}ms)`)); });
         req.on('error', reject);
@@ -10859,6 +10869,7 @@ async function performInstallation(sessionId, versionDetails) {
         session.totalFiles = validLibraries.length;
         session.completedFiles = 0;
 
+        const settings = loadSettingsCached();
         const LIB_PARALLEL = Math.min(parseInt(settings.maxThreads, 10) || 16, validLibraries.length);
         let libCompleted = 0;
         let libIndex = 0;
