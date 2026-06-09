@@ -2781,6 +2781,7 @@ async function loadMods() {
         const hits = data.hits || [];
         modSearchTotal = data.total || 0;
         modSearchResults = hits;
+        hits.forEach(function(h) { _projectDataCache.set(h.id, h); });
 
         if (hits.length === 0) {
             container.innerHTML = '<p class="empty-text">未找到模组</p>';
@@ -3491,6 +3492,7 @@ let mdCurrentDeps = [];
 let mdDepsResolved = {};
 let mdDepsVersionInfo = {};
 let _modDetailSeq = 0;
+const _projectDataCache = new Map();
 
 async function getInstalledVersionInfo() {
     try {
@@ -3521,6 +3523,39 @@ async function getInstalledVersionInfo() {
     }
 }
 
+function _renderModDetailHeader(detail, source, projectId) {
+    currentModDetailData = detail;
+    const modTitle = formatModNameWithChinese(detail.id || detail.slug, detail.title || '未知模组');
+    const mdName = document.getElementById('md-name');
+    const mdDesc = document.getElementById('md-desc');
+    const mdIconImg = document.getElementById('md-icon-img');
+    const mdIconFallback = document.getElementById('md-icon-fallback');
+    if (mdName) mdName.textContent = modTitle;
+    if (mdDesc) mdDesc.textContent = (detail.description || '').substring(0, 200);
+    if (detail.icon && mdIconImg && mdIconFallback) {
+        mdIconImg.src = detail.icon; mdIconImg.style.display = ''; mdIconFallback.style.display = 'none';
+    } else if (mdIconImg && mdIconFallback) {
+        mdIconImg.style.display = 'none'; mdIconFallback.textContent = modTitle.charAt(0).toUpperCase(); mdIconFallback.style.display = '';
+    }
+    const mdDownloads = document.getElementById('md-downloads');
+    const mdFollowers = document.getElementById('md-followers');
+    const mdUpdated = document.getElementById('md-updated');
+    const srcBadge = document.getElementById('md-source-badge');
+    if (mdDownloads) mdDownloads.textContent = `⬇ ${formatNumber(detail.downloads || 0)}`;
+    if (mdFollowers) mdFollowers.textContent = `❤ ${formatNumber(detail.followers || 0)}`;
+    if (mdUpdated) { const u = detail.dateModified ? formatDate(detail.dateModified) : ''; mdUpdated.textContent = u ? `🕐 更新于 ${u}` : ''; }
+    if (srcBadge) {
+        if (source === 'curseforge') { srcBadge.textContent = 'CurseForge'; srcBadge.style.color = '#f97316'; srcBadge.style.background = 'rgba(249,115,22,0.12)'; }
+        else { srcBadge.textContent = 'Modrinth'; srcBadge.style.color = '#a855f7'; srcBadge.style.background = 'rgba(168,85,247,0.12)'; }
+    }
+    var mdFavBtn = document.getElementById('md-fav-btn');
+    if (mdFavBtn) {
+        var isFav = _favorites.some(function(f) { return f.favs.includes(projectId); });
+        if (isFav) { mdFavBtn.classList.remove('btn-secondary'); mdFavBtn.classList.add('btn-primary'); mdFavBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg> 已收藏'; }
+        else { mdFavBtn.classList.remove('btn-primary'); mdFavBtn.classList.add('btn-secondary'); mdFavBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg> 收藏'; }
+    }
+}
+
 async function openModDetail(projectId, source) {
     console.log('[ModDetail] Opening mod detail for:', projectId, 'source:', source);
     const mySeq = ++_modDetailSeq;
@@ -3533,93 +3568,37 @@ async function openModDetail(projectId, source) {
     const backBtn = document.querySelector('#page-mod-detail .moddetail-page-header .btn-icon');
     if (backBtn) backBtn.setAttribute('onclick', 'goBackFromDetail()');
 
-    const mdName = document.getElementById('md-name');
-    const mdDesc = document.getElementById('md-desc');
-    const mdIconImg = document.getElementById('md-icon-img');
-    const mdIconFallback = document.getElementById('md-icon-fallback');
     const mdVersionList = document.getElementById('md-version-list');
     const mdVersionTabs = document.getElementById('md-version-tabs');
 
-    if (!mdName || !mdVersionList) {
-        console.error('[ModDetail] Required elements not found');
-        return;
-    }
+    if (!mdVersionList) { console.error('[ModDetail] Required elements not found'); return; }
 
-    mdName.textContent = '加载中...';
-    if (mdDesc) mdDesc.textContent = '';
-    if (mdIconImg) mdIconImg.style.display = 'none';
-    if (mdIconFallback) mdIconFallback.style.display = 'none';
-    mdVersionList.innerHTML = '<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">加载中...</p>';
+    const cached = _projectDataCache.get(projectId);
+    if (cached) {
+        console.log('[ModDetail] Cache hit, rendering immediately');
+        _renderModDetailHeader(cached, source, projectId);
+    } else {
+        const mdName = document.getElementById('md-name');
+        if (mdName) mdName.textContent = '加载中...';
+    }
+    mdVersionList.innerHTML = '<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">加载版本列表...</p>';
     if (mdVersionTabs) mdVersionTabs.innerHTML = '';
 
     try {
-        console.log('[ModDetail] Fetching mod detail + versions in parallel for:', projectId);
-        const _timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时 (30s)')), 30000));
-        const [detail, versionsData] = await Promise.race([
-            Promise.all([
-                API.getModDetail(projectId, source).catch(e => { console.error('[ModDetail] getModDetail failed:', e); return null; }),
-                API.getModVersions(projectId, source).catch(e => { console.error('[ModDetail] getModVersions failed:', e); return null; })
-            ]),
-            _timeout
-        ]);
+        const versionsPromise = API.getModVersions(projectId, source).catch(e => { console.error('[ModDetail] getModVersions failed:', e); return null; });
+        const detailPromise = cached ? Promise.resolve(cached) : API.getModDetail(projectId, source).catch(e => { console.error('[ModDetail] getModDetail failed:', e); return null; });
+
+        const [detail, versionsData] = await Promise.all([detailPromise, versionsPromise]);
         if (mySeq !== _modDetailSeq) { console.log('[ModDetail] Aborted (stale)'); return; }
         if (!detail) {
-            mdName.textContent = '加载失败';
+            const mdName = document.getElementById('md-name');
+            if (mdName) mdName.textContent = '加载失败';
             mdVersionList.innerHTML = `<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">无法加载模组详情: API请求失败，请检查网络连接</p>`;
             return;
         }
-        console.log('[ModDetail] Got detail:', detail.title || projectId);
-        currentModDetailData = detail;
-
-        const modTitle = formatModNameWithChinese(detail.id || detail.slug, detail.title || '未知模组');
-        mdName.textContent = modTitle;
-        if (mdDesc) mdDesc.textContent = (detail.description || '').substring(0, 200);
-
-        if (detail.icon && mdIconImg && mdIconFallback) {
-            mdIconImg.src = detail.icon;
-            mdIconImg.style.display = '';
-            mdIconFallback.style.display = 'none';
-        } else if (mdIconImg && mdIconFallback) {
-            mdIconImg.style.display = 'none';
-            mdIconFallback.textContent = modTitle.charAt(0).toUpperCase();
-            mdIconFallback.style.display = '';
-        }
-
-        const mdDownloads = document.getElementById('md-downloads');
-        const mdFollowers = document.getElementById('md-followers');
-        const mdUpdated = document.getElementById('md-updated');
-        const srcBadge = document.getElementById('md-source-badge');
-
-        if (mdDownloads) mdDownloads.textContent = `⬇ ${formatNumber(detail.downloads || 0)}`;
-        if (mdFollowers) mdFollowers.textContent = `❤ ${formatNumber(detail.followers || 0)}`;
-        
-        const updatedStr = detail.dateModified ? formatDate(detail.dateModified) : '';
-        if (mdUpdated) mdUpdated.textContent = `🕐 更新于 ${updatedStr}`;
-
-        if (srcBadge) {
-            if (source === 'curseforge') {
-                srcBadge.textContent = 'CurseForge';
-                srcBadge.style.color = '#f97316';
-                srcBadge.style.background = 'rgba(249, 115, 22, 0.12)';
-            } else {
-                srcBadge.textContent = 'Modrinth';
-                srcBadge.style.color = '#a855f7';
-                srcBadge.style.background = 'rgba(168, 85, 247, 0.12)';
-            }
-        }
-
-        var mdFavBtn = document.getElementById('md-fav-btn');
-        if (mdFavBtn) {
-            var isFav = _favorites.some(function(f) { return f.favs.includes(projectId); });
-            if (isFav) {
-                mdFavBtn.classList.remove('btn-secondary');
-                mdFavBtn.classList.add('btn-primary');
-                mdFavBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg> 已收藏';
-            } else {
-                mdFavBtn.classList.remove('btn-primary');
-                mdFavBtn.classList.add('btn-secondary');
-                mdFavBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg> 收藏';
-            }
+        if (!cached) {
+            _projectDataCache.set(projectId, detail);
+            _renderModDetailHeader(detail, source, projectId);
         }
 
         mdAllVersions = versionsData ? (versionsData.versions || []) : [];
@@ -3630,7 +3609,8 @@ async function openModDetail(projectId, source) {
     } catch (e) {
         if (mySeq !== _modDetailSeq) return;
         console.error('[ModDetail] Error:', e);
-        mdName.textContent = '加载失败';
+        const mdName = document.getElementById('md-name');
+        if (mdName) mdName.textContent = '加载失败';
         mdVersionList.innerHTML = `<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">无法加载模组详情: ${escapeHtml(e.message || String(e))}</p>`;
     }
 }
@@ -7933,6 +7913,7 @@ async function loadResourceList(type) {
         const data = await API.searchResources(state.query, type, loader, version, resolution, 'downloads', 15, state.offset);
         const hits = data.hits || [];
         state.total = data.total || 0;
+        hits.forEach(item => _projectDataCache.set(item.id, item));
 
         if (hits.length === 0) {
             if (state.query) {
@@ -8003,49 +7984,47 @@ async function openResourceDetail(projectId, type) {
     const typeNames = { mod: '模组', modpack: '整合包', resourcepack: '材质包', shader: '光影包', datapack: '数据包' };
     const typeIcons = { mod: '🧩', modpack: '📦', resourcepack: '🎨', shader: '✨', datapack: '📊' };
 
-    mdName.textContent = '加载中...';
-    if (mdDesc) mdDesc.textContent = '';
-    if (mdIconImg) mdIconImg.style.display = 'none';
-    if (mdIconFallback) mdIconFallback.style.display = 'none';
-    mdVersionList.innerHTML = '<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">加载中...</p>';
+    const cached = _projectDataCache.get(projectId);
+    if (cached) {
+        console.log('[ResDetail] Cache hit, rendering immediately');
+        currentModDetailData = cached;
+        mdName.textContent = formatModNameWithChinese(cached.id || cached.slug, cached.title || typeNames[type] || '未知');
+        if (mdDesc) mdDesc.textContent = (cached.description || '').substring(0, 200);
+        if (cached.icon && mdIconImg && mdIconFallback) { mdIconImg.src = cached.icon; mdIconImg.style.display = ''; mdIconFallback.style.display = 'none'; }
+        const mdDownloads = document.getElementById('md-downloads');
+        const mdFollowers = document.getElementById('md-followers');
+        if (mdDownloads) mdDownloads.textContent = `⬇ ${formatNumber(cached.downloads || 0)}`;
+        if (mdFollowers) mdFollowers.textContent = `❤ ${formatNumber(cached.followers || 0)}`;
+        const srcBadge = document.getElementById('md-source-badge');
+        if (srcBadge) { srcBadge.textContent = typeNames[type] || type; srcBadge.style.color = '#f59e0b'; srcBadge.style.background = 'rgba(245,158,11,0.12)'; }
+    } else {
+        mdName.textContent = '加载中...';
+    }
+    mdVersionList.innerHTML = '<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">加载版本列表...</p>';
     if (mdVersionTabs) mdVersionTabs.innerHTML = '';
 
     try {
-        const [detail, data] = await Promise.all([
-            API.getModDetail(projectId, 'modrinth').catch(e => { console.error('[ResDetail] getModDetail failed:', e); return null; }),
-            API.getModVersions(projectId, 'modrinth').catch(e => { console.error('[ResDetail] getModVersions failed:', e); return null; })
-        ]);
+        const versionsPromise = API.getModVersions(projectId, 'modrinth').catch(e => { console.error('[ResDetail] getModVersions failed:', e); return null; });
+        const detailPromise = cached ? Promise.resolve(cached) : API.getModDetail(projectId, 'modrinth').catch(e => { console.error('[ResDetail] getModDetail failed:', e); return null; });
+
+        const [detail, data] = await Promise.all([detailPromise, versionsPromise]);
         if (!detail) {
             mdName.textContent = '加载失败';
             mdVersionList.innerHTML = `<p class="empty-text" style="padding:30px 0;text-align:center;color:var(--text-muted)">无法加载详情: API请求失败，请检查网络连接</p>`;
             return;
         }
-        currentModDetailData = detail;
-
-        mdName.textContent = formatModNameWithChinese(detail.id || detail.slug, detail.title || typeNames[type] || '未知');
-        if (mdDesc) mdDesc.textContent = (detail.description || '').substring(0, 200);
-
-        if (detail.icon && mdIconImg && mdIconFallback) {
-            mdIconImg.src = detail.icon;
-            mdIconImg.style.display = '';
-            mdIconFallback.style.display = 'none';
-        } else {
-            if (mdIconImg) mdIconImg.style.display = 'none';
-            if (mdIconFallback) mdIconFallback.style.display = 'none';
-        }
-
-        const mdDownloads = document.getElementById('md-downloads');
-        const mdFollowers = document.getElementById('md-followers');
-        const mdUpdated = document.getElementById('md-updated');
-        const srcBadge = document.getElementById('md-source-badge');
-
-        if (mdDownloads) mdDownloads.textContent = `⬇ ${formatNumber(detail.downloads || 0)}`;
-        if (mdFollowers) mdFollowers.textContent = `❤ ${formatNumber(detail.followers || 0)}`;
-        if (mdUpdated) mdUpdated.textContent = '';
-        if (srcBadge) {
-            srcBadge.textContent = typeNames[type] || type;
-            srcBadge.style.color = '#f59e0b';
-            srcBadge.style.background = 'rgba(245,158,11,0.12)';
+        if (!cached) {
+            _projectDataCache.set(projectId, detail);
+            currentModDetailData = detail;
+            mdName.textContent = formatModNameWithChinese(detail.id || detail.slug, detail.title || typeNames[type] || '未知');
+            if (mdDesc) mdDesc.textContent = (detail.description || '').substring(0, 200);
+            if (detail.icon && mdIconImg && mdIconFallback) { mdIconImg.src = detail.icon; mdIconImg.style.display = ''; mdIconFallback.style.display = 'none'; }
+            const mdDownloads = document.getElementById('md-downloads');
+            const mdFollowers = document.getElementById('md-followers');
+            if (mdDownloads) mdDownloads.textContent = `⬇ ${formatNumber(detail.downloads || 0)}`;
+            if (mdFollowers) mdFollowers.textContent = `❤ ${formatNumber(detail.followers || 0)}`;
+            const srcBadge = document.getElementById('md-source-badge');
+            if (srcBadge) { srcBadge.textContent = typeNames[type] || type; srcBadge.style.color = '#f59e0b'; srcBadge.style.background = 'rgba(245,158,11,0.12)'; }
         }
 
         mdAllVersions = data ? (data.versions || []) : [];

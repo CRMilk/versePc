@@ -4001,7 +4001,7 @@ async function downloadFileWithMirror(urlStr, destPath, onProgress, retries = 3,
         } catch (e) {}
     }
 
-    const isSmallAsset = destPath.includes('/assets/') && !destPath.endsWith('.jar');
+    const isSmallAsset = (destPath.includes('/assets/') || destPath.includes('\\assets\\')) && !destPath.endsWith('.jar');
     if (isSmallAsset) {
         return _dlSingle(urlStr, destPath, { onProgress, retries, abortSignal, timeout: 30000, stallTimeout: 15000 });
     }
