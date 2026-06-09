@@ -6502,65 +6502,72 @@ async function downloadJavaRuntime(component, onProgress, mirrorIndex = 0) {
         let lastTime = Date.now();
         let lastSpeedBytes = 0;
         let speed = 0;
-        let currentFileDownloaded = 0;
+        const fileBytes = {};
 
         for (const [filePath, fileInfo] of fileEntries) {
             if (fileInfo.downloads && fileInfo.downloads.raw) {
-                totalBytes += fileInfo.downloads.raw.size;
+                const sz = fileInfo.downloads.raw.size || 0;
+                totalBytes += sz;
+                fileBytes[filePath] = sz;
             }
         }
 
-        for (const [filePath, fileInfo] of fileEntries) {
-            const destPath = path.join(targetDir, filePath);
-            const destDir = path.dirname(destPath);
+        const CONCURRENT = 8;
+        let idx = 0;
 
-            if (!fs.existsSync(destDir)) {
-                fs.mkdirSync(destDir, { recursive: true });
-            }
+        async function downloadNext() {
+            while (idx < fileEntries.length) {
+                const i = idx++;
+                const [filePath, fileInfo] = fileEntries[i];
+                const destPath = path.join(targetDir, filePath);
+                const destDir = path.dirname(destPath);
+                if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
 
-            if (fileInfo.downloads && fileInfo.downloads.raw) {
-                const download = fileInfo.downloads.raw;
-                let downloadUrl = download.url;
-                if (mirror) {
-                    downloadUrl = getJavaMirrorUrl(downloadUrl, mirror);
+                if (fileInfo.downloads && fileInfo.downloads.raw) {
+                    const download = fileInfo.downloads.raw;
+                    let downloadUrl = download.url;
+                    if (mirror) downloadUrl = getJavaMirrorUrl(downloadUrl, mirror);
+
+                    await downloadFile(downloadUrl, destPath, (progress) => {
+                        const now = Date.now();
+                        const elapsed = now - lastTime;
+                        const incrementalBytes = (progress.bytesDownloaded || 0);
+                        downloadedBytes += incrementalBytes;
+                        if (elapsed >= 500) {
+                            speed = Math.round((downloadedBytes - lastSpeedBytes) * 1000 / elapsed);
+                            lastTime = now;
+                            lastSpeedBytes = downloadedBytes;
+                        }
+                        if (onProgress) {
+                            onProgress({
+                                file: path.basename(filePath),
+                                current: downloadedFiles + 1,
+                                total: totalFiles,
+                                progress: totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0,
+                                downloadedBytes: downloadedBytes,
+                                totalBytes: totalBytes,
+                                speed: speed,
+                                source: mirror ? mirror.name : 'Mojang官方'
+                            });
+                        }
+                    }, 3, null);
+                } else {
+                    fs.writeFileSync(destPath, '');
                 }
 
-                currentFileDownloaded = 0;
-                await downloadFile(downloadUrl, destPath, (progress) => {
-                    const now = Date.now();
-                    const elapsed = now - lastTime;
-                    const incrementalBytes = (progress.bytesDownloaded || 0) - currentFileDownloaded;
-                    currentFileDownloaded = progress.bytesDownloaded || 0;
-                    downloadedBytes += incrementalBytes;
-                    if (elapsed >= 500) {
-                        speed = Math.round((downloadedBytes - lastSpeedBytes) * 1000 / elapsed);
-                        lastTime = now;
-                        lastSpeedBytes = downloadedBytes;
-                    }
-                    if (onProgress) {
-                        onProgress({
-                            file: path.basename(filePath),
-                            current: downloadedFiles + 1,
-                            total: totalFiles,
-                            progress: totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0,
-                            downloadedBytes: downloadedBytes,
-                            totalBytes: totalBytes,
-                            speed: speed,
-                            source: mirror ? mirror.name : 'Mojang官方'
-                        });
-                    }
-                });
-                downloadedBytes += (download.size - currentFileDownloaded);
-            } else {
-                fs.writeFileSync(destPath, '');
-            }
+                if (fileInfo.executable && process.platform !== 'win32') {
+                    try { fs.chmodSync(destPath, 0o755); } catch (e) {}
+                }
 
-            if (fileInfo.executable && process.platform !== 'win32') {
-                try { fs.chmodSync(destPath, 0o755); } catch (e) {}
+                downloadedFiles++;
             }
-
-            downloadedFiles++;
         }
+
+        const workers = [];
+        for (let w = 0; w < Math.min(CONCURRENT, totalFiles); w++) {
+            workers.push(downloadNext());
+        }
+        await Promise.all(workers);
 
         return {
             path: path.join(targetDir, 'bin', process.platform === 'win32' ? 'java.exe' : 'java'),
