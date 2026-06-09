@@ -2513,6 +2513,29 @@
                     </div>
                 </div>
 
+                <!-- 更新公告弹窗 -->
+                <div id="announcement-modal" class="modal" style="display:none" data-no-close-on-backdrop>
+                    <div class="modal-content announcement-modal-content">
+                        <div class="modal-header">
+                            <h3>更新公告</h3>
+                            <button class="modal-close" onclick="dismissAnnouncementModal()">&times;</button>
+                        </div>
+                        <div class="modal-body announcement-modal-body">
+                            <div class="announcement-version" id="announcement-version-badge"></div>
+                            <div class="announcement-content" id="announcement-content">
+                                <p>暂无公告内容</p>
+                            </div>
+                        </div>
+                        <div class="modal-footer announcement-modal-footer">
+                            <label class="checkbox-label announcement-checkbox">
+                                <input type="checkbox" id="announcement-dismiss-check">
+                                <span>下次启动不再弹出</span>
+                            </label>
+                            <button class="modal-btn modal-btn--primary" onclick="dismissAnnouncementModal()">我已知晓</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="screenshot-modal" class="modal" style="display:none;">
                     <div class="modal-content" style="max-width:800px;">
                         <div class="modal-header">
@@ -3067,6 +3090,7 @@
                             <div class="form-group" style="margin-top: 12px;">
                                 <div class="btn-group">
                                     <button class="btn btn-secondary" onclick="checkForUpdates()">检查更新</button>
+                                    <button class="btn btn-secondary" onclick="showUpdateAnnouncement()">查看更新公告</button>
                                     <button class="btn btn-secondary" onclick="exportSettings()">导出设置</button>
                                     <button class="btn btn-secondary" onclick="importSettings()">导入设置</button>
                                     <button class="btn btn-secondary" onclick="createDesktopShortcut()">创建桌面快捷方式</button>

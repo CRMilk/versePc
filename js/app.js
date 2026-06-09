@@ -922,6 +922,109 @@ function dismissSupportModal() {
     }
 }
 
+var ANNOUNCEMENT_CONTENT = {
+    version: '',
+    title: 'VersePC 更新公告',
+    body: '<p>暂无公告内容，敬请期待。</p>'
+};
+
+async function showAnnouncementModal(forceShow) {
+    try {
+        var versionResult = await window.electronAPI.updater.getVersion();
+        var currentVersion = versionResult ? versionResult.version : '1.0.0';
+    } catch (e) {
+        var currentVersion = '1.0.0';
+    }
+
+    if (!forceShow) {
+        try {
+            var dismissedVersion = localStorage.getItem('versepc_announcement_dismissed_version');
+            if (dismissedVersion === currentVersion) return;
+        } catch (e) {}
+    }
+
+    var noticeMode = 'show-all';
+    try {
+        var saved = await window.electronAPI.store.get('versepc_other_settings');
+        if (saved) {
+            var settings = JSON.parse(saved);
+            if (settings.launcherNoticeMode) noticeMode = settings.launcherNoticeMode;
+        }
+    } catch (e) {}
+
+    if (!forceShow && noticeMode === 'hide') return;
+
+    var versionBadge = document.getElementById('announcement-version-badge');
+    var contentEl = document.getElementById('announcement-content');
+    var checkEl = document.getElementById('announcement-dismiss-check');
+
+    if (versionBadge) versionBadge.textContent = 'v' + currentVersion;
+    if (contentEl) contentEl.innerHTML = ANNOUNCEMENT_CONTENT.body;
+    if (checkEl) checkEl.checked = false;
+
+    var modal = document.getElementById('announcement-modal');
+    if (!modal) return;
+
+    if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+
+    modal.style.display = 'flex';
+    requestAnimationFrame(function () {
+        modal.classList.add('modal-visible');
+        modal.classList.remove('modal-exiting');
+    });
+
+    requestAnimationFrame(function () {
+        var closeBtn = modal.querySelector('.modal-close');
+        if (closeBtn) closeBtn.focus();
+    });
+
+    var onKeyDown = function (e) {
+        if (e.key === 'Escape') {
+            dismissAnnouncementModal();
+        }
+    };
+    modal.addEventListener('keydown', onKeyDown);
+    modal._escCleanup = function () { modal.removeEventListener('keydown', onKeyDown); };
+}
+
+function dismissAnnouncementModal() {
+    var modal = document.getElementById('announcement-modal');
+    if (!modal) return;
+
+    var checkEl = document.getElementById('announcement-dismiss-check');
+    if (checkEl && checkEl.checked) {
+        try {
+            var versionBadge = document.getElementById('announcement-version-badge');
+            var version = versionBadge ? versionBadge.textContent : '';
+            if (version) localStorage.setItem('versepc_announcement_dismissed_version', version.replace(/^v/, ''));
+        } catch (e) {}
+    }
+
+    if (typeof modal._escCleanup === 'function') {
+        modal._escCleanup();
+        modal._escCleanup = null;
+    }
+
+    modal.setAttribute('data-state', 'closed');
+    modal.classList.add('modal-exiting');
+    modal.classList.remove('modal-visible');
+
+    setTimeout(function () {
+        modal.classList.remove('modal-exiting');
+        modal.style.display = 'none';
+    }, 200);
+}
+
+async function checkAnnouncementPopup() {
+    await showAnnouncementModal(false);
+}
+
+async function showUpdateAnnouncement() {
+    await showAnnouncementModal(true);
+}
+
 function generateColorAvatar(username, size) {
     size = size || 64;
     const canvas = document.createElement('canvas');
@@ -10358,6 +10461,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderSponsors();
     loadMachineId();
     updateActivationStatus();
+    setTimeout(checkAnnouncementPopup, 2000);
 });
 
 document.addEventListener('keydown', (e) => {

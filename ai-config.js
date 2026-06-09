@@ -104,6 +104,19 @@ const AI_PROVIDERS = {
             { id: 'step-1-8k', name: 'Step-1-8K', free: true },
         ],
     },
+    doubao: {
+        name: '豆包',
+        baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+        authType: 'bearer',
+        apiFormat: 'openai',
+        thinkingParams: {},
+        models: [
+            { id: 'doubao-1.5-pro-256k', name: '豆包 1.5 Pro 256K', free: false },
+            { id: 'doubao-1.5-lite-32k', name: '豆包 1.5 Lite 32K', free: true },
+            { id: 'doubao-pro-256k', name: '豆包 Pro 256K', free: false },
+            { id: 'doubao-lite-128k', name: '豆包 Lite 128K', free: true },
+        ],
+    },
     siliconflow: {
         name: 'SiliconFlow',
         baseUrl: 'https://api.siliconflow.cn/v1',

@@ -961,7 +961,21 @@ ipcMain.handle('get-memory-info', async () => {
 
 ipcMain.handle('memory-optimize', async () => {
     return new Promise((resolve) => {
-        const scriptPath = path.join(__dirname, 'scripts', 'memopt.ps1');
+        const scriptSrc = path.join(__dirname, 'scripts', 'memopt.ps1');
+        let scriptPath;
+        try {
+            if (scriptSrc.includes('app.asar')) {
+                const tmpDir = path.join(app.getPath('temp'), 'versepc-memopt');
+                fs.mkdirSync(tmpDir, { recursive: true });
+                scriptPath = path.join(tmpDir, 'memopt.ps1');
+                fs.copyFileSync(scriptSrc, scriptPath);
+            } else {
+                scriptPath = scriptSrc;
+            }
+        } catch (e) {
+            resolve({ success: false, error: 'extract script failed: ' + e.message });
+            return;
+        }
         if (!fs.existsSync(scriptPath)) {
             resolve({ success: false, error: 'Script not found' });
             return;

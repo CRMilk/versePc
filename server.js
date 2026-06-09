@@ -8405,6 +8405,14 @@ function buildLaunchArguments(versionJson, settings, account, versionId, customG
         if (!gameArgs.some(a => a === '--height')) gameArgs.push('--height', resH);
     }
 
+    let versionTypeIdx = gameArgs.indexOf('--versionType');
+    if (versionTypeIdx === -1) {
+        const ci = (settings.customInfo || '').trim();
+        if (ci) {
+            gameArgs.push('--versionType', ci);
+        }
+    }
+
     const finalGameArgs = deduplicateGameArgs(gameArgs);
 
     console.log(`[Launch] Args built: ${jvmArgs.length} JVM, ${finalGameArgs.length} game (${gameArgs.length - finalGameArgs.length} duplicates removed)`);
