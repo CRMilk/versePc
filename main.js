@@ -2112,37 +2112,18 @@ function initAutoUpdater() {
 
 function showUpdateNotification(info) {
     if (!mainWindow || mainWindow.isDestroyed()) return;
-    const detail = [];
-    detail.push('当前版本：v' + app.getVersion());
-    detail.push('最新版本：v' + info.version);
-    if (info.releaseNotes) {
-        const notes = typeof info.releaseNotes === 'string'
-            ? info.releaseNotes
-            : Array.isArray(info.releaseNotes)
-                ? info.releaseNotes.map(n => n.note || '').filter(Boolean).join('\n')
-                : '';
-        if (notes) detail.push('\n更新内容：\n' + notes.substring(0, 500));
-    }
-    dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: '发现新版本',
-        message: 'VersePC 有可用更新 v' + info.version,
-        detail: detail.join('\n'),
-        buttons: ['稍后提醒', '查看详情', '立即下载'],
-        defaultId: 2,
-        cancelId: 0,
-    }).then(({ response }) => {
-        switch (response) {
-            case 0:
-                break;
-            case 1:
-                shell.openExternal('https://github.com/doujie081231/versePc/releases/latest');
-                break;
-            case 2:
-                doDownloadUpdate(info);
-                break;
-        }
-    }).catch(() => {});
+    const notes = typeof info.releaseNotes === 'string'
+        ? info.releaseNotes
+        : Array.isArray(info.releaseNotes)
+            ? info.releaseNotes.map(n => n.note || '').filter(Boolean).join('\n')
+            : '';
+    sendToUpdateUI('update-available', {
+        version: info.version,
+        releaseDate: info.releaseDate,
+        releaseName: info.releaseName,
+        releaseNotes: notes,
+        currentVersion: app.getVersion(),
+    });
 }
 
 async function doDownloadUpdate(updateInfo) {
