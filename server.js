@@ -10859,11 +10859,14 @@ async function performInstallation(sessionId, versionDetails) {
         session.totalFiles = validLibraries.length;
         session.completedFiles = 0;
 
-        for (let i = 0; i < validLibraries.length; i++) {
-            if (isAborted()) { abortCleanup(); return; }
+        const LIB_PARALLEL = Math.min(parseInt(settings.maxThreads, 10) || 16, validLibraries.length);
+        let libCompleted = 0;
+        let libIndex = 0;
+        let libActive = 0;
+        let libResolve = null;
 
-            const lib = validLibraries[i];
-            session.currentFile = lib.name || 'unknown';
+        const downloadOneLib = async (lib, idx) => {
+            if (isAborted()) return;
 
             if (lib.downloads?.artifact) {
                 const artifact = lib.downloads.artifact;
@@ -10874,18 +10877,16 @@ async function performInstallation(sessionId, versionDetails) {
                 }
                 const libFile = path.join(LIBRARIES_DIR, libPath);
 
-                session.currentFile = lib.name || libPath;
-
                 if (!fs.existsSync(libFile) || (artifact.size && fs.statSync(libFile).size !== artifact.size)) {
                     try {
                         await downloadFileWithMirror(libUrl, libFile, (p) => {
-                            const baseProgress = 25 + (i / validLibraries.length) * 30;
+                            const baseProgress = 25 + (idx / validLibraries.length) * 30;
                             const libProgress = (p.progress / 100) * (30 / validLibraries.length);
                             session.progress = baseProgress + libProgress;
                             session.speed = p.speed || DownloadManager.getSpeed();
                             session.bytesDownloaded = p.bytesDownloaded;
                             session.totalBytes = p.totalBytes;
-                            session.message = `下载库文件 (${i + 1}/${validLibraries.length}): ${path.basename(libPath)}`;
+                            session.message = `下载库文件 (${idx + 1}/${validLibraries.length}): ${path.basename(libPath)}`;
                         });
 
                         if (artifact.sha1) {
@@ -10955,10 +10956,10 @@ async function performInstallation(sessionId, versionDetails) {
 
                         try {
                             await downloadFileWithMirror(downloadUrl, libFile, (p) => {
-                                const baseProgress = 25 + (i / validLibraries.length) * 30;
+                                const baseProgress = 25 + (idx / validLibraries.length) * 30;
                                 const libProgress = (p.progress / 100) * (30 / validLibraries.length);
                                 session.progress = baseProgress + libProgress;
-                                session.message = `下载库文件 (${i + 1}/${validLibraries.length}): ${jarName}`;
+                                session.message = `下载库文件 (${idx + 1}/${validLibraries.length}): ${jarName}`;
                             });
                             if (libFile.endsWith('.jar') && !isJarIntact(libFile)) {
                                 console.warn(`Library JAR corrupt after download: ${lib.name}`);
@@ -10996,11 +10997,42 @@ async function performInstallation(sessionId, versionDetails) {
                     }
                 }
             }
+        };
 
-            if (i % 5 === 4) await sleep(200);
-            session.completedFiles = i + 1;
-            session.progress = 25 + (i / validLibraries.length) * 35;
-        }
+        await new Promise((resolve) => {
+            libResolve = resolve;
+            const startLib = async () => {
+                while (libIndex < validLibraries.length) {
+                    if (isAborted()) { abortCleanup(); return; }
+                    const curIdx = libIndex++;
+                    const lib = validLibraries[curIdx];
+                    session.currentFile = lib.name || 'unknown';
+                    libActive++;
+                    downloadOneLib(lib, curIdx).then(() => {
+                        libCompleted++;
+                        libActive--;
+                        session.completedFiles = libCompleted;
+                        if (libActive === 0 && libIndex >= validLibraries.length && libResolve) {
+                            libResolve();
+                        }
+                    });
+                    if (libActive >= LIB_PARALLEL) {
+                        await new Promise(r => {
+                            const check = setInterval(() => {
+                                if (libActive < LIB_PARALLEL || libIndex >= validLibraries.length) {
+                                    clearInterval(check);
+                                    r();
+                                }
+                            }, 10);
+                        });
+                    }
+                }
+                if (libActive === 0 && libResolve) libResolve();
+            };
+            startLib();
+        });
+        session.completedFiles = validLibraries.length;
+        session.progress = 60;
 
         session.stage = 'assets';
         session.message = '下载资源索引...';
