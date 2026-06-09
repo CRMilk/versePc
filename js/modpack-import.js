@@ -90,11 +90,22 @@
             window.electronAPI.onImportProgress(function (data) {
                 if (typeof dlManager !== 'undefined') {
                     const stageText = getImportStageText(data.message);
-                    dlManager.update(taskId, {
+                    const updateData = {
                         progress: data.progress || 0,
                         status: 'downloading',
                         message: stageText
-                    });
+                    };
+                    if (data.files && data.files.length > 0) {
+                        updateData.files = data.files.map(function (f) {
+                            return {
+                                name: f.name || f.filename || f.path || '',
+                                status: f.status || 'pending',
+                                progress: f.progress || 0,
+                                size: f.size ? (typeof formatSize === 'function' ? formatSize(f.size) : f.size) : ''
+                            };
+                        });
+                    }
+                    dlManager.update(taskId, updateData);
                 }
             });
         }

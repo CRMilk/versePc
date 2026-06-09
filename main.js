@@ -1164,7 +1164,7 @@ app.whenReady().then(async () => {
 
         const sseLog = (msg) => {
             console.log(msg);
-            try { const fs = require('fs'); fs.appendFileSync(path.join(__dirname, 'sse-debug.log'), `[${new Date().toISOString()}] ${msg}\n`); } catch (_) {}
+            try { fs.promises.appendFile(path.join(__dirname, 'sse-debug.log'), `[${new Date().toISOString()}] ${msg}\n`).catch(() => {}); } catch (_) {}
         };
         try {
             sseLog('[DEBUG SSE] require sse-server...');
@@ -1606,7 +1606,7 @@ function registerModsIPC() {
             const jarFiles = files.filter(f => f.endsWith(".jar"));
             modCount = jarFiles.length;
             
-            hasConfig = fs.existsSync(path.join(modsDirPath, "config"));
+            try { await fs.promises.access(path.join(modsDirPath, "config")); hasConfig = true; } catch { hasConfig = false; }
             
             const langFiles = await searchFilesRecursive(modsDirPath, "*.lang", []);
             languageFiles = langFiles.map(f => path.relative(modsDirPath, f));
@@ -1620,9 +1620,8 @@ function registerModsIPC() {
     // 获取已安装的版本列表（包含模组加载器信息和模组数量）
     ipcMain.handle("mods:getInstalledVersions", async () => {
         try {
-            const os = require('os');
             const versionsDir = path.join(os.homedir(), '.versepc', 'versions');
-            if (!fs.existsSync(versionsDir)) return { success: true, versions: [] };
+            try { await fs.promises.access(versionsDir); } catch { return { success: true, versions: [] }; }
 
             const versions = [];
             const dirs = await fs.promises.readdir(versionsDir, { withFileTypes: true });
@@ -1633,7 +1632,7 @@ function registerModsIPC() {
                 const jsonFile = path.join(versionDir, `${dir.name}.json`);
                 const modsDir = path.join(versionDir, 'mods');
 
-                if (!fs.existsSync(jsonFile)) continue;
+                try { await fs.promises.access(jsonFile); } catch { continue; }
 
                 let versionInfo = { id: dir.name, type: 'release', isFabric: false, isForge: false, isNeoForge: false, hasMods: false, modsPath: modsDir };
 
@@ -1648,15 +1647,14 @@ function registerModsIPC() {
                     versionInfo.isNeoForge = versionIdLower.includes('neoforge');
                 } catch (e) {}
 
-                if (fs.existsSync(modsDir)) {
-                    try {
-                        const modsItems = await fs.promises.readdir(modsDir);
-                        versionInfo.hasMods = modsItems.length > 0;
-                        versionInfo.modsCount = modsItems.filter(f => f.endsWith('.jar') || f.endsWith('.jar.disabled')).length;
-                    } catch (e) {
-                        versionInfo.hasMods = false;
-                        versionInfo.modsCount = 0;
-                    }
+                try {
+                    await fs.promises.access(modsDir);
+                    const modsItems = await fs.promises.readdir(modsDir);
+                    versionInfo.hasMods = modsItems.length > 0;
+                    versionInfo.modsCount = modsItems.filter(f => f.endsWith('.jar') || f.endsWith('.jar.disabled')).length;
+                } catch (e) {
+                    versionInfo.hasMods = false;
+                    versionInfo.modsCount = 0;
                 }
 
                 versions.push(versionInfo);
@@ -1678,9 +1676,7 @@ function registerModsIPC() {
     ipcMain.handle("mods:listJar", async (event, { path: jarPath }) => {
         try {
             if (!isPathAllowed(jarPath)) return { success: false, error: '路径不被允许' };
-            if (!fs.existsSync(jarPath)) {
-                return { success: false, error: '文件不存在' };
-            }
+            try { await fs.promises.access(jarPath); } catch { return { success: false, error: '文件不存在' }; }
             const entries = await parseJarFile(jarPath);
             return { success: true, entries: entries };
         } catch (e) {
@@ -1692,9 +1688,7 @@ function registerModsIPC() {
     ipcMain.handle("mods:readJarEntry", async (event, { jarPath, entryName }) => {
         try {
             if (!isPathAllowed(jarPath)) return { success: false, error: '路径不被允许' };
-            if (!fs.existsSync(jarPath)) {
-                return { success: false, error: '文件不存在' };
-            }
+            try { await fs.promises.access(jarPath); } catch { return { success: false, error: '文件不存在' }; }
             const content = await readJarEntryContent(jarPath, entryName);
             if (content === null) {
                 return { success: false, error: '入口不存在: ' + entryName };
@@ -1709,9 +1703,7 @@ function registerModsIPC() {
     ipcMain.handle("mods:writeJarEntry", async (event, { jarPath, entryName, content }) => {
         try {
             if (!isPathAllowed(jarPath)) return { success: false, error: '路径不被允许' };
-            if (!fs.existsSync(jarPath)) {
-                return { success: false, error: 'JAR文件不存在' };
-            }
+            try { await fs.promises.access(jarPath); } catch { return { success: false, error: 'JAR文件不存在' }; }
             const AdmZip = require('adm-zip');
             let zip;
             try {
@@ -1740,9 +1732,7 @@ function registerModsIPC() {
     ipcMain.handle("mods:findLangFiles", async (event, { jarPath }) => {
         try {
             if (!isPathAllowed(jarPath)) return { success: false, error: '路径不被允许' };
-            if (!fs.existsSync(jarPath)) {
-                return { success: false, error: 'JAR文件不存在' };
-            }
+            try { await fs.promises.access(jarPath); } catch { return { success: false, error: 'JAR文件不存在' }; }
             const entries = await parseJarFile(jarPath);
             const langFiles = entries.filter(e =>
                 !e.isDirectory && (
@@ -1798,43 +1788,92 @@ function registerModsIPC() {
         }
     });
 
-    // 获取默认模组路径（根据当前选中版本自动定位到对应版本的mods文件夹）
+    // 获取默认模组路径（参考PCL2智能版本隔离逻辑自动定位mods文件夹）
+    let _defaultModPathCache = { path: '', time: 0 };
+    const DEFAULT_MOD_PATH_TTL = 30000;
     ipcMain.handle("getDefaultModPath", async () => {
         try {
-            const homeDir = require('os').homedir();
+            if (_defaultModPathCache.path && (Date.now() - _defaultModPathCache.time) < DEFAULT_MOD_PATH_TTL) {
+                return { success: true, path: _defaultModPathCache.path };
+            }
+            const homeDir = os.homedir();
             const dataDir = path.join(homeDir, '.versepc');
             const versionsDir = path.join(dataDir, 'versions');
-            let defaultPath = '';
+            const minecraftDir = path.join(homeDir, '.minecraft');
 
-            const settingsFile = path.join(dataDir, 'settings.json');
-            if (fs.existsSync(settingsFile)) {
+            let settings = {};
+            try {
+                const content = await fs.promises.readFile(path.join(dataDir, 'settings.json'), 'utf8');
+                settings = JSON.parse(content);
+            } catch (e) {}
+
+            let versionId = settings.selectedVersion || '';
+
+            if (!versionId) {
                 try {
-                    const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-                    if (settings.selectedVersion) {
-                        const modsDir = path.join(versionsDir, settings.selectedVersion, 'mods');
-                        if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir, { recursive: true });
-                        defaultPath = modsDir;
-                    }
+                    const dirs = await fs.promises.readdir(versionsDir, { withFileTypes: true });
+                    const versionDirs = dirs.filter(d => d.isDirectory());
+                    if (versionDirs.length > 0) versionId = versionDirs[0].name;
                 } catch (e) {}
             }
 
-            if (!defaultPath) {
-                if (fs.existsSync(versionsDir)) {
-                    const versions = fs.readdirSync(versionsDir).filter(d =>
-                        fs.statSync(path.join(versionsDir, d)).isDirectory()
-                    );
-                    if (versions.length > 0) {
-                        const modsDir = path.join(versionsDir, versions[0], 'mods');
-                        if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir, { recursive: true });
-                        defaultPath = modsDir;
+            if (!versionId) {
+                const defaultPath = path.join(minecraftDir, 'mods');
+                await fs.promises.mkdir(defaultPath, { recursive: true }).catch(() => {});
+                _defaultModPathCache = { path: defaultPath, time: Date.now() };
+                return { success: true, path: defaultPath };
+            }
+
+            let gameDir;
+            if (versionId.includes('[外部]')) {
+                try {
+                    const storeFile = path.join(dataDir, 'store.json');
+                    const storeContent = await fs.promises.readFile(storeFile, 'utf8');
+                    const store = JSON.parse(storeContent);
+                    const folders = store.externalVersionFolders || [];
+                    const cleanId = versionId.replace(/\s*\[外部\]/, '');
+                    for (const folder of folders) {
+                        const candidate = path.join(folder, cleanId);
+                        if (fs.existsSync(candidate)) { gameDir = candidate; break; }
+                        const candidate2 = path.join(folder, versionId);
+                        if (fs.existsSync(candidate2)) { gameDir = candidate2; break; }
                     }
+                } catch (e) {}
+                if (!gameDir) {
+                    gameDir = path.join(versionsDir, versionId.replace(/\s*\[外部\]/, ''));
+                }
+            } else {
+                let effectiveIsolation;
+                try {
+                    const verSettingsFile = path.join(versionsDir, versionId, 'version-settings.json');
+                    const verContent = await fs.promises.readFile(verSettingsFile, 'utf8');
+                    const verSettings = JSON.parse(verContent);
+                    if (verSettings.isolation === 'on') effectiveIsolation = true;
+                    else if (verSettings.isolation === 'off') effectiveIsolation = false;
+                } catch (e) {}
+
+                if (effectiveIsolation === undefined) {
+                    effectiveIsolation = settings.versionIsolation !== false;
+                }
+
+                if (!effectiveIsolation) {
+                    const versionDir = path.join(versionsDir, versionId);
+                    const hasMods = fs.existsSync(path.join(versionDir, 'mods'));
+                    const hasSaves = fs.existsSync(path.join(versionDir, 'saves'));
+                    const hasConfig = fs.existsSync(path.join(versionDir, 'config'));
+                    if (hasMods || hasSaves || hasConfig) effectiveIsolation = true;
+                }
+
+                if (effectiveIsolation) {
+                    gameDir = path.join(versionsDir, versionId);
+                } else {
+                    gameDir = settings.gameDir || dataDir;
                 }
             }
 
-            if (!defaultPath) {
-                defaultPath = path.join(homeDir, '.minecraft', 'mods');
-            }
-
+            const defaultPath = path.join(gameDir, 'mods');
+            await fs.promises.mkdir(defaultPath, { recursive: true }).catch(() => {});
+            _defaultModPathCache = { path: defaultPath, time: Date.now() };
             return { success: true, path: defaultPath };
         } catch (e) {
             return { success: false, error: e.message };

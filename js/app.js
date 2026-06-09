@@ -46,6 +46,7 @@ let modSearchOffset = 0;
 let modSearchTotal = 0;
 let modSearchQuery = '';
 let modSearchResults = [];
+let _modDownloadVersionId = '';
 let currentInstallSessionId = null;
 let msAuthPollInterval = null;
 let currentLoaderType = 'fabric';
@@ -249,7 +250,11 @@ let modSelectedVersions = new Map();
 // DOM 缓存对象
 const domCache = new Map();
 function getDOMElement(id) {
-    if (domCache.has(id)) return domCache.get(id);
+    if (domCache.has(id)) {
+        const el = domCache.get(id);
+        if (el.isConnected) return el;
+        domCache.delete(id);
+    }
     const el = document.getElementById(id);
     if (el) domCache.set(id, el);
     return el;
@@ -2150,6 +2155,17 @@ function navigateToPage(pageName) {
     }
 
     if (currentPage && currentPage.id === 'page-explore' && pageName !== 'explore') {
+        const cm = document.getElementById('ai-chat-main');
+        if (cm) {
+            window.__exploreChatState = {
+                classes: cm.className,
+                idle: cm.classList.contains('ai-idle'),
+                welcomeDisplay: document.getElementById('ai-welcome')?.style.display || '',
+                messagesDisplay: document.getElementById('ai-messages')?.style.display || '',
+                topbarDisplay: document.getElementById('ai-chat-topbar')?.style.display || '',
+                inputAreaClasses: document.getElementById('ai-input-area')?.className || '',
+            };
+        }
     }
 
     if (pageName === 'explore') {
@@ -2170,6 +2186,21 @@ function navigateToPage(pageName) {
             console.log('[Navigate] disclaimer already accepted, showing explore directly');
             target.classList.add('active');
             target.scrollTop = 0;
+        }
+        const st = window.__exploreChatState;
+        if (st) {
+            requestAnimationFrame(() => {
+                const cm = document.getElementById('ai-chat-main');
+                if (cm) cm.className = st.classes;
+                const w = document.getElementById('ai-welcome');
+                if (w) w.style.display = st.welcomeDisplay;
+                const m = document.getElementById('ai-messages');
+                if (m) m.style.display = st.messagesDisplay;
+                const t = document.getElementById('ai-chat-topbar');
+                if (t) t.style.display = st.topbarDisplay;
+                const ia = document.getElementById('ai-input-area');
+                if (ia) ia.className = st.inputAreaClasses;
+            });
         }
         return;
     }
@@ -2591,6 +2622,7 @@ function getStageText(stage) {
         'natives': '提取原生库...',
         'finalizing': '完成安装...',
         'loader': '安装模组加载器...',
+        'fabric-api': '下载 Fabric API...',
         'completed': '安装完成',
         'failed': '安装失败',
         'cancelled': '已取消'
@@ -3609,8 +3641,34 @@ let mdCurrentDeps = [];
 let mdDepsResolved = {};
 let mdDepsVersionInfo = {};
 let _modDetailSeq = 0;
-const _projectDataCache = new Map();
-const _versionPreloadCache = new Map();
+class LRUCache {
+    constructor(maxSize) {
+        this._max = maxSize;
+        this._map = new Map();
+    }
+    has(key) { return this._map.has(key); }
+    get(key) {
+        if (!this._map.has(key)) return undefined;
+        const val = this._map.get(key);
+        this._map.delete(key);
+        this._map.set(key, val);
+        return val;
+    }
+    set(key, val) {
+        if (this._map.has(key)) this._map.delete(key);
+        this._map.set(key, val);
+        if (this._map.size > this._max) {
+            const oldest = this._map.keys().next().value;
+            this._map.delete(oldest);
+        }
+    }
+    delete(key) { this._map.delete(key); }
+    clear() { this._map.clear(); }
+    get size() { return this._map.size; }
+}
+
+const _projectDataCache = new LRUCache(200);
+const _versionPreloadCache = new LRUCache(100);
 let _versionPreloadInFlight = new Set();
 
 function preloadModVersions(projectId, source) {
@@ -3886,6 +3944,19 @@ function switchMdVersionTab(ver) {
 
 const mdDepsCache = new Map();
 const MD_DEPS_CACHE_TTL = 5 * 60 * 1000;
+const MD_DEPS_CACHE_MAX = 50;
+
+function cleanupMdDepsCache() {
+    const now = Date.now();
+    for (const [key, entry] of mdDepsCache) {
+        if (now - entry.time > MD_DEPS_CACHE_TTL) mdDepsCache.delete(key);
+    }
+    if (mdDepsCache.size > MD_DEPS_CACHE_MAX) {
+        const entries = [...mdDepsCache.entries()].sort((a, b) => a[1].time - b[1].time);
+        for (let i = 0; i < entries.length - MD_DEPS_CACHE_MAX; i++) mdDepsCache.delete(entries[i][0]);
+    }
+}
+setInterval(cleanupMdDepsCache, 60000);
 
 async function loadModDependencies() {
     const depsSection = document.getElementById('md-deps-section');
@@ -4279,9 +4350,9 @@ function renderMdVersionList(versions) {
     _mdvRenderedCount = initial.length;
 
     if (versions.length > MDV_INITIAL_RENDER) {
-        container.innerHTML += `<div id="mdv-load-more" style="text-align:center;padding:16px 0">
+        container.insertAdjacentHTML('beforeend', `<div id="mdv-load-more" style="text-align:center;padding:16px 0">
             <button class="btn btn-secondary" onclick="renderMdVersionListMore()">加载更多 (${versions.length - MDV_INITIAL_RENDER} 个版本)</button>
-        </div>`;
+        </div>`);
     }
 }
 
@@ -4521,16 +4592,21 @@ function getDownloadStageText(data) {
     return data.message || '处理中...';
 }
 
-async function resolveModSavePath() {
+async function resolveModSavePath(versionId) {
     try {
-        const gpRes = await API.getDefaultModPath().catch(() => null);
-        let path = '';
-        if (typeof gpRes === 'string') {
-            path = gpRes;
-        } else if (gpRes && typeof gpRes === 'object') {
-            path = gpRes.path || gpRes.data || '';
+        const vid = versionId || _modDownloadVersionId || '';
+        const url = vid ? `/api/filesystem/default-mod-path?versionId=${encodeURIComponent(vid)}` : '/api/filesystem/default-mod-path';
+        const resp = await fetch(url);
+        if (resp.ok) {
+            const gpRes = await resp.json();
+            let path = '';
+            if (typeof gpRes === 'string') {
+                path = gpRes;
+            } else if (gpRes && typeof gpRes === 'object') {
+                path = gpRes.path || gpRes.data || '';
+            }
+            if (path) return path;
         }
-        if (path) return path;
     } catch (e) {}
     return localStorage.getItem('lastModSavePath') || '';
 }
@@ -5171,6 +5247,7 @@ function switchLanTab(page, tab, btnEl) {
 }
 
 let terracottaPollTimer = null;
+let _terracottaPollRefresher = null;
 let terracottaState = { mode: null, connected: false };
 
 function updateTerracottaStatus(title, desc, state) {
@@ -5224,6 +5301,7 @@ function terracottaHide() {
     document.getElementById('terracotta-connected').style.display = 'none';
     document.getElementById('terracotta-tabs').style.display = 'none';
     if (terracottaPollTimer) { clearInterval(terracottaPollTimer); terracottaPollTimer = null; }
+    if (_terracottaPollRefresher) { clearInterval(_terracottaPollRefresher); _terracottaPollRefresher = null; }
 }
 
 async function terracottaStartHost() {
@@ -5388,6 +5466,7 @@ let _lastTerracottaStateIndex = -1;
 
 function terracottaStartPolling() {
     if (terracottaPollTimer) clearInterval(terracottaPollTimer);
+    if (_terracottaPollRefresher) { clearInterval(_terracottaPollRefresher); _terracottaPollRefresher = null; }
     _lastTerracottaStateIndex = -1;
     let pollInterval = 3000;
     let idleCount = 0;
@@ -5484,7 +5563,7 @@ function terracottaStartPolling() {
     doPoll();
     terracottaPollTimer = setInterval(doPoll, pollInterval);
 
-    setInterval(() => {
+    _terracottaPollRefresher = setInterval(() => {
         if (terracottaPollTimer) {
             clearInterval(terracottaPollTimer);
             terracottaPollTimer = setInterval(doPoll, pollInterval);
@@ -8514,6 +8593,7 @@ function saveCurrentVersionSetting(key, value) {
 function closeVersionSettings() {
     currentSettingsVersionId = null;
     currentVersionSettings = null;
+    _modDownloadVersionId = '';
     document.querySelector('.content-area').classList.remove('no-scroll');
     navigateToPage(previousPage || 'home');
 }
@@ -9007,14 +9087,17 @@ function installModByFile(filePath) {
 }
 
 function openBrowseMods() {
+    _modDownloadVersionId = '';
     navigateToPage('mods');
 }
 
 function goDownloadMods() {
     if (!currentSettingsVersionId) {
+        _modDownloadVersionId = '';
         navigateToPage('mods');
         return;
     }
+    _modDownloadVersionId = currentSettingsVersionId;
     
     const versionInfo = installedVersions.find(v => v.id === currentSettingsVersionId);
     
