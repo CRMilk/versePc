@@ -395,21 +395,21 @@ function createWindow() {
                 { role: 'zoomOut', label: '缩小' },
                 { type: 'separator' },
                 { role: 'togglefullscreen', label: '全屏' },
-                { type: 'separator' },
-                {
-                    label: '开发者工具',
-                    accelerator: 'F12',
-                    click: () => {
-                        mainWindow?.webContents.toggleDevTools();
-                    }
-                },
-                {
-                    label: '开发者工具 (备选)',
-                    accelerator: 'CmdOrCtrl+Shift+I',
-                    click: () => {
-                        mainWindow?.webContents.toggleDevTools();
-                    }
-                }
+                { type: 'separator' }
+                // {
+                //     label: '开发者工具',
+                //     accelerator: 'F12',
+                //     click: () => {
+                //         mainWindow?.webContents.toggleDevTools();
+                //     }
+                // },
+                // {
+                //     label: '开发者工具 (备选)',
+                //     accelerator: 'CmdOrCtrl+Shift+I',
+                //     click: () => {
+                //         mainWindow?.webContents.toggleDevTools();
+                //     }
+                // }
             ]
         }
     ];
