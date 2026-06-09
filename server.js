@@ -3297,22 +3297,29 @@ async function fetchJSON(urlStr, retriesOrHeaders = 3, timeoutMs) {
     const reqTimeout = typeof timeoutMs === 'number' ? timeoutMs : 15000;
 
     let actualUrl = urlStr;
+    let isMirror = false;
     if (urlStr.startsWith(MODRINTH_API)) {
         actualUrl = urlStr.replace(MODRINTH_API, MODRINTH_API_MIRROR);
+        isMirror = true;
     } else if (urlStr.startsWith(CURSEFORGE_API)) {
         actualUrl = urlStr.replace(CURSEFORGE_API, CURSEFORGE_API_MIRROR);
+        isMirror = true;
     }
     const mod = actualUrl.startsWith('https') ? https : http;
     const agent = actualUrl.startsWith('https') ? SHARED_HTTPS_AGENT : SHARED_HTTP_AGENT;
 
     const tryUrls = actualUrl !== urlStr ? [actualUrl, urlStr] : [urlStr];
     let lastErr = null;
-    for (const tryUrl of tryUrls) {
-        for (let attempt = 0; attempt < Math.min(retries, 2); attempt++) {
+    for (let urlIdx = 0; urlIdx < tryUrls.length; urlIdx++) {
+        const tryUrl = tryUrls[urlIdx];
+        const isMirrorUrl = urlIdx === 0 && isMirror;
+        const mirrorTimeout = isMirrorUrl ? Math.min(reqTimeout, 5000) : reqTimeout;
+        const maxAttempts = isMirrorUrl ? 1 : Math.min(retries, 2);
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
             try {
                 return await new Promise((resolve, reject) => {
                     const headers = { 'User-Agent': 'VersePC/2.0 (PCL2)', 'Connection': 'keep-alive', ...extraHeaders };
-                    const req = mod.get(tryUrl, { headers, agent, timeout: reqTimeout }, (res) => {
+                    const req = mod.get(tryUrl, { headers, agent, timeout: mirrorTimeout }, (res) => {
                         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
                             req.destroy();
                             return fetchJSON(res.headers.location, retries, reqTimeout).then(resolve).catch(reject);
@@ -3329,13 +3336,13 @@ async function fetchJSON(urlStr, retriesOrHeaders = 3, timeoutMs) {
                             catch (e) { reject(new Error(`JSON解析失败: ${e.message}`)); }
                         });
                     });
-                    req.on('timeout', () => { req.destroy(); reject(new Error(`请求超时 (${reqTimeout}ms)`)); });
+                    req.on('timeout', () => { req.destroy(); reject(new Error(`请求超时 (${mirrorTimeout}ms)`)); });
                     req.on('error', reject);
                 });
             } catch (e) {
                 lastErr = e;
                 console.warn(`[fetchJSON] ${tryUrl.substring(0, 60)}... 尝试${attempt + 1}失败: ${e.message}`);
-                if (attempt >= 1) break;
+                if (attempt >= maxAttempts - 1) break;
             }
         }
     }

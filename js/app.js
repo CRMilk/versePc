@@ -1960,7 +1960,7 @@ function renderVersions() {
 
         if (isInInstalledTab) {
             const externalBadgeHtml = v.isExternal ? '<span style="display:inline-block;background:rgba(255,165,0,0.15);color:#ffa500;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px">外部文件夹</span>' : '';
-            const externalPathHtml = v.isExternal && v.externalPath ? `<span style="color:var(--text-muted);font-size:11px;margin-left:4px" title="${escapeHtml(v.externalPath)}">📁 ${escapeHtml(v.externalPath)}</span>` : '';
+            const externalPathHtml = v.isExternal && v.externalPath ? `<span style="color:var(--text-muted);font-size:11px;margin-left:4px" title="${escapeHtml(v.externalPath)}">${escapeHtml(v.externalPath)}</span>` : '';
             const displayName = v.isExternal ? (v.customName || v.id.replace(' [外部]', '')) : (v.customName || v.id);
             const deleteBtnHtml = v.isExternal ? '' : `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteVersion('${escapeOnclick(v.id)}')">删除</button>`;
             return `<div class="version-item version-item-clickable" 

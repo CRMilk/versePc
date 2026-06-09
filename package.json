@@ -5,19 +5,13 @@
     "main": "main.js",
     "scripts": {
         "start": "electron .",
-        "build": "npm run protect && node generate-integrity.js && electron-builder --win --linux --mac --publish never",
-        "build:win": "npm run protect && node generate-integrity.js && electron-builder --win --publish never",
+        "build": "node generate-integrity.js && electron-builder --win --linux --mac --publish never",
+        "build:win": "node generate-integrity.js && electron-builder --win --publish never",
         "build:linux": "electron-builder --linux --publish never",
         "build:mac": "electron-builder --mac --publish never",
         "build:dir": "electron-builder --win --dir",
         "build:installer": "electron-builder --win --config.nsis --publish never",
         "build:publish": "electron-builder --win --linux --mac --publish always",
-        "protect": "node obfuscate.js",
-        "protect:dry": "node obfuscate.js --dry-run",
-        "protect:restore": "node obfuscate.js --restore",
-        "ai-protect": "node ai-protection.js",
-        "ai-protect:check": "node ai-protection.js --check",
-        "ai-protect:dry": "node ai-protection.js --dry-run",
         "build:clean": "node -e \"const{execSync}=require('child_process');execSync('npm run build:win',{stdio:'inherit'})\""
     },
     "dependencies": {
@@ -202,7 +196,6 @@
         "@ffmpeg-installer/ffmpeg": "^1.1.0",
         "electron": "^41.4.0",
         "electron-builder": "^26.8.1",
-        "javascript-obfuscator": "^5.4.3",
         "png-to-ico": "^3.0.1"
     }
 }
