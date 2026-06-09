@@ -1252,8 +1252,6 @@ function setupTabs() {
                 if (browsePanel) browsePanel.style.display = '';
             } else if (tab === 'browse-modpacks') {
                 loadResourcePage('modpack');
-            } else if (tab === 'installed-modpacks') {
-                loadInstalledModpacks();
             }
         });
     });
@@ -2144,12 +2142,7 @@ function navigateToPage(pageName) {
 
     if (pageName === 'modpacks') {
         modDetailHistory = [];
-        const activeTab = document.querySelector('#page-modpacks .tab-btn.active');
-        if (activeTab && activeTab.dataset.tab === 'installed-modpacks') {
-            setTimeout(() => loadInstalledModpacks(), 100);
-        } else {
-            setTimeout(() => loadResourcePage('modpack'), 100);
-        }
+        setTimeout(() => loadResourcePage('modpack'), 100);
     } else if (pageName === 'settings-other') {
         setTimeout(() => refreshMemoryInfo(), 200);
     } else if (pageName === 'datapacks') {
@@ -5121,10 +5114,10 @@ function terracottaCopyAddr() {
 
 function terracottaShowAgreement() {
     const agreementSeen = localStorage.getItem('terracotta_agreement_v2');
-    if (agreementSeen) return true;
+    if (agreementSeen) return Promise.resolve(true);
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `<div class="modal-content" style="max-width:500px">
+    modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);';
+    modal.innerHTML = `<div style="background:var(--bg-primary);border-radius:12px;padding:24px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
         <h3 style="margin-bottom:12px">陶瓦联机使用须知</h3>
         <div style="color:var(--text-secondary);font-size:13px;line-height:1.7;margin-bottom:16px">
             <p>陶瓦联机基于 <a href="https://github.com/EasyTier/EasyTier" style="color:var(--primary)">EasyTier</a> 开源项目，由第三方提供公共节点。</p>
@@ -7829,33 +7822,6 @@ function loadResourcePage(type) {
     state.query = '';
     loadResourceList(type);
     setupResourceEvents(type);
-}
-
-function loadInstalledModpacks() {
-    const container = document.getElementById('modpack-browse-list');
-    if (!container) return;
-
-    const modpackVersions = installedVersions.filter(v => v.isModpack);
-
-    if (modpackVersions.length === 0) {
-        container.innerHTML = '<p class="empty-text">暂无已安装的整合包</p>';
-    } else {
-        container.innerHTML = modpackVersions.map(v => {
-            const iconParams = `id=${encodeURIComponent(v.id)}&type=release`;
-            const modpackParam = '&modpack=true';
-            const iconUrl = `/api/version-icon?${iconParams}${modpackParam}&_t=${versionIconsTimestamp}`;
-            const displayName = v.customName || v.id;
-            const badge = v.modpackLoader || '整合包';
-            return `<div class="version-grid-item" onclick="openVersionSettings('${escapeOnclick(v.id)}','${escapeOnclick(displayName)}')" style="cursor:pointer">
-                <div class="v-icon"><img src="${iconUrl}" alt="" class="version-icon-img"></div>
-                <span class="v-name">${displayName}</span>
-                <span class="v-badge modpack">${badge}</span>
-            </div>`;
-        }).join('');
-    }
-
-    const pageInfo = document.getElementById('modpack-page-info');
-    if (pageInfo) pageInfo.textContent = '';
 }
 
 function setupResourceEvents(type) {
