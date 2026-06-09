@@ -14033,7 +14033,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     let versionData = null;
                     if (gdSource === 'modrinth') {
                         if (gdVersionId) {
-                            versionData = await fetchJSON(`${MODRINTH_API}/version/${gdVersionId}`);
+                            versionData = await cachedFetchJSON(`${MODRINTH_API}/version/${gdVersionId}`, 300000);
                         }
                     }
                     const deps = [];
@@ -14045,8 +14045,8 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         if (requiredDeps.length > 0) {
                             const depIds = requiredDeps.map(d => `"${d.project_id}"`).join(',');
                             try {
-                                const depProjects = await fetchJSON(`${MODRINTH_API}/projects?ids=[${depIds}]`);
-                                for (const dep of requiredDeps) {
+                                const depProjects = await cachedFetchJSON(`${MODRINTH_API}/projects?ids=[${depIds}]`, 300000);
+                                const depVersionPromises = requiredDeps.map(async dep => {
                                     const proj = depProjects?.find(p => p.id === dep.project_id);
                                     let compatibleVersion = null;
                                     if (proj) {
@@ -14056,7 +14056,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                                             if (gdGameVersion) depParams.push(`game_versions=["${gdGameVersion}"]`);
                                             if (gdLoader) depParams.push(`loaders=["${gdLoader}"]`);
                                             depParams.push('limit=1');
-                                            const depVersions = await fetchJSON(depVerUrl + '?' + depParams.join('&'));
+                                            const depVersions = await cachedFetchJSON(depVerUrl + '?' + depParams.join('&'), 120000);
                                             if (depVersions?.length) {
                                                 const depFile = depVersions[0].files?.find(f => f.primary) || depVersions[0].files?.[0];
                                                 compatibleVersion = {
@@ -14069,14 +14069,16 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                                             }
                                         } catch (e) {}
                                     }
-                                    deps.push({
+                                    return {
                                         projectId: dep.project_id,
                                         title: proj?.title || dep.project_id,
                                         icon: proj?.icon_url || '',
                                         description: proj?.description || '',
                                         compatibleVersion
-                                    });
-                                }
+                                    };
+                                });
+                                const depResults = await Promise.all(depVersionPromises);
+                                deps.push(...depResults);
                             } catch (e) {}
                         }
                     }
@@ -14102,7 +14104,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         if (depth > 10) return;
                         let versionData = null;
                         if (gdrSource === 'modrinth') {
-                            versionData = await fetchJSON(`${MODRINTH_API}/version/${versionId}`);
+                            versionData = await cachedFetchJSON(`${MODRINTH_API}/version/${versionId}`, 300000);
                         }
                         if (!versionData || !versionData.dependencies) return;
                         const requiredDeps = versionData.dependencies.filter(d =>
@@ -14113,7 +14115,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         const depIds = requiredDeps.map(d => `"${d.project_id}"`).join(',');
                         let depProjects = [];
                         try {
-                            depProjects = await fetchJSON(`${MODRINTH_API}/projects?ids=[${depIds}]`) || [];
+                            depProjects = await cachedFetchJSON(`${MODRINTH_API}/projects?ids=[${depIds}]`, 300000) || [];
                         } catch (e) {}
                         for (const dep of requiredDeps) {
                             if (visited.has(dep.project_id)) continue;
@@ -14126,7 +14128,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                                 if (gdrGameVersion) depParams.push(`game_versions=["${gdrGameVersion}"]`);
                                 if (gdrLoader) depParams.push(`loaders=["${gdrLoader}"]`);
                                 depParams.push('limit=1');
-                                const depVersions = await fetchJSON(depVerUrl + '?' + depParams.join('&'));
+                                const depVersions = await cachedFetchJSON(depVerUrl + '?' + depParams.join('&'), 120000);
                                 if (depVersions?.length) {
                                     const depFile = depVersions[0].files?.find(f => f.primary) || depVersions[0].files?.[0];
                                     compatibleVersion = {
@@ -14175,7 +14177,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     if (pvGameVersion) verParams.push(`game_versions=["${pvGameVersion}"]`);
                     if (pvLoader) verParams.push(`loaders=["${pvLoader}"]`);
                     if (verParams.length) verUrl += '?' + verParams.join('&');
-                    const rawVersions = await fetchJSON(verUrl);
+                    const rawVersions = await cachedFetchJSON(verUrl, 120000);
                     const versions = (rawVersions || []).map(v => ({
                         versionId: v.id,
                         versionNumber: v.version_number,
@@ -17209,7 +17211,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     const result = {};
                     try {
                         const batchIds = JSON.stringify(ids);
-                        const projects = await fetchJSON(`${MODRINTH_API}/projects?ids=${encodeURIComponent(batchIds)}`);
+                        const projects = await cachedFetchJSON(`${MODRINTH_API}/projects?ids=${encodeURIComponent(batchIds)}`, 300000);
                         if (Array.isArray(projects)) {
                             for (const project of projects) {
                                 result[project.id] = {
@@ -17229,7 +17231,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     } catch (batchErr) {
                         await Promise.all(ids.map(async (pid) => {
                             try {
-                                const project = await fetchJSON(`${MODRINTH_API}/project/${pid}`);
+                                const project = await cachedFetchJSON(`${MODRINTH_API}/project/${pid}`, 300000);
                                 result[pid] = {
                                     id: project.id,
                                     title: project.title || pid,
@@ -17259,14 +17261,14 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     let projectMap = {};
                     try {
                         const batchIds = JSON.stringify(rdvIds);
-                        const projects = await fetchJSON(`${MODRINTH_API}/projects?ids=${encodeURIComponent(batchIds)}`);
+                        const projects = await cachedFetchJSON(`${MODRINTH_API}/projects?ids=${encodeURIComponent(batchIds)}`, 300000);
                         if (Array.isArray(projects)) {
                             for (const p of projects) {
                                 projectMap[p.id] = p;
                             }
                         }
                     } catch (batchErr) {
-                        const projectResults = await Promise.allSettled(rdvIds.map(pid => fetchJSON(`${MODRINTH_API}/project/${pid}`)));
+                        const projectResults = await Promise.allSettled(rdvIds.map(pid => cachedFetchJSON(`${MODRINTH_API}/project/${pid}`, 300000)));
                         for (let i = 0; i < rdvIds.length; i++) {
                             if (projectResults[i].status === 'fulfilled') {
                                 projectMap[rdvIds[i]] = projectResults[i].value;
@@ -17278,7 +17280,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                     if (rdvLoader) versionParams.push(`loaders=["${rdvLoader}"]`);
                     const versionQueryString = versionParams.length > 0 ? '?' + versionParams.join('&') : '';
                     const versionResults = await Promise.allSettled(rdvIds.map(pid =>
-                        fetchJSON(`${MODRINTH_API}/project/${pid}/version${versionQueryString}`)
+                        cachedFetchJSON(`${MODRINTH_API}/project/${pid}/version${versionQueryString}`, 120000)
                     ));
                     for (let i = 0; i < rdvIds.length; i++) {
                         const pid = rdvIds[i];
