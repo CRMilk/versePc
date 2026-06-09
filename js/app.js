@@ -5560,10 +5560,8 @@ function terracottaShowAgreement() {
             <p style="margin-top:8px">• 联机质量取决于网络环境，可能有延迟</p>
             <p>• 公共节点由社区维护，不保证100%可用</p>
             <p>• 游戏数据通过P2P加密传输，不经过服务器</p>
-            <p>• 遇到问题可在反馈页面提交</p>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-            <a href="https://docs.hmcl.net/multiplayer/feedback.html" target="_blank" style="color:var(--primary);font-size:13px;align-self:center">反馈问题</a>
             <button class="btn btn-primary" id="terracotta-agree-btn">我已了解，开始使用</button>
         </div>
     </div>`;

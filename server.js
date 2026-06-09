@@ -265,7 +265,7 @@ const FABRIC_META_URL = 'https://meta.fabricmc.net/v2';
 const FORGE_MAVEN_URL = 'https://maven.minecraftforge.net/net/minecraftforge/forge';
 const NEOFORGE_API_URL = 'https://maven.neoforged.net/api/maven';
 
-const MS_CLIENT_ID = '00000000402b5328';
+const MS_CLIENT_ID = '9c1f1f43-58d5-4b7a-af0d-4e487f073441';
 
 const BMCLAPI_MIRROR = {
     'https://piston-data.mojang.com/': 'https://bmclapi2.bangbang93.com/',
@@ -15343,8 +15343,8 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         success: true,
                         deviceCode: result.device_code,
                         userCode: result.user_code,
-                        verificationUri: 'https://www.xbox.com/live/security/code',
-                        verificationUriComplete: result.verification_uri_complete,
+                        verificationUri: result.verification_uri || 'https://www.microsoft.com/link',
+                        verificationUriComplete: result.verification_uri_complete || null,
                         expiresIn: result.expires_in,
                         interval: result.interval || 5,
                         message: result.message
