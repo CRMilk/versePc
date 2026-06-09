@@ -61,15 +61,15 @@
     --launchbar-height: 56px;
     --transition: 0.2s ease;
     --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-    --ai-bg: #1a1a2e;
-    --ai-bg-secondary: #16213e;
-    --ai-bg-tertiary: #0f3460;
-    --ai-bg-hover: rgba(233, 69, 96, 0.08);
-    --ai-bg-active: rgba(233, 69, 96, 0.12);
+    --ai-bg: #0a0a0a;
+    --ai-bg-secondary: #141414;
+    --ai-bg-tertiary: #1c1c1c;
+    --ai-bg-hover: rgba(255, 255, 255, 0.06);
+    --ai-bg-active: rgba(255, 255, 255, 0.1);
     --ai-bg-input: rgba(255, 255, 255, 0.05);
-    --ai-bg-float: #16213e;
-    --ai-border: rgba(233, 69, 96, 0.2);
-    --ai-accent: #e94560;
+    --ai-bg-float: #181818;
+    --ai-border: rgba(255, 255, 255, 0.15);
+    --ai-accent: #ffffff;
     --ai-accent-fg: #ffffff;
     --ai-text-primary: #e0e0e0;
     --ai-text-secondary: #c0c0d0;
@@ -85,7 +85,7 @@
     --ai-radius-sm: 6px;
     --ai-radius-md: 8px;
     --ai-radius-lg: 12px;
-    --ai-card-hover: rgba(233, 69, 96, 0.05);
+    --ai-card-hover: rgba(255, 255, 255, 0.05);
 }
 
 [data-theme="light"] {

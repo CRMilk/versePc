@@ -9112,7 +9112,9 @@ function toggleAdvancedOptions() {
 
 async function saveLaunchSettings() {
     let windowSize = document.getElementById('window-size')?.value || 'default';
-    if (windowSize === 'custom') {
+    if (windowSize === 'default') {
+        windowSize = '854x480';
+    } else if (windowSize === 'custom') {
         const w = document.getElementById('custom-width')?.value;
         const h = document.getElementById('custom-height')?.value;
         if (w && h) {
