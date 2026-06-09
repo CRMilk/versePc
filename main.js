@@ -269,7 +269,6 @@ function createWindow() {
 
     // 使用 versepc:// 协议加载首页
     mainWindow.loadURL('versepc://app/index.html');
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
 
     // 窗口关闭时清理引用
     mainWindow.on('closed', () => {
