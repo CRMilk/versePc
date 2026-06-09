@@ -46,6 +46,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     isFullscreen: () => ipcRenderer.invoke('window-is-fullscreen'),
     setFullscreen: (fullscreen) => ipcRenderer.send('window-set-fullscreen', fullscreen),
     setWindowMode: (windowMode) => ipcRenderer.send('window-set-window-mode', windowMode),
+    setLauncherSize: (width, height) => ipcRenderer.send('window-set-launcher-size', width, height),
     quitApp: () => ipcRenderer.send('app-quit'),
     showOpenDialog: (options) => ipcRenderer.invoke('dialog-open', options),
     onWindowStateChanged: (callback) => ipcRenderer.on('window-state-changed', (event, data) => callback(data)),

@@ -190,6 +190,37 @@ protocol.registerSchemesAsPrivileged([
 // 窗口配置管理 - 持久化保存窗口大小、位置和全屏状态
 // ============================================================================
 
+function getLaunchSettingsWindowSize() {
+    try {
+        const storePath = path.join(require('os').homedir(), '.versepc', 'app-store.json');
+        if (fs.existsSync(storePath)) {
+            const store = JSON.parse(fs.readFileSync(storePath, 'utf8'));
+            const settingsStr = store.versepc_launch_settings;
+            if (settingsStr) {
+                const settings = JSON.parse(settingsStr);
+                const windowSize = settings.windowSize;
+                
+                if (windowSize) {
+                    if (windowSize === 'default') {
+                        // 默认值是 854x480
+                        return { width: 854, height: 480 };
+                    } else if (windowSize === 'custom') {
+                        return null;
+                    } else if (windowSize.includes('x')) {
+                        const [w, h] = windowSize.split('x').map(Number);
+                        if (w && h && w >= 800 && h >= 450) {
+                            return { width: w, height: h };
+                        }
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Failed to read launch settings:', e);
+    }
+    return null;
+}
+
 /**
  * 加载窗口配置
  * @returns {Object} 配置对象 { fullscreen, windowMode, windowWidth, windowHeight, windowX, windowY }
@@ -233,8 +264,18 @@ function createWindow() {
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
-    const windowWidth = config.windowWidth || 1200;
-    const windowHeight = config.windowHeight || 800;
+    // 优先使用启动设置中的窗口大小，其次使用窗口配置，最后使用默认值
+    const launchSettingsSize = getLaunchSettingsWindowSize();
+    let windowWidth, windowHeight;
+    
+    if (launchSettingsSize) {
+        windowWidth = launchSettingsSize.width;
+        windowHeight = launchSettingsSize.height;
+    } else {
+        windowWidth = config.windowWidth || 1200;
+        windowHeight = config.windowHeight || 800;
+    }
+    
     const windowX = config.windowX !== undefined ? config.windowX : Math.floor((screenWidth - windowWidth) / 2);
     const windowY = config.windowY !== undefined ? config.windowY : Math.floor((screenHeight - windowHeight) / 2);
 
@@ -243,8 +284,8 @@ function createWindow() {
         height: windowHeight,
         x: windowX,
         y: windowY,
-        minWidth: 900,
-        minHeight: 600,
+        minWidth: 800,
+        minHeight: 450,
         frame: false,
         show: true,
         backgroundColor: '#ffffff',
@@ -507,6 +548,49 @@ ipcMain.on('window-set-window-mode', (event, windowMode) => {
             config.windowY = savedWindowBounds.y;
         }
         saveWindowConfig(config);
+    }
+});
+
+// 设置启动器窗口大小
+ipcMain.on('window-set-launcher-size', (event, width, height) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        // 如果当前是全屏模式，先退出全屏
+        if (mainWindow.isFullScreen()) {
+            mainWindow.setFullScreen(false);
+        }
+        
+        // 确保尺寸在合理范围内
+        const primaryDisplay = screen.getPrimaryDisplay();
+        const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+        const minWidth = 800;
+        const minHeight = 450;
+        
+        width = Math.max(minWidth, Math.min(width, screenWidth));
+        height = Math.max(minHeight, Math.min(height, screenHeight));
+        
+        // 计算居中位置
+        const x = Math.floor((screenWidth - width) / 2);
+        const y = Math.floor((screenHeight - height) / 2);
+        
+        // 设置窗口大小和位置
+        mainWindow.setBounds({ x, y, width, height });
+        
+        // 保存到配置文件
+        const config = loadWindowConfig();
+        config.windowWidth = width;
+        config.windowHeight = height;
+        config.windowX = x;
+        config.windowY = y;
+        config.fullscreen = false;
+        config.windowMode = true;
+        saveWindowConfig(config);
+        
+        // 更新 savedWindowBounds
+        savedWindowBounds = { x, y, width, height };
+        
+        // 通知渲染进程窗口状态变化
+        mainWindow.webContents.send('window-state-changed', { maximized: false, fullscreen: false });
+        mainWindow.webContents.send('window-mode-changed', { windowMode: true, maximized: false });
     }
 });
 

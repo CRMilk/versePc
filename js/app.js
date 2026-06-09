@@ -7990,7 +7990,7 @@ async function openResourceDetail(projectId, type) {
     if (mdVersionTabs) mdVersionTabs.innerHTML = '';
 
     try {
-        const detail = await API.getResourceDetail(projectId);
+        const detail = await API.getModDetail(projectId, 'modrinth');
         currentModDetailData = detail;
 
         mdName.textContent = formatModNameWithChinese(detail.id || detail.slug, detail.title || typeNames[type] || '未知');
@@ -8019,7 +8019,7 @@ async function openResourceDetail(projectId, type) {
             srcBadge.style.background = 'rgba(245,158,11,0.12)';
         }
 
-        const data = await API.getResourceVersions(projectId);
+        const data = await API.getModVersions(projectId, 'modrinth');
         mdAllVersions = data.versions || [];
         if (!Array.isArray(mdAllVersions)) mdAllVersions = [];
 
@@ -9147,8 +9147,38 @@ async function saveLaunchSettings() {
     try {
         await window.electronAPI.store.set('versepc_launch_settings', JSON.stringify(settings));
         showToast('启动设置已保存', 'success');
+        
+        // 应用窗口大小到启动器窗口
+        applyLauncherWindowSize(windowSize);
     } catch (e) {
         showToast('保存失败: ' + e.message, 'error');
+    }
+}
+
+function applyLauncherWindowSize(windowSize) {
+    let width, height;
+    
+    if (windowSize === 'default') {
+        // 默认值是 854x480
+        width = 854;
+        height = 480;
+    } else if (windowSize === 'custom') {
+        const w = document.getElementById('custom-width')?.value;
+        const h = document.getElementById('custom-height')?.value;
+        if (w && h) {
+            width = parseInt(w);
+            height = parseInt(h);
+        }
+    } else if (windowSize && windowSize.includes('x')) {
+        const [w, h] = windowSize.split('x').map(Number);
+        if (w && h) {
+            width = w;
+            height = h;
+        }
+    }
+    
+    if (width && height && window.electronAPI?.setLauncherSize) {
+        window.electronAPI.setLauncherSize(width, height);
     }
 }
 
