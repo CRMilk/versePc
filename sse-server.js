@@ -154,6 +154,7 @@ function createSSEServer(mainExports = {}) {
                 const engine = new EngineClass({ executeTool, onRequestApproval, onChunk, logger: console });
                 await engine.processChat({ apiKey, model, messages, temperature, enableTools, maxRounds: 24 });
             } catch (e) {
+                console.error('[SSE] processChat error:', e.message, e.stack);
                 sendChunk({ type: 'error', error: e.message });
             } finally {
                 cleanup();

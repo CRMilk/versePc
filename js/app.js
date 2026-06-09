@@ -892,8 +892,137 @@ function dismissSupportModal() {
 
 var ANNOUNCEMENT_CONTENT = {
     version: '',
-    title: 'VersePC 更新公告',
-    body: '<p>暂无公告内容，敬请期待。</p>'
+    title: 'VersePC 小规模测试公告',
+    body: `
+        <div class="announcement-section">
+            <p>感谢您参与 VersePC 的小规模测试！软件目前仍处于开发阶段，可能存在一些未发现的 bug 或不完善之处。我们诚挚邀请您在试用过程中帮助发掘问题，并通过邮件反馈至：</p>
+            <p style="font-weight:bold;text-align:center;margin:12px 0;">doujie2978166201@163.com</p>
+        </div>
+
+        <div class="announcement-section">
+            <h4>VersePC 功能特色</h4>
+            <p>VersePC 是一款专为 Minecraft 玩家设计的现代化启动器，集成了多种实用功能，旨在提升游戏体验：</p>
+
+            <h5>1. 版本管理</h5>
+            <ul>
+                <li>自动识别并管理已安装的游戏版本（原版、Forge、Fabric、NeoForge、Quilt 等）</li>
+                <li>支持一键下载、安装、删除游戏版本</li>
+                <li>版本隔离功能：可设置独立游戏目录，避免存档、模组冲突</li>
+            </ul>
+
+            <h5>2. 模组管理</h5>
+            <ul>
+                <li>内置 Modrinth 和 CurseForge 模组搜索与下载</li>
+                <li>支持批量下载、多选操作、模组更新检测</li>
+                <li>模组详情展示依赖关系、兼容版本、下载量等信息</li>
+            </ul>
+
+            <h5>3. 资源整合下载</h5>
+            <ul>
+                <li>光影包、材质包、数据包、地图、存档等资源一键下载</li>
+                <li>自动匹配当前游戏版本，避免兼容性问题</li>
+            </ul>
+
+            <h5>4. 账户管理</h5>
+            <ul>
+                <li>支持 Microsoft 账户登录（正版）和离线账户（盗版）</li>
+                <li>皮肤预览与更换功能，支持自定义披风</li>
+            </ul>
+
+            <h5>5. Java 环境管理</h5>
+            <ul>
+                <li>自动检测系统已安装的 Java 版本</li>
+                <li>提供 Java 8/11/17 等版本的一键下载与安装</li>
+                <li>智能推荐适合当前游戏版本的 Java 环境</li>
+            </ul>
+
+            <h5>6. 整合包安装</h5>
+            <ul>
+                <li>直接从 Modrinth 和 CurseForge 浏览并安装整合包</li>
+                <li>支持整合包版本选择、模组列表预览</li>
+            </ul>
+
+            <h5>7. 游戏优化与设置</h5>
+            <ul>
+                <li>启动参数自定义（JVM 参数、内存分配等）</li>
+                <li>游戏内覆盖层（Overlay）显示 FPS、坐标等信息</li>
+                <li>一键优化设置，提升游戏性能</li>
+            </ul>
+
+            <h5>8. 崩溃分析与日志管理</h5>
+            <ul>
+                <li>游戏崩溃时自动收集日志，提供错误原因分析</li>
+                <li>支持日志导出、一键清理</li>
+            </ul>
+
+            <h5>9. 服务器与多人游戏</h5>
+            <ul>
+                <li>服务器列表管理，支持添加、收藏、测试连接延迟</li>
+                <li>局域网联机辅助工具（开发中）</li>
+            </ul>
+
+            <h5>10. 个性化界面</h5>
+            <ul>
+                <li>支持深色/浅色主题切换</li>
+                <li>自定义背景图片、动画效果</li>
+                <li>响应式设计，适应不同屏幕尺寸</li>
+            </ul>
+        </div>
+
+        <div class="announcement-section">
+            <h4>与其他启动器的独特功能</h4>
+            <p>VersePC 在以下方面提供了差异化体验：</p>
+
+            <h5>1. AI 智能分析</h5>
+            <ul>
+                <li>游戏崩溃时，VersePC 可通过 AI 分析日志，提供更准确的错误原因和修复建议</li>
+                <li>支持将崩溃日志一键发送至 AI 服务进行分析（需联网）</li>
+            </ul>
+
+            <h5>2. 统一资源管理</h5>
+            <ul>
+                <li>模组、光影、材质、数据包等资源均通过同一界面管理，无需切换多个页面</li>
+                <li>所有资源下载自动适配版本隔离目录，避免手动配置</li>
+            </ul>
+
+            <h5>3. 批量操作与效率提升</h5>
+            <ul>
+                <li>支持模组、资源包的批量选择、下载、删除</li>
+                <li>收藏夹功能：可保存常用模组、服务器，快速访问</li>
+            </ul>
+
+            <h5>4. 实时进度与任务管理</h5>
+            <ul>
+                <li>下载任务实时显示进度、速度、状态</li>
+                <li>支持多任务并发下载，失败自动重试</li>
+            </ul>
+
+            <h5>5. 深度版本隔离</h5>
+            <ul>
+                <li>不仅隔离存档，还可隔离模组、配置、资源包等</li>
+                <li>自动检测并隔离已有内容，避免意外覆盖</li>
+            </ul>
+
+            <h5>6. 跨平台兼容性</h5>
+            <ul>
+                <li>未来计划支持 macOS 和 Linux（当前仅 Windows）</li>
+                <li>采用 Electron 框架，确保界面一致性与性能</li>
+            </ul>
+        </div>
+
+        <div class="announcement-section">
+            <h4>注意事项</h4>
+            <ul>
+                <li>测试期间可能会遇到功能不稳定、界面错位等问题，敬请谅解</li>
+                <li>如有任何建议或 bug 报告，请通过邮件详细描述（附上截图或日志更佳）</li>
+                <li>感谢您的参与，VersePC 的进步离不开每一位测试者的支持！</li>
+            </ul>
+        </div>
+
+        <div class="announcement-footer">
+            <p style="text-align:right;margin-top:20px;font-weight:bold;">豆杰<br>2026 年 6 月</p>
+        </div>
+    `
 };
 
 async function showAnnouncementModal(forceShow) {
@@ -2189,7 +2318,7 @@ function navigateToPage(pageName) {
         }
         const st = window.__exploreChatState;
         if (st) {
-            requestAnimationFrame(() => {
+            const _restoreChat = () => {
                 const cm = document.getElementById('ai-chat-main');
                 if (cm) cm.className = st.classes;
                 const w = document.getElementById('ai-welcome');
@@ -2200,7 +2329,8 @@ function navigateToPage(pageName) {
                 if (t) t.style.display = st.topbarDisplay;
                 const ia = document.getElementById('ai-input-area');
                 if (ia) ia.className = st.inputAreaClasses;
-            });
+            };
+            requestAnimationFrame(() => requestAnimationFrame(_restoreChat));
         }
         return;
     }
@@ -6522,10 +6652,24 @@ async function startMsAuth() {
     try {
         const result = await API.getMsDeviceCode();
         if (result.success) {
-            document.getElementById('msauth-url').href = result.verificationUri;
-            document.getElementById('msauth-url').textContent = result.verificationUri;
+            const verifyUrl = result.verificationUriComplete || result.verificationUri;
+            document.getElementById('msauth-url').href = verifyUrl;
+            document.getElementById('msauth-url').textContent = verifyUrl;
             document.getElementById('msauth-code-text').textContent = result.userCode;
             document.getElementById('msauth-status-text').textContent = '等待登录...';
+
+            try {
+                await window.electronAPI?.clipboard?.writeText(result.userCode);
+            } catch (e) {}
+
+            setTimeout(async () => {
+                try {
+                    await window.electronAPI?.openExternal?.(verifyUrl);
+                } catch (e) {
+                    console.warn('[Auth] 自动打开浏览器失败:', e);
+                }
+            }, 500);
+
             if (msAuthPollInterval) clearInterval(msAuthPollInterval);
             msAuthPollInterval = setInterval(async () => {
                 try {
@@ -6576,6 +6720,18 @@ function closeOfflineModal() {
 function copyMsCode() {
     const code = document.getElementById('msauth-code-text').textContent;
     window.electronAPI.clipboard.writeText(code).then(() => showToast('代码已复制', 'success'));
+}
+
+async function reopenMsAuthPage() {
+    const url = document.getElementById('msauth-url').href;
+    if (url && url !== '#') {
+        try {
+            await window.electronAPI?.openExternal?.(url);
+            showToast('已打开浏览器', 'success');
+        } catch (e) {
+            showToast('无法打开浏览器', 'error');
+        }
+    }
 }
 
 function closeThirdPartyModal() {

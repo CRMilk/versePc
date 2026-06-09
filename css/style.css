@@ -8241,6 +8241,41 @@ body {
     user-select: none;
 }
 
+.announcement-content h4 {
+    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 600;
+    margin: 16px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+}
+
+.announcement-content h5 {
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
+    margin: 12px 0 6px;
+}
+
+.announcement-section {
+    margin-bottom: 16px;
+}
+
+.announcement-section:last-of-type {
+    margin-bottom: 0;
+}
+
+.announcement-footer {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.announcement-footer p {
+    margin: 0;
+    line-height: 1.6;
+}
+
 .ai-onboarding {
     position: absolute;
     inset: 0;

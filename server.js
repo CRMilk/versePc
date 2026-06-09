@@ -15340,6 +15340,7 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         deviceCode: result.device_code,
                         userCode: result.user_code,
                         verificationUri: result.verification_uri,
+                        verificationUriComplete: result.verification_uri_complete,
                         expiresIn: result.expires_in,
                         interval: result.interval || 5,
                         message: result.message
@@ -19831,6 +19832,90 @@ $sc.Save()
                 if (!pingHost) { sendJSON({ error: 'host required' }, 400); break; }
                 const pingResult = await mcPing(pingHost, pingPort);
                 sendJSON(pingResult);
+                break;
+            }
+
+            case '/api/easytier/download': {
+                try {
+                    const etDir = path.join(DATA_DIR, 'easytier');
+                    if (!fs.existsSync(etDir)) fs.mkdirSync(etDir, { recursive: true });
+                    const etBin = path.join(etDir, 'easytier.exe');
+                    if (fs.existsSync(etBin)) { sendJSON({ success: true, message: 'already installed' }); break; }
+                    const etUrl = 'https://github.com/EasyTier/EasyTier/releases/latest/download/easytier-windows-x86_64.zip';
+                    const etZip = path.join(etDir, 'easytier.zip');
+                    const dlRes = await fetch(etUrl, { redirect: 'follow' });
+                    if (!dlRes.ok) throw new Error(`Download failed: ${dlRes.status}`);
+                    const buffer = Buffer.from(await dlRes.arrayBuffer());
+                    fs.writeFileSync(etZip, buffer);
+                    const AdmZip = require('adm-zip');
+                    const zip = new AdmZip(etZip);
+                    zip.extractAllTo(etDir, true);
+                    fs.unlinkSync(etZip);
+                    const extracted = fs.readdirSync(etDir).find(f => f.endsWith('.exe'));
+                    if (extracted && extracted !== 'easytier.exe') {
+                        fs.renameSync(path.join(etDir, extracted), etBin);
+                    }
+                    sendJSON({ success: true });
+                } catch (e) {
+                    sendJSON({ error: e.message });
+                }
+                break;
+            }
+
+            case '/api/easytier/download-status': {
+                sendJSON({ status: 'completed', progress: 100 });
+                break;
+            }
+
+            case '/api/system/memory-info': {
+                const os = require('os');
+                const totalMem = os.totalmem();
+                const freeMem = os.freemem();
+                const usedMem = totalMem - freeMem;
+                sendJSON({
+                    totalMB: Math.round(totalMem / 1024 / 1024),
+                    usedMB: Math.round(usedMem / 1024 / 1024),
+                    freeMB: Math.round(freeMem / 1024 / 1024),
+                    loadPercent: Math.round((usedMem / totalMem) * 100)
+                });
+                break;
+            }
+
+            case '/api/save-background': {
+                const bgBody = await readBody();
+                const bgData = bgBody.dataUrl;
+                if (!bgData) { sendJSON({ error: 'dataUrl required' }, 400); break; }
+                const bgMatch = bgData.match(/^data:image\/(\w+);base64,(.+)$/);
+                if (!bgMatch) { sendJSON({ error: 'invalid dataUrl' }, 400); break; }
+                const bgFile = path.join(DATA_DIR, `background.${bgMatch[1] === 'jpeg' ? 'jpg' : bgMatch[1]}`);
+                fs.writeFileSync(bgFile, Buffer.from(bgMatch[2], 'base64'));
+                sendJSON({ success: true, path: bgFile });
+                break;
+            }
+
+            case '/api/save-avatar': {
+                const avBody = await readBody();
+                const avData = avBody.dataUrl;
+                if (!avData) { sendJSON({ error: 'dataUrl required' }, 400); break; }
+                const avMatch = avData.match(/^data:image\/(\w+);base64,(.+)$/);
+                if (!avMatch) { sendJSON({ error: 'invalid dataUrl' }, 400); break; }
+                const avFile = path.join(DATA_DIR, `avatar.${avMatch[1] === 'jpeg' ? 'jpg' : avMatch[1]}`);
+                fs.writeFileSync(avFile, Buffer.from(avMatch[2], 'base64'));
+                sendJSON({ success: true, path: avFile });
+                break;
+            }
+
+            case '/api/clear-background': {
+                const bgFiles = ['background.png', 'background.jpg', 'background.jpeg'].map(f => path.join(DATA_DIR, f));
+                for (const f of bgFiles) { if (fs.existsSync(f)) fs.unlinkSync(f); }
+                sendJSON({ success: true });
+                break;
+            }
+
+            case '/api/clear-avatar': {
+                const avFiles = ['avatar.png', 'avatar.jpg', 'avatar.jpeg'].map(f => path.join(DATA_DIR, f));
+                for (const f of avFiles) { if (fs.existsSync(f)) fs.unlinkSync(f); }
+                sendJSON({ success: true });
                 break;
             }
 

@@ -2139,14 +2139,14 @@
                             </div>
                             <div class="modal-body">
                                 <div class="msauth-steps">
-                                    <p>1. 在浏览器中打开以下链接：</p>
+                                    <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px;">浏览器将自动打开登录页面，授权码已复制到剪贴板。</p>
+                                    <p>验证链接：</p>
                                     <a id="msauth-url" href="#" target="_blank" class="msauth-link"></a>
-                                    <p>2. 输入代码：</p>
+                                    <p>授权码：</p>
                                     <div class="msauth-code">
                                         <span id="msauth-code-text"></span>
                                         <button class="btn btn-sm btn-secondary" onclick="copyMsCode()">复制</button>
                                     </div>
-                                    <p>3. 等待验证完成...</p>
                                 </div>
                                 <div class="msauth-status">
                                     <div class="spinner-sm"></div>
@@ -2154,6 +2154,7 @@
                                 </div>
                             </div>
                             <div class="modal-footer">
+                                <button class="btn btn-secondary" onclick="reopenMsAuthPage()">重新打开网页</button>
                                 <button class="btn btn-secondary" onclick="closeMsAuthModal()">取消</button>
                             </div>
                         </div>

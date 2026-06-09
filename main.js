@@ -35,8 +35,7 @@
 // ============================================================================
 try {
     const v8 = require('v8');
-    const osTmpDir = require('os').homedir();
-    const cacheDir = require('path').join(osTmpDir, '.versepc', 'v8-compile-cache');
+    const cacheDir = require('path').join(require('os').tmpdir(), 'versepc-v8-cache');
     try { require('fs').mkdirSync(cacheDir, { recursive: true }); } catch (e) {}
     v8.setFlagsFromString('--compile-cache-dir=' + cacheDir);
 } catch (e) {}
@@ -270,6 +269,7 @@ function createWindow() {
 
     // 使用 versepc:// 协议加载首页
     mainWindow.loadURL('versepc://app/index.html');
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
 
     // 窗口关闭时清理引用
     mainWindow.on('closed', () => {
