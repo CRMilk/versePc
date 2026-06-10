@@ -1,13 +1,13 @@
 {
-  "version": "1.0.16",
+  "version": "1.0.17",
   "releaseDate": "2026-06-10T00:00:00Z",
-  "releaseName": "VersePC v1.0.16",
-  "releaseNotes": "## 更新内容\n- 修复外部Forge版本启动失败（资源文件路径检查错误）\n- 外部版本现在会正确检查.minecraft目录中的assets资源\n- 支持外部版本离线启动（已有资源文件无需重新下载）\n- 修复离线皮肤注入在外部版本中失效的问题\n- 修复外部版本名称显示为.minecraft的问题",
+  "releaseName": "VersePC v1.0.17",
+  "releaseNotes": "## 更新内容\n- 修复正版账号详情页皮肤3D模型不显示（优先使用Session Server获取完整皮肤纹理）\n- 修复下载版本进度条卡住/乱跳（参考PCL2平滑进度算法）\n- 修复导入整合包失败（解压重试机制 + isJarIntact宽松化）\n- 安装进度条使用权重加权平滑计算，不再跳跃\n- 下载 stall 期间发送进度通知，前端实时感知",
   "files": {
     "win-x64": {
-      "url": "https://github.com/doujie081231/versePc/releases/download/v1.0.16/VersePC-Setup-1.0.16.exe",
-      "sha256": "E851B253D07F1AA5FB76DA061A83A2B21447BBB51FA11A3197044EC07BFA0519",
-      "size": 162786052
+      "url": "https://github.com/doujie081231/versePc/releases/download/v1.0.17/VersePC-Setup-1.0.17.exe",
+      "sha256": "700CA3AD4B8C8A1CF394672864432FC97126B82CD7D01E18D26AA50F38A8B433",
+      "size": 162786921
     }
   },
   "minSupportedVersion": "1.0.0",

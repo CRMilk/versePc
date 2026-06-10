@@ -677,6 +677,24 @@ async function fetchAvatarDataFull(cleanUuid, avatarServerUrl, avatarUsername, s
     }
 
     if (!avatarData && !avatarServerUrl) {
+        const skinTextureUrl = await fetchSkinFromSessionServer(cleanUuid, null);
+        if (skinTextureUrl) {
+            try {
+                const texRes = await new Promise((resolve, reject) => {
+                    const req = https.get(skinTextureUrl, { timeout: 5000 }, resolve);
+                    req.on('error', reject);
+                    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+                });
+                if (texRes.statusCode === 200) {
+                    const texChunks = [];
+                    for await (const chunk of texRes) texChunks.push(chunk);
+                    avatarData = Buffer.concat(texChunks);
+                    avatarContentType = texRes.headers['content-type'] || 'image/png';
+                } else { texRes.resume(); }
+            } catch (e) {}
+        }
+    }
+    if (!avatarData && !avatarServerUrl) {
         const serviceResults = await Promise.allSettled(
             AVATAR_SERVICES.map(async (serviceFn) => {
                 const tryUrl = serviceFn(cleanUuid);
@@ -751,7 +769,7 @@ async function fetchAvatarDataFull(cleanUuid, avatarServerUrl, avatarUsername, s
             } else { cslRes.resume(); }
         } catch (e) {}
     }
-    if (!avatarData) {
+    if (!avatarData && avatarServerUrl) {
         const skinTextureUrl = await fetchSkinFromSessionServer(cleanUuid, avatarServerUrl);
         if (skinTextureUrl) {
             try {
@@ -3729,9 +3747,19 @@ async function downloadFileChunked(url, destPath, options = {}) {
                 await new Promise((resolve, reject) => {
                     const ws = fs.createWriteStream(destPath);
                     let idx = 0;
+                    let mergedBytes = 0;
+                    let lastMergeProg = Date.now();
                     const writeNext = () => {
                         if (idx >= chunks.length) { ws.end(); return; }
                         const rs = fs.createReadStream(chunks[idx].tmp);
+                        rs.on('data', (d) => {
+                            mergedBytes += d.length;
+                            if (onProgress && Date.now() - lastMergeProg > 100) {
+                                lastMergeProg = Date.now();
+                                onProgress({ bytesDownloaded: mergedBytes, totalBytes: fileSize, speed: 0,
+                                    progress: Math.min(99.9, (mergedBytes / fileSize) * 100), merging: true });
+                            }
+                        });
                         rs.on('end', () => { idx++; writeNext(); });
                         rs.on('error', reject);
                         rs.pipe(ws, { end: false });
@@ -3819,6 +3847,7 @@ async function _dlSingle(urlStr, destPath, options = {}) {
                     if (stallTimer) clearTimeout(stallTimer);
                     stallTimer = setTimeout(() => {
                         if (!settled && !cleaned) {
+                            if (onProgress) onProgress({ bytesDownloaded: 0, totalBytes: 0, speed: 0, progress: 0, stall: true });
                             try { req.destroy(); } catch (_) {}
                             clean();
                             if (rc > 0) {
@@ -3909,14 +3938,11 @@ function isJarIntact(filePath) {
         const fd = fs.openSync(filePath, 'r');
         const hdr = Buffer.alloc(4);
         fs.readSync(fd, hdr, 0, 4, 0);
-        const tail = Buffer.alloc(4);
         const stat = fs.fstatSync(fd);
-        if (stat.size < 22) { fs.closeSync(fd); return false; }
-        fs.readSync(fd, tail, 0, 4, stat.size - 22);
         fs.closeSync(fd);
+        if (stat.size < 4) return false;
         if (hdr[0] !== 0x50 || hdr[1] !== 0x4B || hdr[2] !== 0x03 || hdr[3] !== 0x04) return false;
-        const eocdBase = tail.readUInt32LE(0);
-        if (eocdBase === 0x06054B50) return true;
+        if (stat.size < 22) return stat.size >= 4;
         const buf = Buffer.alloc(Math.min(65557, stat.size));
         const searchStart = Math.max(0, stat.size - buf.length);
         const fd2 = fs.openSync(filePath, 'r');
@@ -3925,7 +3951,7 @@ function isJarIntact(filePath) {
         for (let i = buf.length - 22; i >= 0; i--) {
             if (buf.readUInt32LE(i) === 0x06054B50) return true;
         }
-        return false;
+        return stat.size < 1024;
     } catch (e) {
         return false;
     }
@@ -11193,6 +11219,18 @@ async function performInstallation(sessionId, versionDetails) {
 
     if (isAborted()) { abortCleanup(); return; }
 
+    const STAGE_WEIGHTS = { version_json: 1, client_jar: 5, libraries: 15, natives: 1, assets: 20, loader: 10, finalizing: 1 };
+    const TOTAL_WEIGHT = Object.values(STAGE_WEIGHTS).reduce((a, b) => a + b, 0);
+    const calcProgress = (stage, stagePct) => {
+        const stageNames = Object.keys(STAGE_WEIGHTS);
+        let prevWeight = 0;
+        for (const s of stageNames) {
+            if (s === stage) break;
+            prevWeight += STAGE_WEIGHTS[s];
+        }
+        return Math.min(99, Math.round(((prevWeight + stagePct * STAGE_WEIGHTS[stage]) / TOTAL_WEIGHT) * 100));
+    };
+
     const versionId = versionDetails.id;
     const versionDir = path.join(VERSIONS_DIR, versionId);
     if (!fs.existsSync(versionDir)) fs.mkdirSync(versionDir, { recursive: true });
@@ -11202,7 +11240,7 @@ async function performInstallation(sessionId, versionDetails) {
         session.status = 'downloading';
         session.stage = 'version_json';
         session.message = '下载版本信息...';
-        session.progress = 2;
+        session.progress = calcProgress('version_json', 0.5);
 
         var speedSyncTimer = setInterval(() => {
             if (session.status === 'downloading') {
@@ -11216,7 +11254,7 @@ async function performInstallation(sessionId, versionDetails) {
         if (isAborted()) { abortCleanup(); return; }
         session.stage = 'client_jar';
         session.message = '下载游戏客户端..';
-        session.progress = 5;
+        session.progress = calcProgress('client_jar', 0);
 
         if (versionDetails.downloads?.client) {
             const clientInfo = versionDetails.downloads.client;
@@ -11224,7 +11262,7 @@ async function performInstallation(sessionId, versionDetails) {
 
             if (!fs.existsSync(clientJarPath) || fs.statSync(clientJarPath).size !== clientInfo.size) {
                 await downloadFileWithMirror(clientInfo.url, clientJarPath, (p) => {
-                    session.progress = 5 + p.progress * 0.2;
+                    session.progress = calcProgress('client_jar', p.progress / 100);
                     session.speed = p.speed;
                     session.bytesDownloaded = p.bytesDownloaded;
                     session.totalBytes = p.totalBytes;
@@ -11244,7 +11282,7 @@ async function performInstallation(sessionId, versionDetails) {
 
         session.stage = 'libraries';
         session.message = '下载依赖库文件..';
-        session.progress = 25;
+        session.progress = calcProgress('libraries', 0);
         session.currentFile = '';
         session.speed = 0;
 
@@ -11278,9 +11316,8 @@ async function performInstallation(sessionId, versionDetails) {
                 if (!fs.existsSync(libFile) || (artifact.size && fs.statSync(libFile).size !== artifact.size)) {
                     try {
                         await downloadFileWithMirror(libUrl, libFile, (p) => {
-                            const baseProgress = 25 + (idx / validLibraries.length) * 30;
-                            const libProgress = (p.progress / 100) * (30 / validLibraries.length);
-                            session.progress = baseProgress + libProgress;
+                            const libDone = (idx + p.progress / 100) / validLibraries.length;
+                            session.progress = calcProgress('libraries', libDone);
                             session.speed = p.speed || DownloadManager.getSpeed();
                             session.bytesDownloaded = p.bytesDownloaded;
                             session.totalBytes = p.totalBytes;
@@ -11354,9 +11391,8 @@ async function performInstallation(sessionId, versionDetails) {
 
                         try {
                             await downloadFileWithMirror(downloadUrl, libFile, (p) => {
-                                const baseProgress = 25 + (idx / validLibraries.length) * 30;
-                                const libProgress = (p.progress / 100) * (30 / validLibraries.length);
-                                session.progress = baseProgress + libProgress;
+                                const libDone = (idx + p.progress / 100) / validLibraries.length;
+                                session.progress = calcProgress('libraries', libDone);
                                 session.message = `下载库文件 (${idx + 1}/${validLibraries.length}): ${jarName}`;
                             });
                             if (libFile.endsWith('.jar') && !isJarIntact(libFile)) {
@@ -11423,11 +11459,10 @@ async function performInstallation(sessionId, versionDetails) {
         }
 
         session.completedFiles = validLibraries.length;
-        session.progress = 60;
 
         session.stage = 'assets';
         session.message = '下载资源索引...';
-        session.progress = 65;
+        session.progress = calcProgress('assets', 0);
         session.currentFile = '';
         session.speed = 0;
 
@@ -11444,7 +11479,7 @@ async function performInstallation(sessionId, versionDetails) {
             }
 
             session.message = '解析资源文件列表...';
-            session.progress = 68;
+            session.progress = calcProgress('assets', 0.1);
 
             let assetIndexData;
             try {
@@ -11506,7 +11541,8 @@ async function performInstallation(sessionId, versionDetails) {
                     })().then(() => {
                         processedCount++;
                         session.completedFiles = Math.min(processedCount, totalAssets);
-                        session.progress = 68 + (processedCount / totalAssets) * 25;
+                        const assetDone = processedCount / Math.max(totalAssets, 1);
+                        session.progress = calcProgress('assets', 0.1 + assetDone * 0.9);
                         session.currentFile = `资源 ${processedCount}/${totalAssets}`;
                     }).catch(() => {}).finally(() => {
                         assetActive--;
@@ -11574,14 +11610,14 @@ async function performInstallation(sessionId, versionDetails) {
 
         session.stage = 'natives';
         session.message = '提取原生库..';
-        session.progress = 93;
+        session.progress = calcProgress('natives', 0.5);
         session.currentFile = '';
 
         extractNatives(versionDetails, versionId);
 
-        session.stage = 'finalizing';
+        session.stage = 'loader';
         session.message = '完成安装...';
-        session.progress = 90;
+        session.progress = calcProgress('loader', 0);
 
         await sleep(300);
 
@@ -11591,7 +11627,7 @@ async function performInstallation(sessionId, versionDetails) {
             const gameVersion = versionDetails.inheritsFrom || versionId;
             session.stage = 'loader';
             session.message = '安装基础版本...';
-            session.progress = 91;
+            session.progress = calcProgress('loader', 0.1);
 
             try {
                 const baseResult = await ensureBaseVersionInstalled(gameVersion);
@@ -11608,14 +11644,14 @@ async function performInstallation(sessionId, versionDetails) {
             const loaderVersion = session.loaderInfo.version;
             const forgeVersionId = `${gameVersion}-${loaderType}-${loaderVersion}`;
 
-            session.progress = 94;
+            session.progress = calcProgress('loader', 0.3);
             session.message = `正在安装${loaderType === 'neoforge' ? 'NeoForge' : loaderType.charAt(0).toUpperCase() + loaderType.slice(1)}模组加载器...`;
 
             try {
                 let loaderResult = { success: true };
                 const loaderProgress = (p, msg) => {
                     if (session.status === 'cancelled') return;
-                    session.progress = Math.min(94 + p * 4, 98);
+                    session.progress = calcProgress('loader', 0.3 + p * 0.65);
                     if (msg) session.message = msg;
                 };
 
@@ -11651,7 +11687,7 @@ async function performInstallation(sessionId, versionDetails) {
                     return;
                 }
 
-                session.progress = 98;
+                session.progress = calcProgress('loader', 0.95);
                 session.message = '模组加载器安装完成';
             } catch (loaderErr) {
                 session.status = 'failed';
@@ -11671,14 +11707,14 @@ async function performInstallation(sessionId, versionDetails) {
         if (session.loaderInfo && session.loaderInfo.type === 'fabric') {
             if (session.status === 'cancelled') return;
             const gameVersionForApi = versionDetails.inheritsFrom || versionId.replace(/-.+$/, '');
-            session.stage = 'fabric-api';
+            session.stage = 'finalizing';
             session.message = '正在下载 Fabric API...';
-            session.progress = 99;
+            session.progress = calcProgress('finalizing', 0.5);
 
             try {
                 const apiResult = await autoDownloadFabricApi(gameVersionForApi, versionId, (p, msg) => {
                     if (session.status === 'cancelled') return;
-                    session.progress = Math.min(98 + p, 99.5);
+                    session.progress = calcProgress('finalizing', 0.5 + p * 0.45);
                     if (msg) session.message = msg;
                 });
                 if (apiResult.success && apiResult.fileName) {
@@ -11874,22 +11910,36 @@ async function importModpackFromPath(filePath, onProgress, targetVersion = '', a
     const curseEntry    = zip.getEntry('manifest.json');
 
     let result;
-    try {
-        if (modrinthEntry) {
-            result = await _importMrpack(zip, modrinthEntry, filePath, progress, targetVersion, abortSignal);
-        } else if (curseEntry) {
-            result = await _importCurseForge(zip, curseEntry, filePath, progress, targetVersion, abortSignal);
-        } else {
-            result = await _importRawZip(zip, filePath, progress, targetVersion, abortSignal);
+    const MAX_IMPORT_RETRIES = 3;
+    for (let importAttempt = 1; importAttempt <= MAX_IMPORT_RETRIES; importAttempt++) {
+        try {
+            if (modrinthEntry) {
+                result = await _importMrpack(zip, modrinthEntry, filePath, progress, targetVersion, abortSignal);
+            } else if (curseEntry) {
+                result = await _importCurseForge(zip, curseEntry, filePath, progress, targetVersion, abortSignal);
+            } else {
+                result = await _importRawZip(zip, filePath, progress, targetVersion, abortSignal);
+            }
+            
+            if (result && result.success) break;
+            if (result && !result.success && importAttempt < MAX_IMPORT_RETRIES) {
+                console.log(`[Modpack] 导入失败，尝试第 ${importAttempt + 1} 次...`);
+                if (result.versionId) cleanupVersionChain(result.versionId);
+                await new Promise(r => setTimeout(r, 2000 * importAttempt));
+                continue;
+            }
+        } catch (e) {
+            console.error(`[Modpack] Import attempt ${importAttempt} failed:`, e.message);
+            if (importAttempt >= MAX_IMPORT_RETRIES) {
+                return { success: false, error: '整合包导入失败: ' + e.message };
+            }
+            await new Promise(r => setTimeout(r, 2000 * importAttempt));
         }
-        
-        if (!result.success && result.versionId) {
-            cleanupVersionChain(result.versionId);
-            console.log(`[Modpack] Cleaned up failed version chain: ${result.versionId}`);
-        }
-    } catch (e) {
-        console.error(`[Modpack] Import failed:`, e.message, e.stack);
-        return { success: false, error: '整合包导入失败: ' + e.message };
+    }
+    
+    if (result && !result.success && result.versionId) {
+        cleanupVersionChain(result.versionId);
+        console.log(`[Modpack] Cleaned up failed version chain: ${result.versionId}`);
     }
     
     return result;
@@ -12073,8 +12123,18 @@ async function _importMrpack(zip, manifestEntry, filePath, progress, targetVersi
                 continue;
             }
             await asyncEnsureDir(destPath);
-            await fs.promises.writeFile(destPath, entry.getData());
-            overrideFiles.push({ name: relPath, status: 'completed', progress: 100 });
+            let extractOk = false;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    await fs.promises.writeFile(destPath, entry.getData());
+                    extractOk = true;
+                    break;
+                } catch (e) {
+                    console.warn(`[Modpack] 解压 ${relPath} 第 ${attempt} 次失败: ${e.message}`);
+                    if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 500));
+                }
+            }
+            if (extractOk) overrideFiles.push({ name: relPath, status: 'completed', progress: 100 });
             if (++extractYieldCounter % 50 === 0) await yieldToEventLoop();
         }
     }
@@ -12589,8 +12649,18 @@ async function _importCurseForge(zip, manifestEntry, filePath, progress, targetV
                 continue;
             }
             await asyncEnsureDir(destPath);
-            await fs.promises.writeFile(destPath, entry.getData());
-            overrideFiles.push({ name: relPath, status: 'completed', progress: 100 });
+            let cfExtractOk = false;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    await fs.promises.writeFile(destPath, entry.getData());
+                    cfExtractOk = true;
+                    break;
+                } catch (e) {
+                    console.warn(`[Modpack] CF解压 ${relPath} 第 ${attempt} 次失败: ${e.message}`);
+                    if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 500));
+                }
+            }
+            if (cfExtractOk) overrideFiles.push({ name: relPath, status: 'completed', progress: 100 });
             if (++cfExtractYieldCounter % 50 === 0) await yieldToEventLoop();
         }
     }
@@ -12918,7 +12988,15 @@ async function _importRawZip(zip, filePath, progress, targetVersion = '', abortS
                 await asyncEnsureDir(path.join(versionDir, entryName, 'dummy.txt'));
             } else {
                 await asyncEnsureDir(path.join(versionDir, entryName));
-                await fs.promises.writeFile(destPath, entry.getData());
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        await fs.promises.writeFile(destPath, entry.getData());
+                        break;
+                    } catch (e) {
+                        console.warn(`[Modpack] RawZip解压 ${entryName} 第 ${attempt} 次失败: ${e.message}`);
+                        if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 500));
+                    }
+                }
                 if (++rzExtractYieldCounter % 50 === 0) await yieldToEventLoop();
             }
         }
@@ -15671,6 +15749,15 @@ async function handleAPI(pathname, req, res, parsedUrl) {
 
                     const accounts = loadAccounts();
                     const now = new Date();
+                    let activeSkinUrl = null;
+                    let activeSkinModel = 'default';
+                    if (profileResult.skins && Array.isArray(profileResult.skins)) {
+                        const activeSkin = profileResult.skins.find(s => s.state === 'ACTIVE');
+                        if (activeSkin) {
+                            activeSkinUrl = activeSkin.url;
+                            activeSkinModel = activeSkin.variant === 'SLIM' ? 'slim' : 'default';
+                        }
+                    }
                     const newAccount = {
                         id: crypto.randomUUID(),
                         username: profileResult.name,
@@ -15680,7 +15767,9 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                         refreshToken: msRefreshToken,
                         tokenExpiresAt: now.getTime() + (msTokenResult.expires_in || 3600) * 1000,
                         lastRefreshed: now.toISOString(),
-                        createdAt: new Date().toISOString()
+                        createdAt: new Date().toISOString(),
+                        skinUrl: activeSkinUrl,
+                        skinModel: activeSkinModel
                     };
 
                     const existingIdx = accounts.findIndex(a => a.uuid === newAccount.uuid);
@@ -16779,8 +16868,14 @@ async function handleAPI(pathname, req, res, parsedUrl) {
                 const stClean = stUuid.replace(/-/g, '');
                 const stCacheKey = `skin:${stClean}:${stServerUrl}:${stUsername}`;
                 const stCached = AVATAR_CACHE.get(stCacheKey);
+                let stSkinModel = 'default';
+                try {
+                    const stAccounts = loadAccounts();
+                    const stAcc = stAccounts.find(a => (a.uuid || '').replace(/-/g, '') === stClean);
+                    if (stAcc && stAcc.skinModel) stSkinModel = stAcc.skinModel;
+                } catch (e) {}
                 const serveStImage = (data, ct) => {
-                    res.writeHead(200, { 'Content-Type': ct || 'image/png', 'Cache-Control': 'public, max-age=86400' });
+                    res.writeHead(200, { 'Content-Type': ct || 'image/png', 'Cache-Control': 'public, max-age=86400', 'X-Skin-Model': stSkinModel });
                     res.end(data);
                 };
                 if (stCached) { serveStImage(stCached.data, stCached.contentType); break; }

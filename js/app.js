@@ -2677,12 +2677,21 @@ function cancelInstall() {
 
 async function pollInstallProgress(sessionId) {
     const taskId = 'version-' + sessionId;
+    let smoothInstallPct = 0;
 
     const poll = async () => {
         try {
             if (!dlManager.tasks.has(taskId)) return;
             const data = await API.getInstallProgress(sessionId);
             if (!data || !data.sessionId) return;
+
+            const rawPct = data.progress || 0;
+            if (smoothInstallPct <= 0 || rawPct < smoothInstallPct) {
+                smoothInstallPct = rawPct;
+            } else {
+                smoothInstallPct = smoothInstallPct * 0.85 + rawPct * 0.15;
+            }
+            const smoothPct = Math.round(smoothInstallPct);
 
             const downloadStatus = data.status === 'completed' ? 'completed' : data.status === 'failed' ? 'failed' : data.status === 'cancelled' ? 'failed' : 'downloading';
             const statusMessage = getStageText(data.stage) || data.message || '安装中...';
@@ -2692,7 +2701,7 @@ async function pollInstallProgress(sessionId) {
                 var speedText = data.speed ? formatBytes(data.speed) + '/s' : '';
                 files.push({
                     name: '当前文件: ' + data.currentFile,
-                    progress: downloadStatus === 'completed' ? 100 : (data.totalFiles ? Math.round(data.completedFiles / data.totalFiles * 100) : data.progress || 0),
+                    progress: downloadStatus === 'completed' ? 100 : (data.totalFiles ? Math.round(data.completedFiles / data.totalFiles * 100) : smoothPct),
                     status: downloadStatus,
                     size: speedText
                 });
@@ -2716,13 +2725,13 @@ async function pollInstallProgress(sessionId) {
             if (data.stage) {
                 files.push({
                     name: '当前阶段: ' + (getStageText(data.stage) || data.stage),
-                    progress: downloadStatus === 'completed' ? 100 : Math.round(data.progress || 0),
+                    progress: downloadStatus === 'completed' ? 100 : smoothPct,
                     status: data.stage === 'completed' ? 'completed' : downloadStatus
                 });
             }
 
             dlManager.update(taskId, {
-                progress: data.progress || 0,
+                progress: smoothPct,
                 status: downloadStatus,
                 message: statusMessage,
                 files: files
@@ -6432,11 +6441,13 @@ function initSkinViewer(skinUrl) {
     const container = document.getElementById('skin-3d-container');
     if (!container) return;
     try {
+        const skinModel = (_currentDetailAccount?.skinModel === 'slim') ? 'slim' : 'default';
         _skinViewer = new skinview3d.SkinViewer({
             canvas: undefined,
             width: container.clientWidth || 400,
             height: container.clientHeight || 500,
-            skin: skinUrl || undefined
+            skin: skinUrl || undefined,
+            model: skinModel
         });
         container.appendChild(_skinViewer.canvas);
         _skinViewer.fov = 40;
@@ -6474,7 +6485,8 @@ async function detailRefreshSkin() {
     if (!accUuid) { showToast('无UUID', 'error'); return; }
     const skinUrl = `/api/skin-texture?uuid=${accUuid}${acc.serverUrl ? '&serverUrl=' + encodeURIComponent(acc.serverUrl) : ''}${acc.username ? '&username=' + encodeURIComponent(acc.username) : ''}&_=${Date.now()}`;
     try {
-        await _skinViewer.loadSkin(skinUrl);
+        const skinModel = (_currentDetailAccount?.skinModel === 'slim') ? 'slim' : 'default';
+        await _skinViewer.loadSkin(skinUrl, { model: skinModel });
         _refreshAccountAvatars();
         showToast('皮肤已刷新', 'success');
     } catch (e) {
@@ -7109,6 +7121,7 @@ async function startLaunchDepDownload(versionId, sessionId) {
 
 function pollLaunchDepProgress(sessionId, versionId) {
     if (launchDepPollTimer) clearInterval(launchDepPollTimer);
+    let depSmoothPct = 0;
 
     launchDepPollTimer = setInterval(async () => {
         try {
@@ -7122,9 +7135,16 @@ function pollLaunchDepProgress(sessionId, versionId) {
                 activeDownloads: status.activeDownloads || []
             };
 
-            updateLaunchDownloadProgress(status.progress || 0, status.message || '', detailData);
-            const baseProgress = 75;
-            updateLaunchProgress(baseProgress + ((status.progress || 0) / 100) * 10);
+            const rawDepPct = status.progress || 0;
+            if (depSmoothPct <= 0 || rawDepPct < depSmoothPct) {
+                depSmoothPct = rawDepPct;
+            } else {
+                depSmoothPct = depSmoothPct * 0.85 + rawDepPct * 0.15;
+            }
+            const smoothDepPct = Math.round(depSmoothPct);
+            updateLaunchDownloadProgress(smoothDepPct, status.message || '', detailData);
+            const baseProgress = 40;
+            updateLaunchProgress(baseProgress + (smoothDepPct / 100) * 50);
 
             if (status.status === 'launched') {
                 clearInterval(launchDepPollTimer);
@@ -7515,6 +7535,7 @@ function toggleLaunchLog() {
 async function pollLaunchDownload(sessionId, versionId, requiredJava) {
     try {
         let lastPct = 0;
+        let smoothPct = 0;
         
         const pollInterval = setInterval(async () => {
             try {
@@ -7531,7 +7552,13 @@ async function pollLaunchDownload(sessionId, versionId, requiredJava) {
                     return;
                 }
                 
-                const pct = Math.min(95, Math.round(dlStatus.progress || 0));
+                const rawPct = dlStatus.progress || 0;
+                if (smoothPct <= 0 || rawPct < smoothPct) {
+                    smoothPct = rawPct;
+                } else {
+                    smoothPct = smoothPct * 0.85 + rawPct * 0.15;
+                }
+                const pct = Math.min(95, Math.round(smoothPct));
                 if (pct !== lastPct) {
                     lastPct = pct;
                     updateLaunchDownloadProgress(pct, `下载文件 (${dlStatus.completedFiles || 0}/${dlStatus.totalFiles || 0}): ${dlStatus.currentFile || ''}`, {
@@ -7541,8 +7568,8 @@ async function pollLaunchDownload(sessionId, versionId, requiredJava) {
                         speed: dlStatus.speed || 0,
                         activeDownloads: dlStatus.activeDownloads || []
                     });
-                    const baseProgress = 75;
-                        updateLaunchProgress(baseProgress + (pct / 100) * 10);
+                    const baseProgress = 40;
+                    updateLaunchProgress(baseProgress + (pct / 100) * 50);
                 }
                 
                 if (dlStatus.status === 'completed') {
