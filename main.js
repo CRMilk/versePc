@@ -1106,11 +1106,63 @@ app.on('gpu-info-update', () => {
 });
 
 // ============================================================================
+// 单实例锁 - 防止崩溃后残留进程导致新实例黑屏
+// ============================================================================
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+    console.log('[App] Another instance is running, quitting');
+    app.quit();
+} else {
+    app.on('second-instance', () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
+        }
+    });
+}
+
+// ============================================================================
 // 应用就绪 - Electron 启动完成后的初始化流程
 // ============================================================================
 app.whenReady().then(async () => {
     try {
         console.log('VersePC starting...');
+
+        // 启动时清理可能残留的旧进程（崩溃后重启的情况）
+        try {
+            const { execSync } = require('child_process');
+            const myPid = process.pid;
+            const pids = execSync(
+                `wmic process where "name='VersePC.exe' and ProcessId!=${myPid}" get ProcessId /format:value 2>nul`,
+                { encoding: 'utf8', timeout: 5000 }
+            );
+            const oldPids = pids.match(/ProcessId=(\d+)/g);
+            if (oldPids) {
+                for (const m of oldPids) {
+                    const pid = parseInt(m.split('=')[1]);
+                    if (pid && pid !== myPid) {
+                        try { process.kill(pid); console.log('[App] Killed zombie process:', pid); } catch (e) {}
+                    }
+                }
+            }
+        } catch (e) {}
+
+        // 清理可能残留的 SSE 端口
+        try {
+            const { execSync } = require('child_process');
+            for (let port = 3001; port <= 3010; port++) {
+                try {
+                    const out = execSync(`netstat -ano | findstr :${port} | findstr LISTENING`, { encoding: 'utf8', timeout: 3000 });
+                    const pidMatch = out.match(/(\d+)\s*$/m);
+                    if (pidMatch) {
+                        const pid = parseInt(pidMatch[1]);
+                        if (pid && pid !== process.pid) {
+                            try { process.kill(pid); console.log('[App] Killed process on port', port, 'pid:', pid); } catch (e) {}
+                        }
+                    }
+                } catch (e) {}
+            }
+        } catch (e) {}
 
         session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
             const responseHeaders = { ...details.responseHeaders };
