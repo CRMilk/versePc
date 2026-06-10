@@ -10299,6 +10299,11 @@ async function verifyImportLibs(versionId, progress, abortSignal) {
 }
 
 async function installForge(gameVersion, forgeVersion, onProgress = null) {
+    if (forgeVersion && forgeVersion.startsWith(gameVersion + '-')) {
+        forgeVersion = forgeVersion.slice(gameVersion.length + 1);
+        console.log(`[Forge] 版本号标准化: 去除MC版本前缀 -> ${forgeVersion}`);
+    }
+
     const versionId = `${gameVersion}-forge-${forgeVersion}`;
 
     try {
@@ -10336,8 +10341,27 @@ async function installForge(gameVersion, forgeVersion, onProgress = null) {
             } else if (installProfile && typeof installProfile.json === 'object' && installProfile.json !== null) {
                 versionJsonData = installProfile.json;
                 console.log('[Forge] 使用 install_profile.json 内嵌的 version JSON');
+            } else if (installProfile && typeof installProfile.json === 'string' && installProfile.json) {
+                const jsonFileName = installProfile.json.replace(/^\//, '');
+                const jsonEntry = zip.getEntry(jsonFileName);
+                if (jsonEntry) {
+                    versionJsonData = JSON.parse(jsonEntry.getData().toString('utf8'));
+                    console.log(`[Forge] 从 installer 中读取 ${jsonFileName}`);
+                }
             }
-        } catch (e) {}
+            if (!versionJsonData) {
+                for (const candidate of ['version.json', `${gameVersion}-forge-${forgeVersion}.json`, `${gameVersion}-forge.json`]) {
+                    const entry = zip.getEntry(candidate);
+                    if (entry) {
+                        try {
+                            versionJsonData = JSON.parse(entry.getData().toString('utf8'));
+                            console.log(`[Forge] 通过候选名 ${candidate} 找到 version JSON`);
+                            break;
+                        } catch (_) {}
+                    }
+                }
+            }
+        } catch (e) { console.error('[Forge] 读取 version JSON 失败:', e.message); }
 
         console.log(`[Forge] installProfile: ${installProfile ? 'found' : 'not found'}, versionJson: ${versionJsonData ? 'found' : 'not found'}`);
 
@@ -11957,8 +11981,13 @@ async function _importMrpack(zip, manifestEntry, filePath, progress, targetVersi
     const packName    = (manifest.name || path.basename(filePath, path.extname(filePath))).replace(/[<>:"/\\|?*]/g, '_');
     const mcVersion   = manifest.dependencies && manifest.dependencies.minecraft ? manifest.dependencies.minecraft : '';
     const fabricVer   = manifest.dependencies ? manifest.dependencies['fabric-loader'] : undefined;
-    const forgeVer    = manifest.dependencies ? manifest.dependencies.forge : undefined;
+    let   forgeVer    = manifest.dependencies ? manifest.dependencies.forge : undefined;
     const neoforgeVer = manifest.dependencies ? manifest.dependencies.neoforge : undefined;
+
+    if (forgeVer && forgeVer.startsWith(mcVersion + '-')) {
+        forgeVer = forgeVer.slice(mcVersion.length + 1);
+        console.log(`[mrpack] Forge 版本标准化: ${manifest.dependencies.forge} -> ${forgeVer}`);
+    }
 
     progress('prepare', `整合包: ${packName}  MC: ${mcVersion}`, 8);
 

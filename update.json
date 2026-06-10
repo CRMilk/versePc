@@ -2,12 +2,12 @@
   "version": "1.0.17",
   "releaseDate": "2026-06-10T00:00:00Z",
   "releaseName": "VersePC v1.0.17",
-  "releaseNotes": "## 更新内容\n- 修复正版账号详情页皮肤3D模型不显示（优先使用Session Server获取完整皮肤纹理）\n- 修复下载版本进度条卡住/乱跳（参考PCL2平滑进度算法）\n- 修复导入整合包失败（解压重试机制 + isJarIntact宽松化）\n- 安装进度条使用权重加权平滑计算，不再跳跃\n- 下载 stall 期间发送进度通知，前端实时感知",
+  "releaseNotes": "## 更新内容\n- 修复正版账号详情页皮肤3D模型不显示（优先使用Session Server获取完整皮肤纹理）\n- 修复下载版本进度条卡住/乱跳（参考PCL2平滑进度算法）\n- 修复导入整合包失败（解压重试机制 + isJarIntact宽松化）\n- 安装进度条使用权重加权平滑计算，不再跳跃\n- 下载 stall 期间发送进度通知，前端实时感知\n- 修复Forge版本整合包下载安装失败（读取installer.jar中的version JSON + Forge版本号标准化）",
   "files": {
     "win-x64": {
       "url": "https://github.com/doujie081231/versePc/releases/download/v1.0.17/VersePC-Setup-1.0.17.exe",
-      "sha256": "700CA3AD4B8C8A1CF394672864432FC97126B82CD7D01E18D26AA50F38A8B433",
-      "size": 162786921
+      "sha256": "06FA5E28724A7C644BA06530B051F99EE7A08A412CA013FCA46E5F41F404497F",
+      "size": 162787135
     }
   },
   "minSupportedVersion": "1.0.0",
